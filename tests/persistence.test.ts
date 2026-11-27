@@ -67,7 +67,7 @@ describe('Sprint 01 persistence', () => {
     commit(state,{type:'harvest',plot:8})
     checkLegacy(true)
     commit(state,{type:'plant',plot:12,species:'solar_strawberry',replaceId:state.plots[12].plant!.id})
-    commit(state,{type:'store',plot:12})
+    commit(state,{type:'store',plot:12,expectedId:state.plots[12].plant!.id})
     checkLegacy(false)
   })
 

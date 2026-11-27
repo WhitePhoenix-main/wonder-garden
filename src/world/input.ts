@@ -80,7 +80,7 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     const world = input.toWorld(p)
     startSlot = decorSlot(world)
     startIndex = input.view()?.decorEditing ? null : plotAt(world)
-    canSweep = startIndex !== null && input.view()?.mode === 'garden'
+    canSweep = !input.view()?.shovel && startIndex !== null && input.view()?.mode === 'garden'
   }, {signal})
   canvas.addEventListener('pointermove',event => {
     const prior = points.get(event.pointerId)
@@ -101,7 +101,7 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     const from = wasMoved ? prior : start
     if (canSweep && input.view()?.mode === 'garden') {
       sweep(from,point)
-    } else if (startIndex === null) {
+    } else if (startIndex === null || input.view()?.shovel) {
       dragging = true
       input.pan({x:point.x-from.x,y:point.y-from.y})
     }

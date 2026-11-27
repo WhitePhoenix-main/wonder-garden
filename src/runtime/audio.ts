@@ -1,43 +1,65 @@
-const sounds = {
-  gather: [440, 660],
-  sale: [523, 659, 784],
-  build: [196, 294],
-  discovery: [523, 659, 880, 1047]
+// Original eight-bar waltz for Wonder Garden, synthesized locally at first entry.
+function makeTheme(ctx:AudioContext) {
+  const beat = 0.5, rate = 22050
+  const buffer = ctx.createBuffer(1, rate * beat * 24, rate)
+  const data = buffer.getChannelData(0)
+  function note(start:number, midi:number, duration:number, gain:number) {
+    const hz = 440 * 2 ** ((midi-69)/12)
+    for (let i=0;i<duration*rate;i++) {
+      const t=i/rate, phase=2*Math.PI*hz*t
+      const envelope=Math.min(1,t/.035,(duration-t)/.07)*Math.exp(-3*t)
+      const sample=(Math.sin(phase)+.18*Math.sin(2*phase))*gain*envelope
+      data[(Math.round(start*rate)+i)%data.length] += sample
+    }
+  }
+  const chords=[[48,64,67],[45,60,64],[53,65,69],[43,62,67],
+                [48,64,72],[45,64,69],[50,65,69],[43,62,71]]
+  chords.forEach(([bass,third,top],bar)=>{
+    note(bar*3*beat,bass,1.4,.07)
+    note((bar*3+1)*beat,third,.82,.05)
+    note((bar*3+2)*beat,top,.94,.05)
+  })
+  const source=ctx.createBufferSource()
+  source.buffer=buffer
+  source.loop=true
+  return source
 }
 
 export function gardenAudio() {
-  let context: AudioContext | null = null
-
-  function unlock() {
+  let ctx:AudioContext|null=null
+  let music:GainNode|null=null
+  function sync(active:boolean, muted:boolean) {
     try {
-      context ??= new AudioContext()
-      if (context.state === 'suspended') void context.resume().catch(() => {})
-    } catch { /* Audio availability does not affect play. */ }
+      if (!ctx && active) {
+        ctx=new AudioContext()
+        music=ctx.createGain()
+        const theme=makeTheme(ctx)
+        theme.connect(music).connect(ctx.destination)
+        theme.start()
+      }
+      if (!ctx || !music) return
+      music.gain.value=muted ? 0 : .42
+      void (active ? ctx.resume() : ctx.suspend()).catch(()=>{})
+    } catch { /* Sound is optional. */ }
   }
-
-  function play(events:string[], muted:boolean) {
-    if (muted || !context || context.state !== 'running' || document.hidden) return
-    const discovery = events.some(event => event.startsWith('RecipeRevealed:') || event === 'GardenCompleted')
-    const notes = discovery ? sounds.discovery : events.includes('Sold') ? sounds.sale :
-      events.includes('Harvested') ? sounds.gather : events.some(event =>
-        ['PlotCleared','BedUpgraded','DecorChanged','HelperUpgraded','AutoSellEnabled','Planted'].includes(event)) ?
-        sounds.build : null
-    if (!notes) return
-    notes.forEach((frequency,i) => {
-      const audio = context!
-      const time = audio.currentTime + i * .058
-      const tone = audio.createOscillator()
-      const volume = audio.createGain()
-      tone.type = 'sine'
-      tone.frequency.value = frequency
+  const cues:Record<string,number[]> = {Planted:[330,494],Harvested:[440,660],Sold:[523,659,784],
+    Composted:[220,147],BedUpgraded:[196,294,392],Discovery:[523,659,880,1047]}
+  function play(events:string[],muted:boolean,automatic=false) {
+    if (!ctx || muted || document.hidden) return
+    const key=events.some(e=>e.startsWith('RecipeRevealed:')) ? 'Discovery' :
+      !automatic && events.find(e=>e in cues)
+    if (!key) return
+    cues[key].forEach((freq,i)=>{
+      const time=ctx!.currentTime+i*.075, tone=ctx!.createOscillator(), volume=ctx!.createGain()
+      tone.frequency.value=freq
       volume.gain.setValueAtTime(.001,time)
-      volume.gain.exponentialRampToValueAtTime(.054,time + .014)
-      volume.gain.exponentialRampToValueAtTime(.001,time + .15)
-      tone.connect(volume).connect(audio.destination)
+      volume.gain.exponentialRampToValueAtTime(.055,time+.014)
+      volume.gain.exponentialRampToValueAtTime(.001,time+.17)
+      tone.connect(volume).connect(ctx!.destination)
+      tone.onended=()=>{tone.disconnect();volume.disconnect()}
       tone.start(time)
-      tone.stop(time + .16)
+      tone.stop(time+.18)
     })
   }
-
-  return {unlock,play}
+  return {sync,play}
 }

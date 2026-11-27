@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { adjacent, island, recipes } from '../game/config'
-import { isRecipeRevealed } from '../game/queries'
+import { isRecipeActive, secondsLeft, isRecipeRevealed } from '../game/queries'
 import { decorationAt } from '../game/decor'
 import type { Plant } from '../game/model'
 import type { WorldView } from '../runtime/presentation'
@@ -8,6 +8,9 @@ import { buildArt } from './art'
 import { halfHeight, halfWidth, iso, plotPosition, type Point } from './geometry'
 
 interface CellArt {
+  countdown:string
+  timer: Phaser.GameObjects.Text
+  level: Phaser.GameObjects.Text
   bed: Phaser.GameObjects.Image
   obstacle: Phaser.GameObjects.Image
   plant: Phaser.GameObjects.Image
@@ -30,6 +33,7 @@ function outline(layer: Phaser.GameObjects.Graphics, point: Point, color: number
 }
 
 export class IslandScene extends Phaser.Scene {
+  private selectedPlot:number|null=null
   private cells: CellArt[] = []
   private decorations = new Map<string,Phaser.GameObjects.Image>()
   private sparks!: Phaser.GameObjects.Graphics
@@ -66,6 +70,9 @@ export class IslandScene extends Phaser.Scene {
       const pos = plotPosition(i)
       const obstacle = ['rock','weeds','stump','weeds','rock','stump'][i % 6]
       this.cells.push({
+        countdown:'',
+        level:this.label(pos.x,pos.y+23,'#f4e9bf','#594937'),
+        timer:this.label(pos.x,pos.y-73,'#fffbed','#385748'),
         bed: place('bed_1',pos,-6),
         obstacle: place(`obstacle_${obstacle}`,pos,pos.y + i / 1000),
         plant: place('stage_seed',pos,pos.y + i / 1000 + 0.1),
@@ -102,6 +109,16 @@ export class IslandScene extends Phaser.Scene {
     this.markers = this.add.graphics().setDepth(900)
   }
 
+  private label(x:number,y:number,color:string,backgroundColor:string) {
+    return this.add.text(x,y,'',{fontFamily:'Arial',fontSize:'13px',fontStyle:'bold',color,
+      backgroundColor,padding:{x:3,y:1}}).setOrigin(.5).setResolution(2).setDepth(910)
+  }
+
+  celebrate() {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+      this.tweens.add({targets:this.greenhouse,alpha:.35,yoyo:true,repeat:2,duration:400})
+  }
+
   flyToPlot(index:number): void {
     const pos = plotPosition(index)
     const x = pos.x + 24, y = pos.y - 16
@@ -117,6 +134,13 @@ export class IslandScene extends Phaser.Scene {
   }
 
   update(_time:number, dt:number) {
+    const scale=1/this.cameras.main.zoom
+    this.cells.forEach((cell,i)=>{
+      cell.level.setScale(scale*.74)
+      cell.timer.setScale(scale*(scale>1.8 ? .86 : 1))
+      const text=scale>2.7 && i!==this.selectedPlot ? '•' : cell.countdown
+      if (cell.timer.text!==text) cell.timer.setText(text)
+    })
     if (this.effectTarget === null) return
     this.sparks.clear()
     this.effectAge += dt
@@ -134,12 +158,13 @@ export class IslandScene extends Phaser.Scene {
     }
   }
 
-  paint({ state, selected, moveFrom, mode, decorEditing, decorPreview }: WorldView): void {
-    const key = JSON.stringify([mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,
+  paint({ state, shovel, selected, moveFrom, mode, decorEditing, decorPreview }: WorldView): void {
+    const key = JSON.stringify([state.lang,shovel,state.tutorialSkipped,mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,
       state.helperLevel,isRecipeRevealed(state),state.decorations,
-      state.plots.map(p => [p.open,p.level,p.plant?.species,p.plant && plantTexture(p.plant)])])
+      state.plots.map((p,i) => [secondsLeft(state,i),p.open,p.level,p.plant?.species,p.plant && plantTexture(p.plant)])])
     if (key === this.lastPaint) return
     this.lastPaint = key
+    this.selectedPlot = selected
     this.art.setTexture(this.stall,state.autoSell ? 'stall_auto' : 'stall_basic')
     if (state.helperLevel) {
       if (!this.helper.visible) this.helper.setPosition(this.stall.x+76,this.stall.y+24)
@@ -162,6 +187,13 @@ export class IslandScene extends Phaser.Scene {
     state.plots.forEach((plot,i) => {
       const cell = this.cells[i]
       const pos = plotPosition(i)
+      cell.level.setVisible(plot.open).setText(['','I','II','III'][plot.level])
+      cell.countdown=secondsLeft(state,i)+(state.lang==='ru'?' с':' s')
+      cell.timer.setVisible(!!plot.plant && plot.plant.readySince===null)
+      if (shovel && plot.plant || !state.tutorialSkipped && !shovel && mode==='garden' && plot.plant?.readySince!=null &&
+        (!state.sold || isRecipeActive(state,i,recipes.find(r=>r.result==='solar_strawberry')!))) {
+        outline(this.highlights,pos,0xffdf85,1,.34)
+      }
       cell.bed.setVisible(plot.open)
       cell.obstacle.setVisible(!plot.open)
       cell.plant.setVisible(plot.plant !== null)

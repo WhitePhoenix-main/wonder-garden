@@ -50,7 +50,7 @@ describe('Garden building and progress', () => {
     expect(state.coins).toBe(coins-80-80-120-120)
     commit(state,{type:'placeDecor',id:first.id,slot:'southwest',replaceId:null})
     expect(harmony(state)).toBe(85)
-    commit(state,{type:'store',plot:12})
+    commit(state,{type:'store',plot:12,expectedId:state.plots[12].plant!.id})
     expect(harmony(state)).toBe(65)
     expect(journal(state).studied).toBe(4)
     const storage = createPersistence(memoryStorage)
@@ -91,7 +91,7 @@ describe('Garden building and progress', () => {
   it('NU-02/03: allows recovery only when existing plants or seed stock cannot restore the garden', () => {
     const state = gardenWithHybrid()
     const active = state.plots.flatMap((p,plot)=>p.plant ? [plot] : [])
-    for (const plot of active) commit(state,{type:'store',plot})
+    for (const plot of active) commit(state,{type:'store',plot,expectedId:state.plots[plot].plant!.id})
     state.coins = 0 // Isolate the depleted-funds guard on a valid snapshot.
     reject(state,{type:'emergencyRadish',plot:12},'recoveryUnavailable')
     const hybrid = state.nursery.find(p=>p.species==='solar_strawberry')!

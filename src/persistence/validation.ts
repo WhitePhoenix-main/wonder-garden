@@ -16,7 +16,7 @@ export function validState(v: unknown): v is GameState {
       v.sellRemaining <= 0 || v.sellRemaining > autoSellOffer.intervalSec : v.sellRemaining !== 0) return false
   if (!integer(v.basketLevel) || !basketLevels[v.basketLevel] || (v.basketLevel > 0 && !v.sold) ||
       typeof v.firstHarvest !== 'boolean' || typeof v.firstPropagation !== 'boolean' ||
-      typeof v.muted !== 'boolean' || !Array.isArray(v.decorations)) return false
+      typeof v.muted !== 'boolean' || typeof v.musicMuted !== 'boolean' || typeof v.tutorialSkipped !== 'boolean' || typeof v.occupiedHintShown !== 'boolean' || !Array.isArray(v.decorations)) return false
   const capacity = basketLevels[v.basketLevel].capacity
   const progress = v.recipeProgress
   const seeds = v.seeds

@@ -50,6 +50,14 @@ export function parseSave(raw: string | null) {
       const migrated = migrateAmenities(previous)
       if (validState(migrated)) return migrated
     }
+    if (record(value) && value.schemaVersion === 4) {
+      const migrated = {...value, schemaVersion:saveVersion, musicMuted:value.muted, tutorialSkipped:false, occupiedHintShown:false}
+      if (validState(migrated)) return migrated
+    }
+    if (record(value) && value.schemaVersion === 5) {
+      const migrated = {...value, schemaVersion:saveVersion, occupiedHintShown:false}
+      if (validState(migrated)) return migrated
+    }
     if (validState(value)) return value
     if (record(value) && (Number(value.schemaVersion) > saveVersion || Number(value.balanceVersion) > balance.version)) return 'future'
   } catch { /* Try the backup below. */ }
