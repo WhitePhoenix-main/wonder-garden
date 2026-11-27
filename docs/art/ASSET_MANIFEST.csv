@@ -1,0 +1,58 @@
+﻿asset_id,category,description,priority,footprint,status
+island_base,terrain,Скальное основание острова,high,10x8,planned
+grass_1,terrain,"Трава, вариант 1",high,1x1,planned
+grass_2,terrain,"Трава, вариант 2",high,1x1,planned
+grass_3,terrain,"Трава, вариант 3",high,1x1,planned
+bed_1,bed,Грядка уровня 1,high,1x1,planned
+bed_2,bed,Грядка уровня 2,high,1x1,planned
+bed_3,bed,Грядка уровня 3,high,1x1,planned
+obstacle_rock,obstacle,rock,high,1x1,planned
+obstacle_stump,obstacle,stump,high,1x1,planned
+obstacle_weeds,obstacle,weeds,high,1x1,planned
+stage_seed,plant_stage,seed,high,1x1,planned
+stage_sprout,plant_stage,sprout,high,1x1,planned
+plant_radish_adult,plant,Редис — взрослое без урожая,high,1x1,planned
+plant_radish_ripe,plant,Редис — зрелое состояние или слой урожая,high,1x1,planned
+plant_strawberry_adult,plant,Клубника — взрослое без урожая,high,1x1,planned
+plant_strawberry_ripe,plant,Клубника — зрелое состояние или слой урожая,high,1x1,planned
+plant_blueberry_adult,plant,Черника — взрослое без урожая,high,1x1,planned
+plant_blueberry_ripe,plant,Черника — зрелое состояние или слой урожая,high,1x1,planned
+plant_sunflower_adult,plant,Подсолнечник — взрослое без урожая,high,1x1,planned
+plant_sunflower_ripe,plant,Подсолнечник — зрелое состояние или слой урожая,high,1x1,planned
+plant_clover_adult,plant,Клевер — взрослое без урожая,high,1x1,planned
+plant_clover_ripe,plant,Клевер — зрелое состояние или слой урожая,high,1x1,planned
+plant_moonflower_adult,plant,Лунный цветок — взрослое без урожая,high,1x1,planned
+plant_moonflower_ripe,plant,Лунный цветок — зрелое состояние или слой урожая,high,1x1,planned
+plant_solar_strawberry_adult,plant,Солнечная клубника — взрослое без урожая,high,1x1,planned
+plant_solar_strawberry_ripe,plant,Солнечная клубника — зрелое состояние или слой урожая,high,1x1,planned
+plant_moonberry_adult,plant,Лунная ягода — взрослое без урожая,high,1x1,planned
+plant_moonberry_ripe,plant,Лунная ягода — зрелое состояние или слой урожая,high,1x1,planned
+plant_honey_clover_adult,plant,Медовый клевер — взрослое без урожая,high,1x1,planned
+plant_honey_clover_ripe,plant,Медовый клевер — зрелое состояние или слой урожая,high,1x1,planned
+plant_golden_flower_adult,plant,Золотой цветок — взрослое без урожая,high,1x1,planned
+plant_golden_flower_ripe,plant,Золотой цветок — зрелое состояние или слой урожая,high,1x1,planned
+plant_crystal_flower_adult,plant,Кристальный цветок — взрослое без урожая,high,1x1,planned
+plant_crystal_flower_ripe,plant,Кристальный цветок — зрелое состояние или слой урожая,high,1x1,planned
+plant_star_orchid_adult,plant,Звёздная орхидея — взрослое без урожая,high,1x1,planned
+plant_star_orchid_ripe,plant,Звёздная орхидея — зрелое состояние или слой урожая,high,1x1,planned
+greenhouse_ruined,building,greenhouse_ruined,medium,2x2,planned
+greenhouse_restored,building,greenhouse_restored,medium,2x2,planned
+stall_basic,building,stall_basic,medium,2x2,planned
+stall_auto,building,stall_auto,medium,2x2,planned
+decor_bench,decor,Скамейка,medium,1x1,planned
+decor_lantern,decor,Фонарь,medium,1x1,planned
+decor_flower_arch,decor,Цветочная арка,medium,1x1,planned
+decor_sakura,decor,Сакура,medium,1x1,planned
+path_straight,landscape,path_straight,medium,1x1,planned
+path_turn,landscape,path_turn,medium,1x1,planned
+path_t,landscape,path_t,medium,1x1,planned
+path_cross,landscape,path_cross,medium,1x1,planned
+path_end,landscape,path_end,medium,1x1,planned
+fence_straight,landscape,fence_straight,medium,1x1,planned
+fence_corner,landscape,fence_corner,medium,1x1,planned
+fence_end,landscape,fence_end,medium,1x1,planned
+pond,landscape,Декоративный пруд,medium,2x2,planned
+helper_leaf_1,helper,"Листик, уровень 1",high,visual only,planned
+helper_leaf_2,helper,"Листик, уровень 2",high,visual only,planned
+helper_leaf_3,helper,"Листик, уровень 3",high,visual only,planned
+bridge_broken,landscape,Разрушенный мост,low,edge,planned

@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "id": "green",
+  "width": 10,
+  "height": 8,
+  "tileWidth": 128,
+  "tileHeight": 64,
+  "plotOrigin": {
+    "x": 3,
+    "y": 2
+  },
+  "plotWidth": 4,
+  "plotHeight": 4,
+  "startOpen": [
+    8,
+    9,
+    12,
+    13
+  ],
+  "startPlants": [
+    {
+      "plot": 12,
+      "species": "radish"
+    },
+    {
+      "plot": 13,
+      "species": "radish"
+    }
+  ],
+  "structures": [
+    {
+      "id": "greenhouse",
+      "x": 0,
+      "y": 2,
+      "width": 2,
+      "height": 2
+    },
+    {
+      "id": "stall",
+      "x": 0,
+      "y": 4,
+      "width": 2,
+      "height": 2
+    },
+    {
+      "id": "reserve",
+      "x": 8,
+      "y": 2,
+      "width": 2,
+      "height": 2
+    },
+    {
+      "id": "pond",
+      "x": 8,
+      "y": 4,
+      "width": 2,
+      "height": 2
+    }
+  ],
+  "decorSlots": [
+    {
+      "id": "northwest",
+      "x": 3,
+      "y": 0
+    },
+    {
+      "id": "northeast",
+      "x": 6,
+      "y": 0
+    },
+    {
+      "id": "southwest",
+      "x": 3,
+      "y": 7
+    },
+    {
+      "id": "southeast",
+      "x": 6,
+      "y": 7
+    }
+  ],
+  "paths": [
+    {
+      "x": 2,
+      "y": 1
+    },
+    {
+      "x": 3,
+      "y": 1
+    },
+    {
+      "x": 4,
+      "y": 1
+    },
+    {
+      "x": 5,
+      "y": 1
+    },
+    {
+      "x": 6,
+      "y": 1
+    },
+    {
+      "x": 7,
+      "y": 1
+    },
+    {
+      "x": 2,
+      "y": 2
+    },
+    {
+      "x": 7,
+      "y": 2
+    },
+    {
+      "x": 2,
+      "y": 3
+    },
+    {
+      "x": 7,
+      "y": 3
+    },
+    {
+      "x": 2,
+      "y": 4
+    },
+    {
+      "x": 7,
+      "y": 4
+    },
+    {
+      "x": 2,
+      "y": 5
+    },
+    {
+      "x": 7,
+      "y": 5
+    },
+    {
+      "x": 2,
+      "y": 6
+    },
+    {
+      "x": 3,
+      "y": 6
+    },
+    {
+      "x": 4,
+      "y": 6
+    },
+    {
+      "x": 5,
+      "y": 6
+    },
+    {
+      "x": 6,
+      "y": 6
+    },
+    {
+      "x": 7,
+      "y": 6
+    },
+    {
+      "x": 2,
+      "y": 7
+    }
+  ],
+  "bridge": {
+    "x": 2,
+    "y": 7,
+    "direction": "south",
+    "state": "broken"
+  }
+}

@@ -1,0 +1,359 @@
+{
+  "version": 1,
+  "startCoins": 20,
+  "plants": [
+    {
+      "id": "radish",
+      "nameRu": "Редис",
+      "nameEn": "Radish",
+      "family": "earth",
+      "generation": 0,
+      "seedPrice": 10,
+      "cycleSec": 6,
+      "fruitValue": 5,
+      "harmony": 10,
+      "propagationThreshold": 0
+    },
+    {
+      "id": "strawberry",
+      "nameRu": "Клубника",
+      "nameEn": "Strawberry",
+      "family": "earth",
+      "generation": 0,
+      "seedPrice": 60,
+      "cycleSec": 12,
+      "fruitValue": 15,
+      "harmony": 10,
+      "propagationThreshold": 0
+    },
+    {
+      "id": "blueberry",
+      "nameRu": "Черника",
+      "nameEn": "Blueberry",
+      "family": "earth",
+      "generation": 0,
+      "seedPrice": 180,
+      "cycleSec": 25,
+      "fruitValue": 36,
+      "harmony": 10,
+      "propagationThreshold": 0
+    },
+    {
+      "id": "sunflower",
+      "nameRu": "Подсолнечник",
+      "nameEn": "Sunflower",
+      "family": "solar",
+      "generation": 0,
+      "seedPrice": 90,
+      "cycleSec": 12,
+      "fruitValue": 3,
+      "harmony": 10,
+      "propagationThreshold": 0
+    },
+    {
+      "id": "clover",
+      "nameRu": "Клевер",
+      "nameEn": "Clover",
+      "family": "earth",
+      "generation": 0,
+      "seedPrice": 120,
+      "cycleSec": 15,
+      "fruitValue": 4,
+      "harmony": 10,
+      "propagationThreshold": 0
+    },
+    {
+      "id": "moonflower",
+      "nameRu": "Лунный цветок",
+      "nameEn": "Moonflower",
+      "family": "lunar",
+      "generation": 0,
+      "seedPrice": 450,
+      "cycleSec": 20,
+      "fruitValue": 8,
+      "harmony": 10,
+      "propagationThreshold": 0
+    },
+    {
+      "id": "solar_strawberry",
+      "nameRu": "Солнечная клубника",
+      "nameEn": "Sunberry",
+      "family": "solar",
+      "generation": 1,
+      "seedPrice": null,
+      "cycleSec": 12,
+      "fruitValue": 18,
+      "harmony": 20,
+      "propagationThreshold": 6
+    },
+    {
+      "id": "moonberry",
+      "nameRu": "Лунная ягода",
+      "nameEn": "Moonberry",
+      "family": "lunar",
+      "generation": 1,
+      "seedPrice": null,
+      "cycleSec": 30,
+      "fruitValue": 44,
+      "harmony": 20,
+      "propagationThreshold": 6
+    },
+    {
+      "id": "honey_clover",
+      "nameRu": "Медовый клевер",
+      "nameEn": "Honey Clover",
+      "family": "solar",
+      "generation": 1,
+      "seedPrice": null,
+      "cycleSec": 20,
+      "fruitValue": 10,
+      "harmony": 20,
+      "propagationThreshold": 6
+    },
+    {
+      "id": "golden_flower",
+      "nameRu": "Золотой цветок",
+      "nameEn": "Golden Flower",
+      "family": "solar",
+      "generation": 1,
+      "seedPrice": null,
+      "cycleSec": 36,
+      "fruitValue": 50,
+      "harmony": 20,
+      "propagationThreshold": 6
+    },
+    {
+      "id": "crystal_flower",
+      "nameRu": "Кристальный цветок",
+      "nameEn": "Crystal Flower",
+      "family": "crystal",
+      "generation": 2,
+      "seedPrice": null,
+      "cycleSec": 30,
+      "fruitValue": 8,
+      "harmony": 35,
+      "propagationThreshold": 10
+    },
+    {
+      "id": "star_orchid",
+      "nameRu": "Звёздная орхидея",
+      "nameEn": "Star Orchid",
+      "family": "astral",
+      "generation": 3,
+      "seedPrice": null,
+      "cycleSec": 40,
+      "fruitValue": 60,
+      "harmony": 50,
+      "propagationThreshold": 15
+    }
+  ],
+  "recipes": [
+    {
+      "result": "solar_strawberry",
+      "primary": "strawberry",
+      "neighbors": [
+        "sunflower"
+      ],
+      "minBedLevel": 1,
+      "harvests": 3
+    },
+    {
+      "result": "moonberry",
+      "primary": "strawberry",
+      "neighbors": [
+        "moonflower"
+      ],
+      "minBedLevel": 1,
+      "harvests": 3
+    },
+    {
+      "result": "honey_clover",
+      "primary": "clover",
+      "neighbors": [
+        "sunflower"
+      ],
+      "minBedLevel": 1,
+      "harvests": 4
+    },
+    {
+      "result": "golden_flower",
+      "primary": "blueberry",
+      "neighbors": [
+        "moonflower"
+      ],
+      "minBedLevel": 1,
+      "harvests": 4
+    },
+    {
+      "result": "crystal_flower",
+      "primary": "moonberry",
+      "neighbors": [
+        "golden_flower"
+      ],
+      "minBedLevel": 2,
+      "harvests": 5
+    },
+    {
+      "result": "star_orchid",
+      "primary": "crystal_flower",
+      "neighbors": [
+        "solar_strawberry",
+        "honey_clover"
+      ],
+      "minBedLevel": 3,
+      "harvests": 6
+    }
+  ],
+  "auras": [
+    {
+      "source": "sunflower",
+      "kind": "growth",
+      "bonus": 0.4,
+      "targets": "all"
+    },
+    {
+      "source": "clover",
+      "kind": "price",
+      "bonus": 0.35,
+      "targets": "all"
+    },
+    {
+      "source": "golden_flower",
+      "kind": "price",
+      "bonus": 0.5,
+      "targets": [
+        "radish",
+        "strawberry",
+        "blueberry"
+      ]
+    },
+    {
+      "source": "crystal_flower",
+      "kind": "growth",
+      "bonus": 0.6,
+      "targets": "hybrids"
+    },
+    {
+      "source": "honey_clover",
+      "kind": "propagation",
+      "bonus": 1,
+      "targets": "hybrids"
+    }
+  ],
+  "bedLevels": [
+    {
+      "level": 1,
+      "upgradeCost": 0,
+      "growthMultiplier": 1,
+      "priceMultiplier": 1
+    },
+    {
+      "level": 2,
+      "upgradeCost": 250,
+      "growthMultiplier": 1.2,
+      "priceMultiplier": 1
+    },
+    {
+      "level": 3,
+      "upgradeCost": 750,
+      "growthMultiplier": 1.4,
+      "priceMultiplier": 1.25
+    }
+  ],
+  "expansionCosts": [
+    60,
+    90,
+    120,
+    160,
+    220,
+    300,
+    400,
+    550,
+    750,
+    1000,
+    1350,
+    1800
+  ],
+  "basketLevels": [
+    {
+      "capacity": 15,
+      "upgradeCost": 0
+    },
+    {
+      "capacity": 30,
+      "upgradeCost": 60
+    },
+    {
+      "capacity": 60,
+      "upgradeCost": 180
+    },
+    {
+      "capacity": 120,
+      "upgradeCost": 500
+    }
+  ],
+  "helperLevels": [
+    {
+      "level": 0,
+      "upgradeCost": 0,
+      "intervalSec": null
+    },
+    {
+      "level": 1,
+      "upgradeCost": 150,
+      "intervalSec": 5
+    },
+    {
+      "level": 2,
+      "upgradeCost": 450,
+      "intervalSec": 2
+    },
+    {
+      "level": 3,
+      "upgradeCost": 1200,
+      "intervalSec": 1
+    }
+  ],
+  "autoSell": {
+    "cost": 300,
+    "intervalSec": 10,
+    "minHelperLevel": 1
+  },
+  "decor": [
+    {
+      "id": "bench",
+      "nameRu": "Скамейка",
+      "nameEn": "Bench",
+      "cost": 80,
+      "harmony": 5
+    },
+    {
+      "id": "lantern",
+      "nameRu": "Фонарь",
+      "nameEn": "Lantern",
+      "cost": 120,
+      "harmony": 5
+    },
+    {
+      "id": "flower_arch",
+      "nameRu": "Цветочная арка",
+      "nameEn": "Flower Arch",
+      "cost": 250,
+      "harmony": 10
+    },
+    {
+      "id": "sakura",
+      "nameRu": "Сакура",
+      "nameEn": "Cherry Blossom",
+      "cost": 350,
+      "harmony": 15
+    }
+  ],
+  "buildingHarmony": 25,
+  "harmonyMilestones": [
+    50,
+    100,
+    200,
+    300
+  ]
+}

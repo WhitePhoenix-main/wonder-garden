@@ -1,0 +1,179 @@
+import balance from '../../config/balance.json'
+import island from '../../config/island.json'
+import { baseIds, hybridIds, decorIds, type DecorType, type BedLevel, type Hybrid, type Recipe, type Species } from './model'
+
+export const speciesIds = [...baseIds, ...hybridIds] as const
+export const plotCount = island.plotWidth * island.plotHeight
+export const valueScale = 10_000
+
+export function isHybrid(value: unknown): value is Hybrid {
+  return hybridIds.some(id => id === value)
+}
+
+export function hybridCounts(): Record<Hybrid, number> {
+  return Object.fromEntries(hybridIds.map(id => [id, 0])) as Record<Hybrid, number>
+}
+
+export function isSpecies(value: unknown): value is Species {
+  return speciesIds.some(id => id === value)
+}
+
+function requireConfig(condition: unknown, field: string): asserts condition {
+  if (!condition) throw new Error(`Invalid game configuration: ${field}`)
+}
+
+function positiveInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0
+}
+
+function nonnegativeInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0
+}
+
+export function adjacent(index: number): number[] {
+  if (!nonnegativeInteger(index) || index >= plotCount) return []
+  const x = index % island.plotWidth
+  const y = Math.floor(index / island.plotWidth)
+  const neighbors = []
+  if (y > 0) neighbors.push(index - island.plotWidth)
+  if (x > 0) neighbors.push(index - 1)
+  if (x + 1 < island.plotWidth) neighbors.push(index + 1)
+  if (y + 1 < island.plotHeight) neighbors.push(index + island.plotWidth)
+  return neighbors
+}
+
+function validateIsland(): void {
+  requireConfig(island.version === 1, 'island.version')
+  requireConfig(island.id === 'green', 'island.id')
+  requireConfig(positiveInteger(island.width) && positiveInteger(island.height), 'island dimensions')
+  requireConfig(positiveInteger(island.plotWidth) && positiveInteger(island.plotHeight), 'plot dimensions')
+  requireConfig(positiveInteger(island.tileHeight) && island.tileWidth === island.tileHeight * 2, 'tile dimensions')
+
+  const occupied = new Set<string>()
+  const cellKey = (x: number, y: number) => `${x},${y}`
+  function reserve(x: number, y: number, width: number, height: number, label: string): void {
+    requireConfig(nonnegativeInteger(x) && nonnegativeInteger(y), `${label} coordinates`)
+    requireConfig(positiveInteger(width) && positiveInteger(height), `${label} dimensions`)
+    requireConfig(x + width <= island.width && y + height <= island.height, `${label} bounds`)
+    for (let row = y; row < y + height; row++) {
+      for (let col = x; col < x + width; col++) {
+        const key = cellKey(col, row)
+        requireConfig(!occupied.has(key), `${label} overlap at ${key}`)
+        occupied.add(key)
+      }
+    }
+  }
+
+  reserve(island.plotOrigin.x, island.plotOrigin.y, island.plotWidth, island.plotHeight, 'plot area')
+  const structures = new Set(island.structures.map(item => item.id))
+  requireConfig(structures.size === island.structures.length, 'structure ids')
+  for (const id of ['greenhouse', 'stall', 'pond', 'reserve']) {
+    requireConfig(structures.has(id), `structure ${id}`)
+  }
+  for (const {x, y, width, height, id} of island.structures) reserve(x, y, width, height, id)
+  requireConfig(new Set(island.decorSlots.map(item => item.id)).size === island.decorSlots.length, 'decor slot ids')
+  for (const {x, y, id} of island.decorSlots) reserve(x, y, 1, 1, id)
+  for (const {x, y} of island.paths) reserve(x, y, 1, 1, 'path')
+  requireConfig(island.paths.some(p => p.x === island.bridge.x && p.y === island.bridge.y)
+    && island.bridge.direction === 'south' && island.bridge.y === island.height - 1
+    && island.bridge.state === 'broken', 'bridge')
+
+  const start = new Set(island.startOpen)
+  requireConfig(start.size > 0 && start.size === island.startOpen.length, 'startOpen count')
+  requireConfig(island.startOpen.every(id => nonnegativeInteger(id) && id < plotCount), 'startOpen ids')
+  const reachable = new Set([island.startOpen[0]])
+  for (const id of reachable) {
+    for (const neighbor of adjacent(id)) {
+      if (start.has(neighbor)) reachable.add(neighbor)
+    }
+  }
+  requireConfig(reachable.size === start.size, 'connected starting plots')
+  const planted = new Set<number>()
+  requireConfig(island.startPlants.length > 0, 'startPlants count')
+  for (const {plot, species} of island.startPlants) {
+    requireConfig(start.has(plot) && !planted.has(plot), 'startPlants plots')
+    requireConfig(isSpecies(species), 'startPlants species')
+    planted.add(plot)
+  }
+}
+
+function readSpecies(id: Species): Readonly<(typeof balance.plants)[number]> {
+  const matches = balance.plants.filter(plant => plant.id === id)
+  requireConfig(matches.length === 1, `plants.${id}`)
+  const data = matches[0]
+  requireConfig(data.nameRu && data.nameEn, `plants.${id} name`)
+  requireConfig(Number.isFinite(data.cycleSec) && data.cycleSec > 0, `plants.${id} cycleSec`)
+  requireConfig(nonnegativeInteger(data.harmony), 'plants.' + id + '.harmony')
+  requireConfig(positiveInteger(data.fruitValue), `plants.${id} fruitValue`)
+  requireConfig(isHybrid(id) ? positiveInteger(data.propagationThreshold) : data.propagationThreshold === 0, 'propagationThreshold')
+  requireConfig(isHybrid(id)
+    ? data.seedPrice === null
+    : data.seedPrice !== null && nonnegativeInteger(data.seedPrice), `plants.${id} seedPrice`)
+  return data
+}
+
+function readRecipe(result: Hybrid): Recipe {
+  const matches = balance.recipes.filter(recipe => recipe.result === result)
+  requireConfig(matches.length === 1, `recipes.${result}`)
+  const recipe = matches[0]
+  requireConfig(isSpecies(recipe.primary) && recipe.primary !== recipe.result, 'recipe primary')
+  requireConfig(recipe.neighbors.length > 0 && recipe.neighbors.length <= 4
+    && new Set(recipe.neighbors).size === recipe.neighbors.length
+    && recipe.neighbors.every(id => isSpecies(id) && id !== recipe.result), 'recipe neighbors')
+  requireConfig(recipe.minBedLevel === 1 || recipe.minBedLevel === 2 || recipe.minBedLevel === 3, 'recipe minBedLevel')
+  requireConfig(positiveInteger(recipe.harvests), 'recipe harvests')
+  return {result, primary:recipe.primary, neighbors:recipe.neighbors.filter(isSpecies), minBedLevel:recipe.minBedLevel, harvests:recipe.harvests}
+}
+
+function readBed(level: BedLevel) {
+  const matches = balance.bedLevels.filter(item => item.level === level)
+  requireConfig(matches.length === 1, `bedLevels.${level}`)
+  const bed = matches[0]
+  requireConfig(nonnegativeInteger(bed.upgradeCost), `bedLevels.${level} upgradeCost`)
+  requireConfig(Number.isFinite(bed.growthMultiplier) && bed.growthMultiplier > 0, `bedLevels.${level} growthMultiplier`)
+  requireConfig(Number.isFinite(bed.priceMultiplier) && bed.priceMultiplier > 0, `bedLevels.${level} priceMultiplier`)
+  return bed
+}
+
+validateIsland()
+requireConfig(balance.version === 1, 'balance.version')
+requireConfig(nonnegativeInteger(balance.startCoins), 'balance.startCoins')
+requireConfig(balance.expansionCosts.length === plotCount - island.startOpen.length
+  && balance.expansionCosts.every(nonnegativeInteger), 'balance.expansionCosts')
+export const basketLevels = balance.basketLevels
+requireConfig(basketLevels.length === 4 && basketLevels.every((row,i) => positiveInteger(row.capacity) &&
+  nonnegativeInteger(row.upgradeCost) && (i === 0 || row.capacity > basketLevels[i-1].capacity)), 'balance.basketLevels')
+requireConfig(nonnegativeInteger(balance.buildingHarmony) &&
+  balance.harmonyMilestones.every((goal,i,list) => positiveInteger(goal) && (i === 0 || goal > list[i-1])), 'harmony')
+requireConfig(balance.decor.length === decorIds.length, 'decor catalog size')
+export const decorInfo = Object.fromEntries(decorIds.map(id => {
+  const entries = balance.decor.filter(item => item.id === id)
+  requireConfig(entries.length === 1 && positiveInteger(entries[0].cost) &&
+    positiveInteger(entries[0].harmony) && entries[0].nameRu && entries[0].nameEn, 'decor.' + id)
+  return [id,entries[0]]
+})) as Record<DecorType,(typeof balance.decor)[number]>
+export const isDecorType = (value:unknown): value is DecorType => decorIds.some(id => id === value)
+export const isDecorSlot = (value:unknown): value is string => island.decorSlots.some(slot => slot.id === value)
+
+export const helperLevels = balance.helperLevels
+requireConfig(helperLevels.length === 4 && helperLevels.every((row,index) =>
+  row.level === index && nonnegativeInteger(row.upgradeCost) &&
+  (index === 0 ? row.intervalSec === null : row.intervalSec !== null && positiveInteger(row.intervalSec))
+), 'helperLevels')
+export const autoSellOffer = balance.autoSell
+requireConfig(positiveInteger(autoSellOffer.cost) && positiveInteger(autoSellOffer.intervalSec) &&
+  positiveInteger(autoSellOffer.minHelperLevel) && autoSellOffer.minHelperLevel < helperLevels.length, 'autoSell')
+
+requireConfig(balance.recipes.length === hybridIds.length && balance.plants.length === speciesIds.length, 'catalog size')
+export const recipes = hybridIds.map(readRecipe)
+export const bedLevels = {1: readBed(1), 2: readBed(2), 3: readBed(3)} as const
+export const speciesInfo = Object.fromEntries(speciesIds.map(id => [id,readSpecies(id)])) as Record<Species,ReturnType<typeof readSpecies>>
+export const auras = balance.auras
+for (const aura of auras) {
+  requireConfig(isSpecies(aura.source) && ['growth','price','propagation'].includes(aura.kind), `aura ${aura.source} kind`)
+  requireConfig(Number.isFinite(aura.bonus) && aura.bonus >= 0, `aura ${aura.source} bonus`)
+  requireConfig(aura.targets === 'all' || aura.targets === 'hybrids'
+    || (Array.isArray(aura.targets) && aura.targets.every(isSpecies)), `aura ${aura.source} targets`)
+}
+
+export { balance, island }
