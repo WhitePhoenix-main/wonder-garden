@@ -1,4 +1,5 @@
 import type { GameState, Hybrid, Lang, Recipe } from '../../game/model'
+import { chance } from '../../game/queries'
 import { adjacent, speciesInfo } from '../../game'
 
 const hints: Record<Hybrid, [string, string]> = {
@@ -30,10 +31,10 @@ export function recipeCard(s: GameState, r: Recipe, selected: number|null) {
   const plot = selected === null ? null : s.plots[selected]
   const neighbors = selected === null ? [] : adjacent(selected).map(i => s.plots[i].plant?.species)
   const mark = (met:boolean) => plot ? (met ? ' ✓' : ' ✗') : ''
-  const count = s.recipeProgress[r.result]
+  const revealed = s.revealed.includes(r.result)
   return `<section class="recipe-card"><h3>${name(r.result)}</h3>
     <p>${w.harvest} · ${name(r.primary)}${mark(plot?.plant?.species === r.primary)}<br>
     ${w.neighbors} · ${r.neighbors.map(id => name(id) + mark(neighbors.includes(id))).join(' + ')}<br>
     ${w.bed} ≥ ${r.minBedLevel}${mark(!!plot && plot.level >= r.minBedLevel)}</p>
-    <p><b>${count}/${r.harvests}</b> · ${count === r.harvests ? w.revealed : w.count}</p></section>`
+    <p><b>${chance(s,r.result)*100}%</b> · ${s.lang==='ru'?'Сбор семян':'Seed harvest'} ${revealed?' · '+w.revealed:''}</p></section>`
 }

@@ -741,3 +741,11 @@ svg {
   .context { max-height: calc(100% - 205px); width: min(250px,40vw); }
   .camera { flex-direction: row; }
 }
+
+.rating {display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0;font-size:13px}
+.rating meter {width:46%;accent-color:#557c5a}
+[data-action="entry"] img {vertical-align:middle;object-fit:contain}
+[data-action="experiment-harvest"] small {display:block;margin-top:4px}
+[data-profile][aria-pressed="true"] {border-color:#557c5a;background:#e7efda}
+.reward p {grid-column:1/-1;margin:4px}
+.notice:not(.reward){pointer-events:none}

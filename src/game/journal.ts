@@ -5,7 +5,7 @@ export function journal(state:GameState) {
   const cleared = state.plots.filter(p => p.open).length
   const studied = state.planted.length
   const hybrid = recipes.some(r => state.planted.includes(r.result))
-  const revealed = recipes.filter(r => state.recipeProgress[r.result] === r.harvests).map(r=>r.result)
+  const revealed = state.revealed
   const unlocked = revealed.length > 0
   const complete = studied === speciesIds.length && cleared === plotCount
   const rank = complete ? 4 : studied >= 10 ? 3 : studied >= 6 ? 2 : unlocked ? 1 : 0

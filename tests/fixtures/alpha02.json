@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 6,
+  "basketLevel": 0,
+  "firstHarvest": true,
+  "firstPropagation": false,
+  "musicMuted": true,
+  "tutorialSkipped": false,
+  "occupiedHintShown": false,
+  "muted": false,
+  "decorations": [],
+  "helperLevel": 0,
+  "autoSell": false,
+  "harvestRemaining": 0,
+  "sellRemaining": 0,
+  "balanceVersion": 1,
+  "playTime": 758,
+  "nextId": 7,
+  "coins": 20,
+  "plots": [
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 6,
+        "species": "moonflower",
+        "progress": 0.7000000000000001,
+        "mature": false,
+        "readySince": null,
+        "propagation": 0
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 2,
+      "plant": {
+        "id": 3,
+        "species": "strawberry",
+        "progress": 0.27999999999999997,
+        "mature": true,
+        "readySince": null,
+        "propagation": 0
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 4,
+        "species": "sunflower",
+        "progress": 1,
+        "mature": true,
+        "readySince": 720,
+        "propagation": 0
+      }
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 1,
+        "species": "radish",
+        "progress": 1,
+        "mature": true,
+        "readySince": 714,
+        "propagation": 0
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 2,
+        "species": "radish",
+        "progress": 1,
+        "mature": true,
+        "readySince": 712.2857142857143,
+        "propagation": 0
+      }
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    }
+  ],
+  "nursery": [
+    {
+      "id": 5,
+      "species": "blueberry",
+      "progress": 1,
+      "mature": true,
+      "readySince": 725.8571428571429,
+      "propagation": 0
+    }
+  ],
+  "basket": [
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    },
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    },
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    },
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    }
+  ],
+  "sold": true,
+  "planted": [
+    "radish",
+    "strawberry",
+    "sunflower",
+    "blueberry",
+    "moonflower"
+  ],
+  "recipeProgress": {
+    "solar_strawberry": 3,
+    "moonberry": 1,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "seeds": {
+    "solar_strawberry": 1,
+    "moonberry": 0,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "lang": "en"
+}

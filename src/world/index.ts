@@ -9,7 +9,7 @@ const center = { x: (island.width - island.height) * halfWidth / 2, y: 302 }
 const width = (island.width + island.height) * halfWidth
 const height = (island.width + island.height) * halfHeight + 267
 
-export function createWorld(host: HTMLElement, onPick: (index: number) => void, onDecor:(slot:string)=>void): World {
+export function createWorld(host: HTMLElement, onPick: (index: number) => void, onDecor:(slot:string)=>void,onNursery:()=>void): World {
   let view: WorldView | null = null
   let current: IslandScene | null = null
   let removeInput: (() => void) | undefined
@@ -67,6 +67,7 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
           updateCamera()
         },
         pick: onPick,
+        nursery:onNursery,
         pickDecor: onDecor
       })
       if (view) this.paint(view)

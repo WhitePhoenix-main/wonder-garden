@@ -104,6 +104,8 @@ function readSpecies(id: Species): Readonly<(typeof balance.plants)[number]> {
   requireConfig(data.nameRu && data.nameEn, `plants.${id} name`)
   requireConfig(Number.isFinite(data.cycleSec) && data.cycleSec > 0, `plants.${id} cycleSec`)
   requireConfig(nonnegativeInteger(data.harmony), 'plants.' + id + '.harmony')
+  requireConfig(positiveInteger(data.lives) && [data.fruits,data.ownSeeds].every(range=>range.length===2 &&
+    range.every(positiveInteger) && range[1]>=range[0]), 'yield and lives '+id)
   requireConfig(positiveInteger(data.fruitValue), `plants.${id} fruitValue`)
   requireConfig(isHybrid(id) ? positiveInteger(data.propagationThreshold) : data.propagationThreshold === 0, 'propagationThreshold')
   requireConfig(isHybrid(id)
@@ -136,6 +138,15 @@ function readBed(level: BedLevel) {
 }
 
 validateIsland()
+const genetics=balance.genetics
+const probability=(n:number)=>Number.isFinite(n) && n>=0 && n<=1
+requireConfig(genetics.rarity.length===5 && genetics.rarity.every(row=>row.length===3 &&
+  row.every(nonnegativeInteger) && row.reduce((sum,n)=>sum+n,0)===100),'rarity')
+requireConfig([genetics.success,genetics.inheritedPlus,genetics.newFlaw,genetics.oneFlaw,genetics.twoFlaws,
+  genetics.copy,genetics.sparse,genetics.small,genetics.slow].every(probability) &&
+  [genetics.seedCopy,genetics.fruitful,genetics.early].every(pair=>pair.length===2 && pair.every(probability)) &&
+  positiveInteger(genetics.pity) && genetics.hardy.length===2 && genetics.hardy.every(positiveInteger) &&
+  positiveInteger(genetics.fragile),'genetics')
 requireConfig(balance.version === 1, 'balance.version')
 requireConfig(nonnegativeInteger(balance.startCoins), 'balance.startCoins')
 requireConfig(balance.expansionCosts.length === plotCount - island.startOpen.length

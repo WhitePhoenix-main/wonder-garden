@@ -2,7 +2,9 @@ import { saveVersion, type GameState } from '../game/model'
 import { balance, hybridCounts, recipes } from '../game/config'
 import { inactiveAutomation, initialAmenities } from '../game/state'
 import { record, integer } from './shape'
-import { validState } from './validation'
+import { initialState, newPlant } from '../game/state'
+import { nextRandom, rules } from '../game/genetics'
+import { type LegacyState, validLegacy, validState } from './validation'
 
 // Keep the existing storage key so either snapshot from the first sprint can be recovered.
 function migrateFirstSprint(value: Record<string, unknown>): GameState|null {
@@ -18,10 +20,10 @@ function migrateFirstSprint(value: Record<string, unknown>): GameState|null {
     nursery:value.nursery.map(migratePlant)
   }
   const state = migrateAmenities(migrated)
-  if (!validState(state)) return null
+  if (!validLegacy(state)) return null
   const oldHybrids = [...state.nursery, ...state.plots.map(p => p.plant)].filter(p => p?.species === 'solar_strawberry')
   if (oldHybrids.length + value.solarSeeds !== Number(value.recipeProgress === recipes.find(r => r.result === 'solar_strawberry')!.harvests)) return null
-  return state
+  return upgrade(state)
 }
 
 function migrateAmenities(value:Record<string,unknown>) {
@@ -31,13 +33,29 @@ function migrateAmenities(value:Record<string,unknown>) {
   const seeds = record(value.seeds) ? value.seeds : {}
   const plants = [...plots.map(p => record(p) ? p.plant : null), ...nursery].filter(record)
   return {
-    ...value, ...initialAmenities, schemaVersion:saveVersion, decorations:[],
+    ...value, ...initialAmenities, schemaVersion:6, decorations:[],
     firstHarvest:value.sold === true || basket.length > 0,
     firstPropagation:recipes.some(({result}) =>
       Number(seeds[result]) + plants.filter(p => p.species === result).length > 1)
   }
 }
 
+function upgrade(old:LegacyState):GameState {
+  const fresh=initialState(0x3e971ab)
+  const {recipeProgress,plots,nursery,...rest}=old
+  const stream={rng:fresh.rng}
+  function convert(p:LegacyState['nursery'][number]){
+    const {id,species,progress,readySince,mature}=p
+    return {...newPlant(id,species,undefined,nextRandom(stream)),progress,readySince,mature}
+  }
+  const state:GameState={...rest,schemaVersion:saveVersion,revealed:[],tutorialBranch:null,pendingHybrid:null,
+    seeds:{...fresh.seeds,...old.seeds},variants:[],failures:hybridCounts(),
+    plots:plots.map(b=>({...b,plant:b.plant && convert(b.plant)})),nursery:nursery.map(convert),rng:stream.rng}
+  for(const r of recipes)if(recipeProgress[r.result]<r.harvests){
+    state.failures[r.result]=Math.min(rules.pity,recipeProgress[r.result])
+  }else state.revealed.push(r.result)
+  return state
+}
 export function parseSave(raw: string | null) {
   if (raw === null) return null
   try {
@@ -48,16 +66,17 @@ export function parseSave(raw: string | null) {
     if (record(value) && (value.schemaVersion === 2 || value.schemaVersion === 3)) {
       const previous = value.schemaVersion === 2 ? {...value,...inactiveAutomation} : value
       const migrated = migrateAmenities(previous)
-      if (validState(migrated)) return migrated
+      if (validLegacy(migrated)) return upgrade(migrated)
     }
     if (record(value) && value.schemaVersion === 4) {
-      const migrated = {...value, schemaVersion:saveVersion, musicMuted:value.muted, tutorialSkipped:false, occupiedHintShown:false}
-      if (validState(migrated)) return migrated
+      const migrated = {...value, schemaVersion:6, musicMuted:value.muted, tutorialSkipped:false, occupiedHintShown:false}
+      if (validLegacy(migrated)) return upgrade(migrated)
     }
     if (record(value) && value.schemaVersion === 5) {
-      const migrated = {...value, schemaVersion:saveVersion, occupiedHintShown:false}
-      if (validState(migrated)) return migrated
+      const migrated = {...value, schemaVersion:6, occupiedHintShown:false}
+      if (validLegacy(migrated)) return upgrade(migrated)
     }
+    if (validLegacy(value)) return upgrade(value)
     if (validState(value)) return value
     if (record(value) && (Number(value.schemaVersion) > saveVersion || Number(value.balanceVersion) > balance.version)) return 'future'
   } catch { /* Try the backup below. */ }

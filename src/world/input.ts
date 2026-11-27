@@ -9,6 +9,7 @@ interface IslandInput {
   toWorld(point:Point):Point
   zoom(factor:number,from:Point,to?:Point):void
   pan(delta:Point):void
+  nursery():void
   pick(plot:number):void
   pickDecor(slot:string):void
 }
@@ -112,6 +113,10 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     if (points.size !== 0) return
     if (!pinch && !moved && !dragging && start && Math.hypot(point.x-start.x,point.y-start.y) < 6) {
       const world = input.toWorld(point)
+      const gx=Math.round((world.x/halfWidth+world.y/halfHeight)/2)
+      const gy=Math.round((world.y/halfHeight-world.x/halfWidth)/2)
+      const g=island.structures.find(v=>v.id==='greenhouse')!
+      if(!input.view()?.decorEditing && gx>=g.x && gx<g.x+g.width && gy>=g.y && gy<g.y+g.height)input.nursery()
       if (startSlot !== null && startSlot === decorSlot(world)) input.pickDecor(startSlot)
       if (startIndex !== null && startIndex === plotAt(world)) input.pick(startIndex)
     }

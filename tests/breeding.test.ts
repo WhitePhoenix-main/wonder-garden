@@ -1,148 +1,89 @@
-import { describe, it, expect } from 'vitest'
-import type { Command, Species } from '../src/game/model'
-import { hybridIds } from '../src/game/model'
-import { initialState, execute, advance, basketCapacity, speciesIds, recipes, growthMultiplier } from '../src/game'
-import { createPersistence } from '../src/persistence/storage'
-import { commit, earn, memoryStorage, reject, wait } from './helpers'
+import { expect,it } from 'vitest'
+import { advance, initialState, speciesInfo } from '../src/game'
+import { chance, experiments, secondsLeft } from '../src/game/queries'
+import { rules } from '../src/game/genetics'
+import { parseSave } from '../src/persistence/migration'
+import type { Command,Hybrid,Species } from '../src/game/model'
+import { commit,cross,reject } from './helpers'
 
-describe('Sprint 02 breeding', () => {
-  it('BR-04: one harvest advances two distinct recipes, and either recipe can open the nursery', () => {
-    const s = initialState()
-    earn(s,1100)
-    commit(s,{type:'clear',plot:4})
-    commit(s,{type:'clear',plot:5})
-    commit(s,{type:'plant',plot:8,species:'strawberry'})
-    commit(s,{type:'plant',plot:5,species:'blueberry'})
-    commit(s,{type:'plant',plot:4,species:'moonflower'})
-    wait(s,12)
-    commit(s,{type:'harvest',plot:8})
-    commit(s,{type:'plant',plot:9,species:'sunflower'})
-    for (let i=0;i<2;i++) {
-      wait(s,12)
-      commit(s,{type:'harvest',plot:8})
-    }
-    expect(s.recipeProgress).toMatchObject({moonberry:3,solar_strawberry:2})
-    expect(s.seeds).toMatchObject({moonberry:1,solar_strawberry:0})
-    commit(s,{type:'store',plot:12,expectedId:s.plots[12].plant!.id})
-    commit(s,{type:'plant',plot:12,species:'clover'})
-  })
-
-  it('grows and harvests all twelve species, opens sixteen beds, and reloads before the last discovery', () => {
-    let state = initialState()
-    const storage = memoryStorage()
-    const discoveries: string[] = []
-    const harvested = new Set<Species>()
-    let completions = 0
-
-    function play(command: Command) {
-      const result = execute(state, command)
-      if (result.ok) {
-        if (result.events.includes('GardenCompleted')) completions++
-        for (const event of result.events) {
-          if (event.startsWith('RecipeRevealed:')) discoveries.push(event.split(':')[1])
+it.each([17,42,2026])('completes a legal garden with common parents, sequence %i',seed=>{
+  let s=initialState(seed),renewals=0,firstRenewal=0
+  // Sell ripe fruit across the island and reserve enough seeds to renew each producer.
+  function earn(amount:number){
+    while(s.coins<amount){
+      advance(s,6)
+      for(const [plot,bed] of s.plots.entries()){
+        const plant=bed.plant
+        if(!plant || plant.readySince===null)continue
+        commit(s,{type:'harvest',plot,seeds:plant.lives===1 && !s.seeds[plant.species]})
+        commit(s,{type:'sell'})
+        if(!s.plots[plot].plant){
+          commit(s,{type:'plant',species:plant.species,plot,stock:common})
+          renewals++;firstRenewal ||= s.playTime
         }
-        if (command.type === 'harvest') harvested.add(state.plots[command.plot].plant!.species)
       }
-      return result
     }
-    function cycle() {
-      for (let tick=0;tick<60;tick++) advance(state,0.1)
-      for (const [plot,bed] of state.plots.entries()) {
-        if (bed.plant?.readySince == null) continue
-        if (state.basket.length === basketCapacity(state)) play({type:'sell'})
-        expect(play({type:'harvest',plot}).ok).toBe(true)
+  }
+  function pay(command:Command,cost:number){earn(cost);commit(s,command)}
+  function open(plot:number){
+    if(!s.plots[plot].open)pay({type:'clear',plot},balance.expansionCosts[s.plots.filter(b=>b.open).length-4])
+  }
+  function plant(plot:number,species:Species){
+    open(plot);pay({type:'plant',plot,species},speciesInfo[species].seedPrice??0)
+  }
+  function discover(plot:number,result:Hybrid){
+    for(let i=0;i<100 && !s.seeds[result];i++){
+      const p=s.plots[plot].plant!
+      if(p.lives===1 && !s.seeds[p.species]){
+        advance(s,secondsLeft(s,plot));commit(s,{type:'harvest',plot,seeds:true})
+      }else{
+        advance(s,secondsLeft(s,plot));cross(s,plot,result)
       }
-      play({type:'sell'})
+      if(!s.plots[plot].plant)commit(s,{type:'plant',species:p.species,plot,stock:common})
     }
-    function purchase(command: Command) {
-      for (let i=0;i<600;i++) {
-        const result = play(command)
-        if (result.ok) return
-        if (!['noCoins','noSeeds','seedLocked','firstSale'].includes(result.reason)) throw Error(result.reason)
-        cycle()
-      }
-      throw Error('Unreachable action ' + JSON.stringify(command))
-    }
-    function openAndPlant(plot:number, species:Species) {
-      if (!state.plots[plot].open) purchase({type:'clear',plot})
-      purchase({type:'plant',plot,species})
-    }
-    openAndPlant(8,'strawberry')
-    openAndPlant(9,'sunflower')
-    openAndPlant(14,'solar_strawberry')
-    openAndPlant(5,'blueberry')
-    openAndPlant(4,'moonflower')
-    openAndPlant(10,'clover')
-    openAndPlant(6,'moonberry')
-    openAndPlant(7,'golden_flower')
-    cycle()
-    expect(state.recipeProgress.crystal_flower).toBe(0)
-    purchase({type:'upgrade',plot:6})
-    openAndPlant(11,'honey_clover')
-    openAndPlant(15,'crystal_flower')
-    purchase({type:'upgrade',plot:15})
-    for (let i=0;i<6;i++) cycle()
-    expect(state.recipeProgress.star_orchid).toBe(0)
-    // At level III each individual parent alone still fails the recipe.
-    purchase({type:'store',plot:11,expectedId:state.plots[11].plant!.id})
-    purchase({type:'upgrade',plot:15})
-    reject(state,{type:'upgrade',plot:15},'maxLevel')
-    wait(state,40)
-    expect(play({type:'harvest',plot:15}).ok).toBe(true)
-    expect(state.recipeProgress.star_orchid).toBe(0)
-    purchase({type:'return',plot:11,id:state.nursery[0].id})
-    purchase({type:'store',plot:14,expectedId:state.plots[14].plant!.id})
-    wait(state,40)
-    expect(play({type:'harvest',plot:15}).ok).toBe(true)
-    expect(state.recipeProgress.star_orchid).toBe(0)
-    purchase({type:'return',plot:14,id:state.nursery[0].id})
-    expect(growthMultiplier(state,14)).toBeCloseTo(1.6)
-    expect(growthMultiplier(state,8)).toBeCloseTo(1.4)
-    while (state.recipeProgress.star_orchid < 5 && state.playTime<7200) cycle()
-    expect(state.recipeProgress.star_orchid).toBe(5)
-    createPersistence(() => storage).save(state)
-    const restored = createPersistence(() => storage).load()
-    expect(restored).toEqual(state)
-    state = restored
-    openAndPlant(0,'star_orchid')
-    const orchidTime = Math.round(state.playTime)
-    for (const plot of [1,2,3]) purchase({type:'clear',plot})
-    wait(state,40)
-    cycle()
-    expect(completions).toBe(1)
-    expect(discoveries.sort()).toEqual([...hybridIds].sort())
-    expect([...state.planted].sort()).toEqual([...speciesIds].sort())
-    expect([...harvested].sort()).toEqual([...speciesIds].sort())
-    expect(state.plots.filter(p => p.open)).toHaveLength(16)
-    for (const recipe of recipes) expect(state.recipeProgress[recipe.result]).toBe(recipe.harvests)
-    expect(state.coins).toBeGreaterThanOrEqual(0)
-    expect(state.seeds.star_orchid).toBeGreaterThanOrEqual(0)
-    const verifiedTime = Math.round(state.playTime)
-    // Existing, legally grown plants. Check that progression and stored seeds survive
-    // the exact threshold, including the honey clover's extra unit and any remainder.
-    for (const [plot,species,threshold,step] of [
-      [14,'solar_strawberry',6,1],[15,'crystal_flower',10,2],[0,'star_orchid',15,1]
-    ] as const) {
-      const plant = state.plots[plot].plant!
-      const before = state.seeds[species]
-      const start = plant.propagation
-      for (let i=0;i<threshold;i++) {
-        wait(state,40)
-        play({type:'sell'})
-        expect(play({type:'harvest',plot}).ok).toBe(true)
-      }
-      expect(plant.propagation).toBe(start)
-      expect(state.seeds[species]).toBe(before + step)
-    }
-    // Golden flower and clover both neighbor a blueberry on a level III bed.
-    purchase({type:'move',from:7,to:4})
-    purchase({type:'move',from:10,to:9})
-    purchase({type:'upgrade',plot:5})
-    purchase({type:'upgrade',plot:5})
-    wait(state,25)
-    play({type:'sell'})
-    play({type:'harvest',plot:5})
-    expect(state.basket[0].valueUnits).toBe(36 * 1.25 * 1.5 * 10000)
-    console.info('12/12 planted at %d s; 12/12 harvested and 16 beds verified at %d s', orchidTime,verifiedTime)
-  })
+    expect(s.seeds[result]).toBeGreaterThan(0)
+  }
+  plant(8,'strawberry');plant(9,'sunflower')
+  discover(8,'solar_strawberry')
+  const first=s.playTime
+  plant(14,'solar_strawberry');plant(5,'blueberry');plant(4,'moonflower');plant(10,'clover')
+  discover(8,'moonberry');discover(5,'golden_flower');discover(10,'honey_clover')
+  plant(6,'moonberry');plant(7,'golden_flower');plant(11,'honey_clover')
+  expect(experiments(s,6)).toEqual([])
+  pay({type:'upgrade',plot:6},250);discover(6,'crystal_flower')
+  plant(15,'crystal_flower');pay({type:'upgrade',plot:15},250)
+  expect(experiments(s,15)).toEqual([])
+  pay({type:'upgrade',plot:15},750)
+  const [a,b]=experiments(s,15)
+  expect(a.donorId).not.toBe(b.donorId)
+  commit(s,{type:'move',from:14,to:12});advance(s,40)
+  reject(s,{type:'harvest',plot:15,expectedId:s.plots[15].plant!.id,seeds:true,experiment:a},'stalePlant')
+  commit(s,{type:'move',from:12,to:14})
+  const restored=parseSave(JSON.stringify(s))
+  expect(restored).toEqual(s);s=restored as typeof s
+  discover(15,'star_orchid');plant(0,'star_orchid')
+  for(const plot of [1,2,3])open(plot)
+  expect(s.planted).toHaveLength(12);expect(s.plots.every(p=>p.open)).toBe(true)
+  expect(parseSave(JSON.stringify(s))).toEqual(s)
+  console.log({seed,first,firstRenewal,renewals,completion:s.playTime})
+})
+import { balance } from '../src/game/config'
+import { common } from '../src/game/genetics'
+
+it('keeps failures across reload and relocation and guarantees the fifth selected cross',()=>{
+  const s=initialState(1);s.coins=2000
+  for(const [plot,species] of [[8,'strawberry'],[9,'sunflower']] as const)commit(s,{type:'plant',plot,species})
+  advance(s,12);cross(s,8,'solar_strawberry')
+  for(let i=0;i<4;i++){
+    // This sequence gives a failed experiment after the ordinary quantity roll.
+    s.rng=1;advance(s,12)
+    expect(cross(s,8,'solar_strawberry')).toContain('ExperimentFailed')
+    expect(s.failures.solar_strawberry).toBe(i+1)
+  }
+  commit(s,{type:'move',from:8,to:9})
+  const copy=parseSave(JSON.stringify(s)) as typeof s
+  expect(chance(copy,'solar_strawberry')).toBe(1)
+  advance(copy,12);cross(copy,9,'solar_strawberry')
+  expect(copy.failures.solar_strawberry).toBe(0)
+  expect(chance(copy,'solar_strawberry')).toBe(rules.success)
 })

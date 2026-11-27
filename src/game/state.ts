@@ -1,8 +1,13 @@
 import { saveVersion, type GameState, type Plant, type Species } from './model'
 import { balance, island, plotCount, hybridCounts, isSpecies } from './config'
 
-export function newPlant(id: number, species: Species): Plant {
-  return { id, species, progress: 0, mature: false, readySince: null, propagation: 0 }
+import { common, maxLives, nextRandom } from './genetics'
+import { speciesIds } from './config'
+import type { Profile } from './model'
+
+export function newPlant(id: number, species: Species, profile:Profile=common, fruitRoll=0): Plant {
+  const lives=maxLives(species,profile)
+  return { id, species, rarity:profile.rarity, plus:profile.plus, minus:profile.minus, lives,maxLives:lives,fruitRoll, progress: 0, mature: false, readySince: null }
 }
 
 export const inactiveAutomation = {
@@ -10,10 +15,10 @@ export const inactiveAutomation = {
 } as const
 
 export const initialAmenities = {
-  basketLevel: 0, firstHarvest: false, firstPropagation: false, musicMuted:false, tutorialSkipped:false, occupiedHintShown:false, muted: false
+  tutorialBranch:null, pendingHybrid:null, basketLevel: 0, firstHarvest: false, firstPropagation: false, musicMuted:false, tutorialSkipped:false, occupiedHintShown:false, muted: false
 } as const
 
-export function initialState(): GameState {
+export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameState {
   const state: GameState = {
     schemaVersion: saveVersion,
     ...initialAmenities,
@@ -32,13 +37,14 @@ export function initialState(): GameState {
     basket: [],
     sold: false,
     planted: [],
-    recipeProgress: hybridCounts(),
-    seeds: hybridCounts(),
+    revealed: [],
+    seeds: Object.fromEntries(speciesIds.map(id=>[id,0])) as GameState['seeds'],
+    variants:[], failures:hybridCounts(), rng:seed,
     lang: 'ru'
   }
   for (const {plot, species} of island.startPlants) {
     if (!isSpecies(species)) throw new Error(`Unknown starting species: ${species}`)
-    state.plots[plot].plant = newPlant(state.nextId++, species)
+    state.plots[plot].plant = newPlant(state.nextId++, species,common,nextRandom(state))
     if (!state.planted.includes(species)) state.planted.push(species)
   }
   return state

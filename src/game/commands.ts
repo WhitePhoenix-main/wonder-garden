@@ -1,9 +1,11 @@
 import type { Command, GameState, Result } from './model'
-import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, recipes, speciesIds, speciesInfo, valueScale } from './config'
-import { auraBonus, basketCapacity, canRecoverGarden, plantingIssue, removalIssue, expansionCost, isRecipeActive } from './queries'
+import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, speciesIds, speciesInfo } from './config'
+import { basketCapacity, canRecoverGarden, plantingIssue, removalIssue, expansionCost } from './queries'
 import { decorate } from './decor'
 import { newPlant } from './state'
 import { sellBasket } from './trade'
+import { harvest } from './harvest'
+import { common, changeStock, nextRandom } from './genetics'
 
 function success(...events: string[]): Result {
   return {ok: true, events}
@@ -15,6 +17,8 @@ function failure(reason: string): Result {
 
 export function execute(state: GameState, command: Command): Result {
   switch (command.type) {
+    case 'dismissHybrid': state.pendingHybrid=null;return success('HintDismissed')
+    case 'tutorialBranch': state.tutorialBranch=command.branch;return success('BranchChosen')
     case 'sell': return success(...sellBasket(state))
     case 'upgradeHelper': {
       if (!state.sold) return failure('firstSale')
@@ -98,40 +102,9 @@ export function execute(state: GameState, command: Command): Result {
   switch (command.type) {
     case 'emergencyRadish':
       if (!canRecoverGarden(state)) return failure('recoveryUnavailable')
-      plot.plant = newPlant(state.nextId++,'radish')
+      plot.plant = newPlant(state.nextId++,'radish',common,nextRandom(state))
       return success('Planted')
-    case 'harvest': {
-      const plant = plot.plant
-      if (!plant || plant.readySince === null) return failure('notReady')
-      if (state.basket.length >= basketCapacity(state)) return failure('basketFull')
-      const value = speciesInfo[plant.species].fruitValue * bedLevels[plot.level].priceMultiplier
-      const valueUnits = Math.round(value * (1 + auraBonus(state, command.plot, 'price')) * valueScale)
-      state.basket.push({species: plant.species, valueUnits})
-      plant.progress = 0
-      plant.readySince = null
-
-      state.firstHarvest = true
-      const events = ['Harvested']
-      for (const recipe of recipes) {
-        if (!isRecipeActive(state, command.plot, recipe)) continue
-        if (++state.recipeProgress[recipe.result] === recipe.harvests) {
-          state.seeds[recipe.result]++
-          events.push('RecipeRevealed:' + recipe.result)
-        }
-      }
-      if (isHybrid(plant.species)) {
-        const threshold = speciesInfo[plant.species].propagationThreshold
-        plant.propagation += 1 + auraBonus(state, command.plot, 'propagation')
-        if (plant.propagation >= threshold) {
-          plant.propagation -= threshold
-          state.seeds[plant.species]++
-          state.firstPropagation = true
-          events.push('SeedPropagated:' + plant.species)
-        }
-      }
-      if (state.autoSell && state.basket.length === basketCapacity(state)) events.push(...sellBasket(state))
-      return success(...events)
-    }
+    case 'harvest': return harvest(state,command)
     case 'upgrade': {
       if (!state.sold) return failure('firstSale')
       if (plot.level === 3) return failure('maxLevel')
@@ -144,14 +117,14 @@ export function execute(state: GameState, command: Command): Result {
     }
     case 'plant': {
       const displaced = plot.plant
-      const issue = plantingIssue(state,command.plot,command.species,command.replaceId)
+      const issue = plantingIssue(state,command.plot,command.species,command.replaceId,command.stock)
       if (issue) return failure(issue)
       const price = speciesInfo[command.species].seedPrice
 
-      if (isHybrid(command.species)) state.seeds[command.species]--
+      if (command.stock || isHybrid(command.species)) changeStock(state,command.species,command.stock??common,-1)
       else if (price !== null) state.coins -= price
       if (displaced) state.nursery.push(displaced)
-      plot.plant = newPlant(state.nextId++, command.species)
+      plot.plant = newPlant(state.nextId++, command.species,command.stock,nextRandom(state))
       const events = displaced ? ['PlantStored','Planted'] : ['Planted']
       if (!state.planted.includes(command.species)) {
         state.planted.push(command.species)

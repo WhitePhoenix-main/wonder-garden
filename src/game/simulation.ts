@@ -36,7 +36,8 @@ export function advance(state: GameState, seconds: number): string[] {
         state.harvestRemaining = helperLevels[state.helperLevel].intervalSec!
         const plot = oldestReadyPlot(state)
         if (plot !== null) {
-          const result = execute(state, {type:'harvest', plot})
+          const plant=state.plots[plot].plant!
+          const result = execute(state, {type:'harvest', plot,expectedId:plant.id,cycle:plant.lives})
           if (result.ok) events.push(...result.events, 'HelperHarvested:' + plot)
         }
       }

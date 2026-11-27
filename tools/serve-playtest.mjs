@@ -19,7 +19,9 @@ const server=http.createServer(async(req,res)=>{
 server.on('error',e=>{console.error(e.message);process.exitCode=1})
 server.listen(port,'0.0.0.0',()=>{
   console.log('PC: http://127.0.0.1:'+port)
-  for(const group of Object.values(networkInterfaces()))for(const ip of group??[]){
+  let interfaces={}
+  try { interfaces=networkInterfaces() } catch { console.log('LAN address unavailable. Use the PC network settings to find its IPv4 address.') }
+  for(const group of Object.values(interfaces))for(const ip of group??[]){
     if(ip.family==='IPv4'&&!ip.internal)console.log('LAN: http://'+ip.address+':'+port)
   }
 })

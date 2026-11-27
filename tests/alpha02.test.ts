@@ -3,14 +3,14 @@ import { initialState, speciesInfo } from '../src/game'
 import { recoveryHint } from '../src/ui/onboarding'
 import { canRecoverGarden, plantingIssue, removalIssue, secondsLeft } from '../src/game/queries'
 import { parseSave } from '../src/persistence/migration'
-import { commit, earn, reject, wait } from './helpers'
+import { cross, legacySix, commit, earn, reject, wait } from './helpers'
 
 it('migrates Alpha 02 v5 and remembers the occupied-bed hint across reload',()=>{
-  const state=initialState()
+  const state=initialState(33)
   earn(state,65)
   const {occupiedHintShown,...legacy}=state
   expect(occupiedHintShown).toBe(false)
-  expect(parseSave(JSON.stringify({...legacy, schemaVersion:5}))).toEqual(state)
+  expect(parseSave(JSON.stringify({...legacySix(state), schemaVersion:5}))).toMatchObject({coins:state.coins,occupiedHintShown:false})
   expect(commit(state,{type:'showOccupiedHint'})).toEqual(['OccupiedHintShown'])
   expect(parseSave(JSON.stringify(state))).toEqual({...state,occupiedHintShown:true})
   expect(commit(state,{type:'showOccupiedHint'})).toEqual([])
@@ -18,7 +18,7 @@ it('migrates Alpha 02 v5 and remembers the occupied-bed hint across reload',()=>
 })
 
 it('validates payment, occupant and an open bed before changing stock',()=>{
-  const s=initialState(), cmd={type:'plant',species:'radish',plot:8} as const
+  const s=initialState(33), cmd={type:'plant',species:'radish',plot:8} as const
   const cost=speciesInfo.radish.seedPrice!
   s.coins=cost-1
   reject(s,cmd,'noCoins')
@@ -31,7 +31,7 @@ it('validates payment, occupant and an open bed before changing stock',()=>{
 })
 
 it('compost preserves soil, basket and collection; a stale confirmation cannot remove a replacement',()=>{
-  const s=initialState()
+  const s=initialState(33)
   earn(s,500)
   commit(s,{type:'upgrade',plot:12})
   wait(s,6)
@@ -48,11 +48,11 @@ it('compost preserves soil, basket and collection; a stale confirmation cannot r
 })
 
 it.each(['none','other species','seed','nursery','island'])('checks the exact species reserve: %s',reserve=>{
-  const s=initialState()
+  const s=initialState(33)
   earn(s,650)
   commit(s,{type:'plant',plot:8,species:'strawberry'})
   commit(s,{type:'plant',plot:9,species:'sunflower'})
-  for(let i=0;i<3;i++){wait(s,12);commit(s,{type:'harvest',plot:8})}
+  wait(s,12);cross(s,8,'solar_strawberry')
   const replace={type:'plant',plot:12,species:'solar_strawberry',replaceId:s.plots[12].plant!.id} as const
   commit(s,replace)
   reject(s,replace,'stalePlant')
@@ -72,7 +72,7 @@ it.each(['none','other species','seed','nursery','island'])('checks the exact sp
 })
 
 it('uses liquid resources and existing stock before emergency planting',()=>{
-  const s=initialState()
+  const s=initialState(33)
   s.plots.forEach(p=>p.plant=null)
   s.coins=0
   const cost=speciesInfo.radish.seedPrice!
@@ -85,7 +85,7 @@ it('uses liquid resources and existing stock before emergency planting',()=>{
 })
 
 it('recomputes remaining seconds on changes to neighbors, bed level and position',()=>{
-  const s=initialState()
+  const s=initialState(33)
   earn(s,650)
   commit(s,{type:'plant',species:'strawberry',plot:8})
   wait(s,2)
@@ -105,7 +105,7 @@ it('recomputes remaining seconds on changes to neighbors, bed level and position
 })
 
 it('guides an empty garden through every available recovery path',()=>{
-  const state=initialState(), plant=state.plots[12].plant!
+  const state=initialState(33), plant=state.plots[12].plant!
   state.plots.forEach(p=>p.plant=null)
   state.nursery.push(plant)
   expect(recoveryHint(state)).toMatch(/питомника/)
@@ -122,25 +122,25 @@ it('guides an empty garden through every available recovery path',()=>{
 })
 
 it('restarts the countdown after a helper harvest and rejects an outdated nursery selection',()=>{
-  const s=initialState()
+  const s=initialState(33)
   earn(s,1000)
   commit(s,{type:'upgradeHelper',target:1})
   const picked=s.plots[12].plant!
   wait(s,6)
   if(picked.readySince!==null) wait(s,5)
   expect(secondsLeft(s,12)).toBeGreaterThan(0)
-  s.recipeProgress.solar_strawberry=3
+  s.revealed.push('solar_strawberry')
   const id=s.plots[12].plant!.id
   commit(s,{type:'move',from:12,to:13})
   reject(s,{type:'store',plot:12,expectedId:id},'stalePlant')
 })
 
 it('carries the Alpha 01 mute setting to both channels and retains tutorial skip independently',()=>{
-  const state=initialState()
+  const state=initialState(33)
   earn(state,120)
   const {musicMuted,tutorialSkipped,...v4}=state
-  const migrated=parseSave(JSON.stringify({...v4,schemaVersion:4,muted:true}))
-  expect(migrated).toEqual({...state,muted:true,musicMuted:true})
+  const migrated=parseSave(JSON.stringify({...legacySix(state),schemaVersion:4,muted:true}))
+  expect(migrated).toMatchObject({coins:state.coins,muted:true,musicMuted:true})
   commit(state,{type:'skipTutorial'})
   commit(state,{type:'music',muted:true})
   expect(parseSave(JSON.stringify(state))).toEqual(state)
