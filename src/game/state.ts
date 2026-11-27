@@ -10,7 +10,7 @@ export const inactiveAutomation = {
 } as const
 
 export const initialAmenities = {
-  basketLevel: 0, firstHarvest: false, firstPropagation: false, muted: false
+  basketLevel: 0, firstHarvest: false, firstPropagation: false, musicMuted:false, tutorialSkipped:false, occupiedHintShown:false, muted: false
 } as const
 
 export function initialState(): GameState {

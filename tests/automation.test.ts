@@ -136,7 +136,7 @@ describe('Leafy and the market stall', () => {
     commit(s,{type:'plant',plot:9,species:'sunflower'})
     for (let i=0;i<3;i++) { wait(s,12); commit(s,{type:'harvest',plot:8}) }
     commit(s,{type:'plant',plot:12,species:'solar_strawberry',replaceId:s.plots[12].plant!.id})
-    for (const plot of [8,9,13]) commit(s,{type:'store',plot})
+    for (const plot of [8,9,13]) commit(s,{type:'store',plot,expectedId:s.plots[plot].plant!.id})
     for (let i=0;i<5;i++) { wait(s,12); commit(s,{type:'harvest',plot:12}) }
     commit(s,{type:'sell'})
     wait(s,12)

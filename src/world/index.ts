@@ -99,6 +99,7 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
   observer.observe(host)
   return {
     effects(events, harvestPlot) {
+      if (events.some(e=>e.startsWith('RecipeRevealed:'))) current?.celebrate()
       for (const event of events) {
         if (event.startsWith('HelperHarvested:')) {
           const index = Number(event.split(':')[1])

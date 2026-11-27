@@ -1,9 +1,11 @@
 import type { Species } from '../game/model'
 import type { Mode, WorldView } from '../runtime/presentation'
 import { adjacent, auras, bedLevels, isHybrid, recipes, speciesIds, speciesInfo } from '../game/config'
-import { basketCapacity, canRecoverGarden, canReplace, expansionCost, isRecipeRevealed, saleValue, seedUnlocked } from '../game/queries'
+import { isRecipeActive, basketCapacity, canRecoverGarden, canReplace, expansionCost, isRecipeRevealed, saleValue, seedUnlocked } from '../game/queries'
 import { decorUnlocked, harmony } from '../game/decor'
-import { gardenHint } from './onboarding'
+import { alpha } from './alpha'
+import { removalIssue, secondsLeft } from '../game/queries'
+import { gardenHint, recoveryHint } from './onboarding'
 import { recipeCard, recipeKnown } from './panels/recipes'
 import { decorPanel, gardenWords, journalPanel, type DecorChoice } from './panels/garden'
 import { automationPanel, automationWords } from './panels/automation'
@@ -13,6 +15,10 @@ export type Overlay = 'settings' | 'collection' | 'helper' | 'journal' | 'decor'
 export type CollectionFilter = 'all' | 'base' | 'hybrids'
 
 interface PanelState {
+  cornerPlanted:boolean
+  firstSeeds:Species[]
+  branch:'experiment'|'corner'|null
+  confirmId:number|null
   overlay: Overlay | null
   warning: string | null
   notice: string
@@ -35,7 +41,7 @@ const svg = (content:string) => `<svg viewBox="0 0 24 24" aria-hidden="true" fil
 const button = (action:string, label:string, extra='', disabled=false) => `<button type="button" data-action="${action}" ${extra} ${disabled ? 'disabled' : ''}>${label}</button>`
 
 export function uiMarkup(view: WorldView, {
-  overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
+  cornerPlanted, firstSeeds, branch, confirmId, overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
 }:PanelState):string {
   const settingsOpen = overlay === 'settings'
   const collectionOpen = overlay === 'collection'
@@ -48,9 +54,17 @@ export function uiMarkup(view: WorldView, {
   const goal = gardenHint(s)
   let panel = ''
   const garden = gardenWords[s.lang]
+  const a=alpha[s.lang]
+  const switches=button('language',w.language) + button('music',a.music+' · '+(s.musicMuted ? garden.off : garden.on),`aria-pressed="${!s.musicMuted}"`) +
+    button('sound',a.effects+' · '+(s.muted ? garden.off : garden.on),`aria-pressed="${!s.muted}"`)
+  const progress=`${w.collection} ${s.planted.length}/${speciesIds.length} · ${a.beds} ${s.plots.filter(p=>p.open).length}/${s.plots.length}`
+  if (view.menu) return `<main class="menu-screen"><section class="menu-card"><span class="menu-leaf">${svg(icons.garden)}</span>
+    <h1>${w.title}</h1><p>${a.promise}</p>${view.started ? '<p>'+progress+'</p>' : ''}
+    ${button('enter',view.started ? a.resume : a.start,'class="menu-primary"')}${view.started || warning==='future' || warning==='damaged' ? button('new-game',a.fresh) : ''}
+    <div class="switches">${switches}</div>${warning ? '<p role="status">'+(w as Record<string,string>)[warning]+'</p>'+button('export-save',garden.export) : ''}
+    <small>Wonder Garden · Alpha 02</small></section></main>`
   if (settingsOpen) {
-    panel = `<h2>${w.settings}</h2>${button('language',w.language)}
-      ${button('sound',garden.sound + ' · ' + (s.muted ? garden.off : garden.on),'aria-pressed="'+!s.muted+'"')}
+    panel = `<h2>${w.settings}</h2>${switches}${button('menu',a.menu)}
       ${button('center',w.center)}${button('export-save',garden.export)}${button('reset',w.reset)}`
   } else if (journalOpen) panel = journalPanel(s,chapter)
   else if (decorOpen) panel = decorPanel(s,slot,decorChoice)
@@ -82,6 +96,9 @@ export function uiMarkup(view: WorldView, {
   } else if (view.mode === 'plant') {
     panel += `<h2>${w.plant}</h2><p>${returnId === null ? w.chooseSeed : w.chooseReturn}</p>`
     if (full && !isRecipeRevealed(s)) panel += `<p class="hint">${w.full}</p>`
+    if (chosen) panel += button('cancel-seed',name(chosen)+' · '+w.cancel)
+    if (plot && !plot.open) panel += '<p>'+a.closed+'</p>'
+    if (plot?.plant && s.sold) panel += '<p>'+ (canReplace(s) ? w.replaceHint : a.occupied)+'</p>'+button('shovel',a.shovel)
     if (returnId !== null) panel += button('cancel-return',w.cancel)
     if (canRecoverGarden(s)) {
       panel += `<p class="hint">${garden.recovery}</p>`
@@ -97,7 +114,7 @@ export function uiMarkup(view: WorldView, {
       panel += button('seed',`<span class="seed-dot seed-${id}"></span><span><strong>${name(id)}</strong><small>${locked ? (id === 'moonflower' ? w.needBlue : id === 'clover' ? w.needRecipe : w.seedHint) : lowFunds ? price + ' · ' + w.funds : price}</small></span>`,`data-seed="${id}" class="seed ${chosen === id ? 'chosen' : ''}"`,locked || lowFunds || outOfStock)
     }
     panel += '</div>'
-    if (plot?.plant && !(full && !isRecipeRevealed(s))) panel += `<p class="hint">${canReplace(s) ? w.replaceHint : w.locked}</p>`
+
     if (s.nursery.length) {
       panel += `<h3>${w.nursery}</h3><div class="nursery-list">`
       for (const p of s.nursery) panel += button('return',`${name(p.species)} · #${p.id} — ${w.return}`,`data-id="${p.id}"`)
@@ -105,6 +122,7 @@ export function uiMarkup(view: WorldView, {
     }
   } else if (view.mode === 'breed') {
     panel += '<h2>' + w.breed + '</h2>'
+    panel += button('collect',a.collect)
     panel += recipes.map(recipe => recipeCard(s,recipe,selected)).join('')
   } else if (view.mode === 'build') {
     panel += `<h2>${w.build}</h2>`
@@ -123,25 +141,63 @@ export function uiMarkup(view: WorldView, {
       panel += `<p>${w.plot} ${selected! + 1} · ${w.level} ${plot.level}</p>`
       if (plot.level < 3) {
         const cost = bedLevels[plot.level === 1 ? 2 : 3].upgradeCost
+        const next=plot.level === 1 ? 2 : 3
+        panel += `<p>${['','I','II','III'][plot.level]} → ${['','I','II','III'][next]}<br>${w.growth} ×${bedLevels[plot.level].growthMultiplier} → ×${bedLevels[next].growthMultiplier}<br>${w.price} ×${bedLevels[plot.level].priceMultiplier} → ×${bedLevels[next].priceMultiplier}</p>`
         panel += button('upgrade',`${w.upgrade} · ${cost} ◈`,'class="primary"',s.coins < cost)
       }
       if (plot.plant) panel += button('move',w.move)
-      if (plot.plant && isRecipeRevealed(s)) panel += button('store',w.store)
+      if (plot.plant && isRecipeRevealed(s)) panel += button('store',w.store,'data-id="'+plot.plant.id+'"')
     }
-  } else if (plot) {
+  } else if (view.shovel && !plot?.plant) panel='<h2>'+a.shovel+'</h2><p>'+a.select+'</p>'
+  else if (plot) {
     panel += `<h2>${plot.plant ? name(plot.plant.species) : plot.open ? w.empty : w.closed}</h2><p>${w.plot} ${selected! + 1} · ${w.level} ${plot.level}</p>`
     if (plot.plant) {
-      panel += `<div class="progress"><span style="width:${Math.round(plot.plant.progress * 100)}%"></span></div><p>${plot.plant.readySince !== null ? w.ready : `${w.growing} · ${Math.floor(plot.plant.progress * 100)}%`}</p>`
+      panel += `<div class="progress"><span style="width:${Math.round(plot.plant.progress * 100)}%"></span></div><p>${plot.plant.readySince !== null ? w.ready : `${w.growing} · ${secondsLeft(s,selected!)} ${w.sec}`}</p>`
       if (isHybrid(plot.plant.species)) panel += `<p>${w.multiply} · ${plot.plant.propagation}/${speciesInfo[plot.plant.species].propagationThreshold}</p>`
-      if (plot.plant.readySince !== null) panel += button('harvest',w.harvest,'class="primary"')
+      if (view.shovel) {
+        const id=plot.plant.id
+        if (confirmId===id) {
+          panel += '<p>'+a.confirm(name(plot.plant.species),['','I','II','III'][plot.level])+' '+(plot.plant.readySince!==null?a.lost:'')+'</p>'
+          if (s.plots.filter(p=>p.plant).length===1) panel+='<p>'+recoveryHint(s)+'</p>'
+          panel+=button('confirm-compost',a.compost,'data-id="'+id+'"')+button('cancel-compost',w.cancel)
+        } else {
+          if (!removalIssue(s,selected!,id,'store')) panel+=button('store',w.store,'data-id="'+id+'"')
+          const issue=removalIssue(s,selected!,id,'compost')
+          panel+=issue ? '<p>'+a.lastHybrid+'</p>' : button('compost',a.compost,'data-id="'+id+'"')
+        }
+      } else if (plot.plant.readySince !== null) panel += button('harvest',w.harvest,'class="primary"')
     }
   }
   const modes: Mode[] = ['garden','plant','breed','build']
   const warningText = warning ? (w as Record<string,string>)[warning] : ''
-  return `<header class="topbar"><div class="brand"><span class="brand-mark">${svg(icons.garden)}</span><span><small>${w.subtitle}</small><strong>${w.title}</strong></span></div><div class="stats"><div class="stat"><span class="stat-icon">${svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v10m-3-7h6m-6 4h6"/>')}</span><span><small>${w.coins}</small><strong>${s.coins}</strong></span></div><button type="button" class="stat basket" data-action="helper" aria-expanded="${helperOpen}" ${s.sold ? '' : 'disabled'}><span class="stat-icon">${svg('<path d="M4 10h16l-2 10H6L4 10ZM8 10c0-7 8-7 8 0M8 13l1 4m3-4v4m4-4-1 4"/>')}</span><span><small>${w.basket}</small><strong>${s.basket.length}/${basketCapacity(s)}</strong></span></button>${button('sell',`${w.sell} · ${saleValue(s)} ◈`,'class="sell"',!s.basket.length)}<button type="button" data-action="collection" aria-expanded="${collectionOpen}" class="stat collection"><span class="stat-icon">${svg(icons.breed)}</span><span><small>${w.collection}</small><strong>${s.planted.length}/${speciesIds.length}</strong></span></button></div><div class="top-actions">${button('journal',garden.journal,'class="quiet" aria-expanded="'+journalOpen+'"')}${button('settings',w.settings,'class="quiet" aria-expanded="'+settingsOpen+'"')}</div></header>
-    <div class="goal-card"><span class="eyebrow">${w.goal}</span><p>${goal}</p><small class="harmony-label">${garden.harmony} · ${harmony(s)}</small>${s.sold ? button('helper',svg(icons.garden) + automationWords[s.lang].name,`class="helper-link" aria-expanded="${helperOpen}"`) : ''}</div>
+  const honey=recipes.find(r=>r.result==='honey_clover')!
+  let branchHint=goal, branchButton=''
+  if (branch==='experiment') {
+    branchHint=s.planted.includes(honey.result) ? a.honeyBenefit : a.experimentHint
+    if (!s.planted.includes(honey.result)) {
+      branchHint+=' · '+s.recipeProgress[honey.result]+'/'+honey.harvests
+      const next=seedUnlocked(s,honey.result) ? honey.result : !s.plots.some(p=>p.plant?.species==='clover') ? 'clover' :
+        !s.plots.some(p=>p.plant?.species==='sunflower') ? 'sunflower' : null
+      branchButton=next ? button('branch-seed',a.plant+' · '+name(next),'data-seed="'+next+'"') :
+        s.plots.some((_,i)=>isRecipeActive(s,i,honey)) ? button('collect',a.collect) : button('mode',w.move,'data-mode="build"')
+    }
+  } else if (branch==='corner') {
+    branchHint=a.cornerHint
+    branchButton=cornerPlanted ? button('decor',garden.decor) : s.plots.some(p=>p.open&&!p.plant) ?
+      button('mode',w.plant,'data-mode="plant"') : button('corner-shovel',a.shovel)
+  }
+  const guide = !s.tutorialSkipped && !s.planted.includes('solar_strawberry')
+  const targetSeed=s.recipeProgress.solar_strawberry===recipes.find(r=>r.result==='solar_strawberry')!.harvests ? 'solar_strawberry' :
+    !s.plots.some(p=>p.plant?.species==='strawberry') ? 'strawberry' : !s.plots.some(p=>p.plant?.species==='sunflower') ? 'sunflower' : null
+  const needed=targetSeed ? speciesInfo[targetSeed].seedPrice ?? 0 : 0
+  const guideAction=s.basket.length && (!s.sold || s.coins<needed) ? 'sell' :
+    !s.sold || s.coins<needed || !targetSeed ? 'collect' : s.plots.every(p=>!p.open || p.plant) && !canReplace(s) ? 'shovel' : 'plant'
+  return `<div class="garden-ui" data-guide="${guide ? guideAction : ''}" data-guide-seed="${guide && targetSeed ? targetSeed : ''}"><header class="topbar"><div class="brand"><span class="brand-mark">${svg(icons.garden)}</span><span><small>${w.subtitle}</small><strong>${w.title}</strong></span></div><div class="stats"><div class="stat"><span class="stat-icon">${svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v10m-3-7h6m-6 4h6"/>')}</span><span><small>${w.coins}</small><strong>${s.coins}</strong></span></div><button type="button" class="stat basket" data-action="helper" aria-expanded="${helperOpen}" ${s.sold ? '' : 'disabled'}><span class="stat-icon">${svg('<path d="M4 10h16l-2 10H6L4 10ZM8 10c0-7 8-7 8 0M8 13l1 4m3-4v4m4-4-1 4"/>')}</span><span><small>${w.basket}</small><strong>${s.basket.length}/${basketCapacity(s)}</strong></span></button>${button('sell',`${w.sell} · ${saleValue(s)} ◈`,'class="sell"',!s.basket.length)}<button type="button" data-action="collection" aria-expanded="${collectionOpen}" class="stat collection"><span class="stat-icon">${svg(icons.breed)}</span><span><small>${w.collection}</small><strong>${s.planted.length}/${speciesIds.length}</strong></span></button></div><div class="top-actions">${button('journal',garden.journal,'class="quiet" aria-expanded="'+journalOpen+'"')}${button('settings',w.settings,'class="quiet" aria-expanded="'+settingsOpen+'"')}</div></header>
+    <div class="goal-card"><span class="eyebrow">${w.goal}</span><p>${!s.plots.some(p=>p.plant) ? recoveryHint(s) : s.planted.includes('solar_strawberry') && branch ? branchHint : s.tutorialSkipped && !s.planted.includes('solar_strawberry') ? '' : goal}</p>${branchButton}
+    ${s.planted.includes('solar_strawberry') ? button('experiment',a.experiment)+button('corner',a.corner) : !s.tutorialSkipped ? button('skip',a.skip,'class="quiet"') : ''}
+    ${s.sold && view.mode==='garden' ? button('shovel',svg('<path d="m16 3 4 4-3 3-4-4zM15 8l-6 7m-2-3 5 5-4 4-5-1 0-5z"/>')+a.shovel,'class="shovel" aria-pressed="'+view.shovel+'"') : ''}<small class="harmony-label">${garden.harmony} · ${harmony(s)}</small>${s.sold ? button('helper',svg(icons.garden) + automationWords[s.lang].name,`class="helper-link" aria-expanded="${helperOpen}"`) : ''}</div>
     ${panel ? `<aside class="context">${settingsOpen || journalOpen || decorOpen || helperOpen || collectionOpen || selected !== null ? button('close','×',`class="close" aria-label="${w.close}"`) : ''}<div class="context-inner">${panel}</div></aside>` : ''}
     <div class="camera">${button('zoomIn','+',`aria-label="${w.zoomIn}" title="${w.zoomIn}"`)}${button('zoomOut','−',`aria-label="${w.zoomOut}" title="${w.zoomOut}"`)}${button('center','⌾',`aria-label="${w.center}" title="${w.center}"`)}</div>
-    <nav class="modes" aria-label="${w.title}">${modes.map(m => button('mode',`${svg(icons[m])}<strong>${w[m]}</strong>`,`data-mode="${m}" class="${view.mode === m ? 'active' : ''}" aria-pressed="${view.mode === m}"`,(m === 'build' && !s.sold) || (m === 'breed' && !s.planted.includes('sunflower') && !isRecipeRevealed(s)))).join('')}</nav>
-    ${warningText ? `<div class="warning" role="status">${warningText}</div>` : ''}${notice ? `<div class="notice" role="status">${notice}</div>` : ''}`
+    <nav class="modes" aria-label="${w.title}">${modes.map(m => button('mode',`${svg(icons[m])}<strong>${w[m]}</strong>`,`data-mode="${m}" class="${view.mode === m ? 'active' : ''}" aria-pressed="${view.mode === m}"`,(m === 'build' && !s.sold) || (m === 'breed' && !s.planted.includes('strawberry') && !isRecipeRevealed(s)))).join('')}</nav>
+    ${warningText ? `<div class="warning" role="status">${warningText}</div>` : ''}${firstSeeds.length ? `<div class="notice reward" role="status"><strong>${firstSeeds.map(name).join(' · ')} · ${a.restored}</strong>${firstSeeds.map(id=>button('plant-reward',firstSeeds.length===1 ? a.plant : a.plant+' · '+name(id),'data-seed="'+id+'"')).join('')}${button('later',a.later)}</div>` : notice ? `<div class="notice" role="status">${notice}</div>` : ''}<div class="keyboard-beds">${s.plots.map((p,i)=>button('pick-bed',w.plot+' '+(i+1)+' · '+(p.plant ? name(p.plant.species) : p.open ? w.empty : w.closed),'data-id="'+i+'"')).join('')}</div></div>`
 }

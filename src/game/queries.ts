@@ -6,7 +6,7 @@ export function basketCapacity(state:Pick<GameState,'basketLevel'>):number {
 }
 
 export function canRecoverGarden(state:GameState):boolean {
-  return state.coins < speciesInfo.radish.seedPrice! && !state.nursery.length &&
+  return state.coins + saleValue(state) < speciesInfo.radish.seedPrice! && !state.nursery.length &&
     !Object.values(state.seeds).some(Boolean) && state.plots.every(plot => !plot.plant) &&
     state.plots.some(plot => plot.open)
 }
@@ -72,6 +72,36 @@ export function auraBonus(state: GameState, index: number, kind: 'growth' | 'pri
 export function growthMultiplier(state: GameState, index: number): number {
   const plot = state.plots[index]
   return plot ? bedLevels[plot.level].growthMultiplier * (1 + auraBonus(state, index, 'growth')) : 1
+}
+
+export function secondsLeft(state:GameState, index:number):number {
+  const plant = state.plots[index]?.plant
+  return plant && plant.readySince === null
+    ? Math.ceil((1 - plant.progress) * speciesInfo[plant.species].cycleSec / growthMultiplier(state,index)) : 0
+}
+
+export function removalIssue(state:GameState, plot:number, expectedId:number, action:'store'|'compost') {
+  const plant = state.plots[plot]?.plant
+  if (action === 'store' && !isRecipeRevealed(state)) return 'nurseryLocked'
+  if (action === 'compost' && !state.sold) return 'firstSale'
+  if (!plant || plant.id !== expectedId) return 'stalePlant'
+  const species = plant.species
+  if (action === 'compost' && isHybrid(species) && !state.seeds[species] &&
+      !state.nursery.some(p => p.species === species) &&
+      !state.plots.some(p => p.plant?.species === species && p.plant.id !== expectedId)) return 'lastHybrid'
+  return null
+}
+
+export function plantingIssue(state:GameState, index:number, species:Species, replaceId?:number) {
+  const plot = state.plots[index]
+  if (!plot?.open) return 'plotClosed'
+  if (replaceId !== undefined && plot.plant?.id !== replaceId) return 'stalePlant'
+  if (plot.plant && !canReplace(state)) return 'replacementLocked'
+  if (plot.plant && replaceId === undefined) return 'occupied'
+  if (!isSpecies(species) || !seedUnlocked(state,species)) return 'seedLocked'
+  if (isHybrid(species) && !state.seeds[species]) return 'noSeeds'
+  if (state.coins < (speciesInfo[species].seedPrice ?? 0)) return 'noCoins'
+  return null
 }
 
 export function oldestReadyPlot(state: GameState): number|null {

@@ -7,7 +7,7 @@ export type Lang = 'ru' | 'en'
 export type HelperLevel = 0 | 1 | 2 | 3
 export const decorIds = ['bench','lantern','flower_arch','sakura'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 4
+export const saveVersion = 6
 
 export interface Recipe {
   result: Hybrid
@@ -60,10 +60,15 @@ export interface GameState {
   recipeProgress: Record<Hybrid,number>
   seeds: Record<Hybrid,number>
   lang: Lang
+  musicMuted: boolean
+  occupiedHintShown: boolean
+  tutorialSkipped: boolean
   muted: boolean
 }
 export type Command =
-  | {type:'harvest'|'clear'|'upgrade'|'store';plot:number}
+  | {type:'harvest'|'clear'|'upgrade';plot:number}
+  | {type:'store'|'compost';plot:number;expectedId:number}
+  | {type:'music';muted:boolean} | {type:'skipTutorial'|'showOccupiedHint'}
   | {type:'plant';plot:number;species:Species;replaceId?:number}
   | {type:'return';plot:number;id:number}
   | {type:'move';from:number;to:number}

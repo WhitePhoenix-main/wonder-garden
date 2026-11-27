@@ -1,6 +1,6 @@
 import type { Command, GameState, Result } from './model'
-import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, isSpecies, recipes, speciesIds, speciesInfo, valueScale } from './config'
-import { auraBonus, basketCapacity, canRecoverGarden, canReplace, expansionCost, isRecipeActive, isRecipeRevealed, seedUnlocked } from './queries'
+import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, recipes, speciesIds, speciesInfo, valueScale } from './config'
+import { auraBonus, basketCapacity, canRecoverGarden, plantingIssue, removalIssue, expansionCost, isRecipeActive } from './queries'
 import { decorate } from './decor'
 import { newPlant } from './state'
 import { sellBasket } from './trade'
@@ -49,6 +49,16 @@ export function execute(state: GameState, command: Command): Result {
       state.basketLevel = command.target
       return success('BasketUpgraded')
     }
+    case 'showOccupiedHint':
+      if (state.occupiedHintShown || state.tutorialSkipped || !state.sold) return success()
+      state.occupiedHintShown = true
+      return success('OccupiedHintShown')
+    case 'skipTutorial':
+      state.tutorialSkipped = true
+      return success('TutorialSkipped')
+    case 'music':
+      state.musicMuted = command.muted
+      return success('SoundChanged')
     case 'sound':
       state.muted = command.muted
       return success('SoundChanged')
@@ -134,13 +144,9 @@ export function execute(state: GameState, command: Command): Result {
     }
     case 'plant': {
       const displaced = plot.plant
-      if (command.replaceId !== undefined && displaced?.id !== command.replaceId) return failure('stalePlant')
-      if (displaced && !canReplace(state)) return failure('replacementLocked')
-      if (displaced && command.replaceId === undefined) return failure('occupied')
-      if (!isSpecies(command.species) || !seedUnlocked(state, command.species)) return failure('seedLocked')
+      const issue = plantingIssue(state,command.plot,command.species,command.replaceId)
+      if (issue) return failure(issue)
       const price = speciesInfo[command.species].seedPrice
-      if (isHybrid(command.species) && state.seeds[command.species] === 0) return failure('noSeeds')
-      if (price !== null && state.coins < price) return failure('noCoins')
 
       if (isHybrid(command.species)) state.seeds[command.species]--
       else if (price !== null) state.coins -= price
@@ -153,12 +159,13 @@ export function execute(state: GameState, command: Command): Result {
       }
       return success(...events)
     }
+    case 'compost':
     case 'store': {
-      if (!isRecipeRevealed(state)) return failure('nurseryLocked')
-      if (!plot.plant) return failure('empty')
-      state.nursery.push(plot.plant)
+      const issue = removalIssue(state,command.plot,command.expectedId,command.type)
+      if (issue) return failure(issue)
+      if (command.type === 'store') state.nursery.push(plot.plant!)
       plot.plant = null
-      return success('PlantStored')
+      return success(command.type === 'store' ? 'PlantStored' : 'Composted')
     }
     case 'return': {
       if (plot.plant) return failure('occupied')

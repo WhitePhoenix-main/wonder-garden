@@ -1,6 +1,8 @@
 import type { Command, DecorType, Species } from '../game/model'
 import type { Mode, UI, UIActions, WorldView } from '../runtime/presentation'
-import { bedLevels, speciesInfo } from '../game/config'
+import { alpha } from './alpha'
+import { plantingIssue } from '../game/queries'
+import { recipes, bedLevels, speciesInfo } from '../game/config'
 import { canRecoverGarden, canReplace, expansionCost } from '../game/queries'
 import type { DecorChoice } from './panels/garden'
 import { uiMarkup, type CollectionFilter, type Overlay } from './render'
@@ -11,6 +13,10 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   let view: WorldView
   let warning: string | null = null
   let chosen: Species|null = null
+  let firstSeeds:Species[]=[]
+  let cornerPlanted=false
+  let branch:'experiment'|'corner'|null=null
+  let confirmId:number|null=null
   let notice = ''
   let last = ''
   let pressing = false
@@ -43,6 +49,11 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   }
 
   function showRewards(events:string[]) {
+    const discoveries=events.filter(event=>event.startsWith('RecipeRevealed:'))
+    if (discoveries.length && discoveries.length===recipes.filter(r=>view.state.recipeProgress[r.result]===r.harvests).length) {
+      firstSeeds=discoveries.map(event=>event.split(':')[1] as Species)
+    }
+    if (branch==='corner' && events.some(e=>e==='Planted'||e==='PlantReturned')) cornerPlanted=true
     const rewards = events.filter(e => e.startsWith('RecipeRevealed:') || e.startsWith('SeedPropagated:'))
     if (rewards.length) notice = rewards.map(e => t().earned + ' · ' + name(e.split(':')[1] as Species)).join(' / ')
   }
@@ -62,7 +73,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (!view) return
     if (pressing) return
     const html = uiMarkup(view,{
-      overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
+      cornerPlanted,firstSeeds,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
     })
     if (html === last) return
     const active = document.activeElement as HTMLElement | null
@@ -90,6 +101,40 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     const target = (event.target as Element).closest<HTMLButtonElement>('button[data-action]')
     if (!target || !view) return
     const action = target.dataset.action, selected = view.selected, plot = selected === null ? null : view.state.plots[selected]
+    const mode=(next:Mode, shovel=false, index:number|null=null)=>{
+      closePanels(); chosen=null; returnId=null; confirmId=null; notice=''
+      updateDecor()
+      actions.changeView({mode:next,selected:index,moveFrom:null,shovel})
+    }
+    if (action==='pick-bed') {controller.pick(Number(target.dataset.id));return}
+    if (action==='enter') return actions.enter()
+    if (action==='menu') {mode('garden');actions.menu();return}
+    if (action==='new-game' || action==='reset') {
+      if (!window.confirm(t().confirmReset+' · '+view.state.planted.length+'/12 · '+view.state.plots.filter(p=>p.open).length+'/16')) return
+      mode('garden');firstSeeds=[];cornerPlanted=false;branch=null;entry=null;chapter=null;collectionFilter='all';actions.reset();actions.enter();return
+    }
+    if (action==='shovel') {mode('garden',!view.shovel,view.shovel ? null : selected);return}
+    if (action==='branch-seed') {mode('plant');chosen=target.dataset.seed as Species;draw();return}
+    if (action==='corner-shovel') {mode('garden',true);return}
+    if (action==='collect') {mode('garden');return}
+    if (action==='compost') {confirmId=Number(target.dataset.id);draw();return}
+    if (action==='cancel-compost') {confirmId=null;draw();return}
+    if ((action==='confirm-compost' || action==='store') && selected!==null) {
+      run({type:action==='store'?'store':'compost',plot:selected,expectedId:Number(target.dataset.id)})
+      confirmId=null;actions.select(null);return
+    }
+    if (action==='skip') return run({type:'skipTutorial'})
+    if (action==='music') return run({type:'music',muted:!view.state.musicMuted})
+    if (action==='cancel-seed') {chosen=null;draw();return}
+    if (action==='later' || action==='plant-reward') {
+      const available=firstSeeds.find(id=>id===target.dataset.seed)
+      firstSeeds=[];notice=''
+      if (action==='plant-reward' && available) {mode('plant');chosen=available}
+      draw();return
+    }
+    if (action==='experiment' || action==='corner') {
+      branch=action;mode(action==='experiment'?'breed':'build');return
+    }
     if (action === 'filter') { collectionFilter = target.dataset.filter as typeof collectionFilter; entry = null; draw(); return }
     if (action === 'entry') { const id = target.dataset.entry as Species; entry = entry === id ? null : id; draw(); return }
     if (action === 'helper' || action === 'collection' || action === 'settings' || action === 'journal' || action === 'decor') {
@@ -128,13 +173,12 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       return
     }
     if (action === 'buy-auto-sell') return run({type:'buyAutoSell'})
-    if (action === 'mode') { closePanels(); updateDecor(); notice = ''; returnId = null; chosen = null; actions.changeView({mode:target.dataset.mode as Mode,selected:null,moveFrom:null}); return }
+    if (action === 'mode') { mode(target.dataset.mode as Mode); return }
     if (action === 'seed') { chosen = target.dataset.seed as Species; returnId = null; draw(); return }
     if (action === 'cancel-return') { returnId = null; draw(); return }
     if (action === 'return') { returnId = Number(target.dataset.id); draw(); return }
     if (action === 'sell') return run({type:'sell'})
     if (action === 'language') return run({type:'language',lang:view.state.lang === 'ru' ? 'en' : 'ru'})
-    if (action === 'reset') { if (window.confirm(t().confirmReset)) { notice=''; chosen=null; returnId=null; closePanels(); chapter=null; collectionFilter='all'; entry=null; actions.reset() } return }
     if (action === 'center') return actions.center()
     if (action === 'zoomIn') return actions.zoom(1)
     if (action === 'zoomOut') return actions.zoom(-1)
@@ -144,14 +188,16 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action === 'emergencyRadish') return run({type:'emergencyRadish',plot:selected})
     if (action === 'clear' && !window.confirm(`${t().confirmClear} ${expansionCost(view.state)} ◈`)) return
     if (action === 'upgrade' && !window.confirm(`${t().confirmUpgrade} ${bedLevels[plot.level === 1 ? 2 : 3].upgradeCost} ◈`)) return
-    if (action === 'clear' || action === 'upgrade' || action === 'store' || action === 'harvest') return run({type:action,plot:selected})
+    if (action === 'clear' || action === 'upgrade' || action === 'harvest') return run({type:action,plot:selected})
   })
-  return {
+  const controller:UI = {
     notify: showRewards,
     pickDecor,
     render(next, storageWarning) { view=next; warning=storageWarning; draw() },
     pick(index) {
-      if (!view || overlay) return
+      if (!view || view.menu || overlay) return
+      confirmId=null
+      if (view.shovel) { actions.select(index); return }
       const plot = view.state.plots[index]
       if (view.mode === 'garden' && plot.plant?.readySince !== null && plot.plant) { run({type:'harvest',plot:index}); return }
       if (view.mode === 'build' && view.moveFrom !== null) {
@@ -169,8 +215,16 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
         }
         if (!chosen || canRecoverGarden(view.state)) { actions.select(index); return }
         if (plot.plant) {
-          if (!canReplace(view.state)) { actions.select(index); return }
+          if (!canReplace(view.state)) {
+            if (view.state.sold && !view.state.occupiedHintShown && !view.state.tutorialSkipped) {
+              actions.command({type:'showOccupiedHint'})
+              notice=alpha[view.state.lang].occupied
+            }
+            actions.select(index)
+            return
+          }
           const replaceId = plot.plant.id
+          if (plantingIssue(view.state,index,chosen,replaceId)) { run({type:'plant',plot:index,species:chosen,replaceId}); return }
           const price = speciesInfo[chosen].seedPrice
           const amount = price === null ? `1 ${t().seedUnit}` : `${price} ${t().cost}`
           if (!window.confirm(`${t().confirmOld}: ${name(plot.plant.species)} #${replaceId}\n${t().confirmNew}: ${name(chosen)} — ${amount}`)) return
@@ -180,4 +234,5 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       actions.select(index)
     }
   }
+  return controller
 }

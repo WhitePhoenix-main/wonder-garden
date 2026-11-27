@@ -26,14 +26,14 @@ it('guides the first sale, parent placement, recipe progress and planting in a f
   }
   expect(gardenHint(state)).toMatch(/Солнечная клубника.*замените/)
   commit(state,{type:'plant',species:'solar_strawberry',plot:12,replaceId:state.plots[12].plant!.id})
-  expect(gardenHint(state)).toMatch(/остальные виды/)
+  expect(gardenHint(state)).toMatch(/уголок сада/)
 })
 
-it('points to clearing a bed when all open plots are full and replacement is still locked', () => {
+it('points to the shovel when all open plots are full and replacement is still locked', () => {
   const state = initialState()
   for (const plot of [8,9]) commit(state,{type:'plant',species:'radish',plot})
   earn(state,120)
-  expect(gardenHint(state)).toMatch(/Стройке.*расчистите.*60/)
+  expect(gardenHint(state)).toMatch(/лопатой/)
   commit(state,{type:'language',lang:'en'})
-  expect(gardenHint(state)).toMatch(/Build.*clear a bed.*60/)
+  expect(gardenHint(state)).toMatch(/shovel/)
 })

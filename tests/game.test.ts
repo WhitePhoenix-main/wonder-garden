@@ -135,7 +135,7 @@ describe('Sprint 01 gameplay', () => {
     const ready = structuredClone(plantAt(state, 8))
     expect(ready.progress).toBe(1)
     expect(ready.readySince).not.toBeNull()
-    commit(state, { type: 'store', plot: 8 })
+    commit(state, { type: 'store', plot: 8, expectedId:state.plots[8].plant!.id })
     wait(state, 20)
     expect(state.nursery).toEqual([ready])
     commit(state, { type: 'return', id: ready.id, plot: 8 })
@@ -170,7 +170,7 @@ describe('Sprint 01 gameplay', () => {
     state = createPersistence(() => storage).load()
     expect(state).toEqual(fullIsland)
     reject(state, { type: 'clear', plot: 15 }, 'plotOpen')
-    reject(state, { type: 'store', plot: 8 }, 'nurseryLocked')
+    reject(state, { type: 'store', plot: 8, expectedId:state.plots[8].plant!.id }, 'nurseryLocked')
     const replacement = { type: 'plant', plot: 8, species: 'strawberry' } as const
     reject(state, replacement, 'occupied')
     reject(state, { ...replacement, replaceId: plantAt(state, 9).id }, 'stalePlant')

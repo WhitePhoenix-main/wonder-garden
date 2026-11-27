@@ -23,7 +23,7 @@ describe('Sprint 02 breeding', () => {
     }
     expect(s.recipeProgress).toMatchObject({moonberry:3,solar_strawberry:2})
     expect(s.seeds).toMatchObject({moonberry:1,solar_strawberry:0})
-    commit(s,{type:'store',plot:12})
+    commit(s,{type:'store',plot:12,expectedId:s.plots[12].plant!.id})
     commit(s,{type:'plant',plot:12,species:'clover'})
   })
 
@@ -84,14 +84,14 @@ describe('Sprint 02 breeding', () => {
     for (let i=0;i<6;i++) cycle()
     expect(state.recipeProgress.star_orchid).toBe(0)
     // At level III each individual parent alone still fails the recipe.
-    purchase({type:'store',plot:11})
+    purchase({type:'store',plot:11,expectedId:state.plots[11].plant!.id})
     purchase({type:'upgrade',plot:15})
     reject(state,{type:'upgrade',plot:15},'maxLevel')
     wait(state,40)
     expect(play({type:'harvest',plot:15}).ok).toBe(true)
     expect(state.recipeProgress.star_orchid).toBe(0)
     purchase({type:'return',plot:11,id:state.nursery[0].id})
-    purchase({type:'store',plot:14})
+    purchase({type:'store',plot:14,expectedId:state.plots[14].plant!.id})
     wait(state,40)
     expect(play({type:'harvest',plot:15}).ok).toBe(true)
     expect(state.recipeProgress.star_orchid).toBe(0)

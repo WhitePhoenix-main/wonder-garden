@@ -7,6 +7,7 @@ const primary = 'wonder-garden.save.v1'
 export function createPersistence(access: () => Storage, key = primary) {
   const backupKey = key + '.backup'
   let warning: string|null = null
+  let hasGarden = false
   let protectedSave = false
   function load(): GameState {
     try {
@@ -14,11 +15,11 @@ export function createPersistence(access: () => Storage, key = primary) {
       const raw = storage.getItem(key)
       const current = parseSave(raw)
       if (current === 'future') { protectedSave = true; warning = 'future'; return initialState() }
-      if (current) return current
+      if (current) { hasGarden = true; return current }
       const previous = storage.getItem(backupKey)
       const recovered = parseSave(previous)
       if (recovered === 'future') { protectedSave = true; warning = 'future'; return initialState() }
-      if (recovered) { warning = 'recovered'; return recovered }
+      if (recovered) { hasGarden = true; warning = 'recovered'; return recovered }
       if (raw !== null || previous !== null) { protectedSave = true; warning = 'damaged' }
     } catch { warning = 'unavailable' }
     return initialState()
@@ -55,5 +56,5 @@ export function createPersistence(access: () => Storage, key = primary) {
     return JSON.stringify(state,null,2)
   }
 
-  return { load, save, reset, exportData, get warning() { return warning } }
+  return { get hasGarden() { return hasGarden }, load, save, reset, exportData, get warning() { return warning } }
 }
