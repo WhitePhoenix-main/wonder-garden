@@ -1,0 +1,8 @@
+packages:
+  - '.'
+storeDir: .pnpm-store
+virtualStoreDir: node_modules/.pnpm
+enableGlobalVirtualStore: false
+packageImportMethod: copy
+allowBuilds:
+  esbuild: true

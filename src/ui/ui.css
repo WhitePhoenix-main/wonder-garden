@@ -1,0 +1,720 @@
+* {
+  box-sizing: border-box;
+}
+
+html,body,#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Segoe UI",Arial,sans-serif;
+  color: #304d3d;
+  background: radial-gradient(ellipse at 46% 35%,#f7f5dc 0%,#e5f0df 39%,#bcded8 100%);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-height: 44px;
+  border: 1px solid #c8ccb6;
+  border-radius: 10px;
+  background: #f9f7e9;
+  padding: 9px 14px;
+}
+
+button:hover:not(:disabled) {
+  background: #edf2dc;
+  border-color: #829d76;
+}
+
+button:focus-visible {
+  outline: 3px solid #b37837;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: .46;
+  cursor: not-allowed;
+}
+
+#world {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+#world canvas {
+  display: block;
+  touch-action: none;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#ui button,#ui aside,#ui nav,#ui header,#ui .camera {
+  pointer-events: auto;
+}
+
+.topbar {
+  height: 76px;
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 10px 14px;
+  background: rgba(251,249,236,.93);
+  border: 1px solid #fff9e6;
+  border-radius: 15px;
+  box-shadow: 0 5px 22px #567b6925;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 202px;
+}
+
+.brand-mark {
+  font: 40px Georgia;
+  color: #6c9467;
+  line-height: 1;
+}
+
+.brand strong {
+  font: 600 23px Georgia,serif;
+  display: block;
+  white-space: nowrap;
+}
+
+.brand small,.eyebrow {
+  font-size: 9px;
+  letter-spacing: .16em;
+  font-weight: 700;
+  color: #8c9b7c;
+}
+
+.brand small {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: 1;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-icon {
+  display: grid;
+  place-items: center;
+  width: 37px;
+  height: 37px;
+  border-radius: 50%;
+  background: #e9ead2;
+  color: #a37939;
+  font-size: 19px;
+}
+
+.stat small {
+  display: block;
+  color: #788a76;
+  font-size: 11px;
+}
+
+.stat strong {
+  font-size: 15px;
+}
+
+.sell {
+  background: #4d7759;
+  color: #fffdf1;
+  border-color: #4d7759;
+  font-weight: 700;
+}
+
+.sell:hover:not(:disabled) {
+  background: #365b43;
+  color: white;
+}
+
+.top-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.quiet {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  padding: 8px;
+}
+
+.goal-card,.context {
+  background: rgba(252,250,237,.94);
+  border: 1px solid #fff9e6;
+  box-shadow: 0 6px 24px #426f5922;
+  border-radius: 15px;
+}
+
+.goal-card {
+  position: absolute;
+  top: 110px;
+  left: 24px;
+  padding: 15px 18px;
+  width: 220px;
+}
+
+.helper-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: #385e45;
+}
+.helper-link svg { width: 22px; height: 22px; }
+.stat.basket { border: 0; background: transparent; padding: 0; }
+.stat.basket:disabled { opacity: 1; }
+
+.goal-card p {
+  font: 15px/1.4 Georgia,serif;
+  margin: 7px 0 0;
+}
+
+.context {
+  position: absolute;
+  right: 24px;
+  top: 110px;
+  width: 290px;
+  max-height: calc(100% - 215px);
+  pointer-events: auto;
+}
+
+.context-inner {
+  overscroll-behavior: contain;
+  padding: 20px;
+  max-height: inherit;
+  overflow: auto;
+}
+
+.context h2 {
+  font: 600 23px/1.15 Georgia,serif;
+  margin: 0 30px 9px 0;
+  color: #385a43;
+}
+
+.context h3 {
+  font: 600 16px Georgia,serif;
+  margin: 18px 0 8px;
+}
+
+.context p {
+  color: #70816e;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 7px 0 13px;
+}
+
+.context button:not(.close) {
+  width: 100%;
+  margin-top: 7px;
+  text-align: left;
+}
+
+.context .primary {
+  background: #557c5a;
+  color: white;
+  border-color: #557c5a;
+  font-weight: 700;
+}
+
+.context .primary:hover {
+  background: #3e6548;
+  color: white;
+}
+
+.close {
+  position: absolute;
+  z-index: 1;
+  background: #fcfaed;
+  right: 10px;
+  top: 8px;
+  border: 0;
+  font-size: 23px;
+  padding: 0;
+  width: 44px;
+}
+
+.harmony-label {
+  display: block;
+  margin-top: 7px;
+  color: #526b56;
+}
+
+.decor-slots {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 4px;
+}
+
+.decor-slots button[aria-pressed="true"], .context button[data-action="decor-item"][aria-pressed="true"] {
+  background: #e1ebd5;
+  border-color: #87a088;
+}
+
+.journal-tasks {
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.seed-list,.nursery-list {
+  display: grid;
+  gap: 2px;
+}
+
+.recipe-card + .recipe-card {
+  border-top: 1px solid #ced4bd;
+}
+
+.book-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.context .book-filters button:not(.close) {
+  width: auto;
+  flex: 1;
+  padding: 6px;
+  text-align: center;
+}
+
+.book-filters button[aria-pressed="true"] {
+  background: #e1ebd5;
+}
+
+.seed-blueberry { background: #52669a; }
+.seed-clover { background: #74a66d; }
+.seed-moonflower { background: #c8c6e0; }
+.seed-moonberry { background: #9981bb; }
+.seed-honey_clover { background: #a9ad63; }
+.seed-golden_flower { background: #dbad48; }
+.seed-crystal_flower { background: #6abbae; }
+.seed-star_orchid { background: #b07da8; }
+
+.context .seed {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  text-align: left;
+  background: #f7f6e9;
+}
+
+.seed strong,.seed small {
+  display: block;
+}
+
+.seed strong {
+  font-size: 13px;
+}
+
+.seed small {
+  font-size: 11px;
+  color: #82907b;
+  margin-top: 2px;
+}
+
+.seed.chosen {
+  border-color: #76966c;
+  background: #e9f0de;
+  box-shadow: inset 3px 0 #729766;
+}
+
+.seed-dot {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  background: #c47b72;
+  border: 4px solid #f3e0cd;
+  border-radius: 50%;
+}
+
+.seed-strawberry {
+  background: #c65e58;
+}
+
+.seed-sunflower {
+  background: #e3bd5a;
+}
+
+.seed-solar_strawberry {
+  background: #e1a94e;
+}
+
+.context .hint {
+  background: #edf1dd;
+  border-radius: 9px;
+  padding: 10px;
+  color: #627a5d;
+}
+
+.recipe-count {
+  display: flex;
+  align-items: center;
+  color: #bd9250;
+}
+
+.recipe-count strong {
+  font: 40px Georgia;
+}
+
+.recipe-count small {
+  display: block;
+  color: #81907c;
+  font-size: 11px;
+}
+
+.progress {
+  height: 7px;
+  border-radius: 20px;
+  background: #e2e8d5;
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: #86ad75;
+}
+
+.modes {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid #fff9e6;
+  background: rgba(251,249,236,.95);
+  border-radius: 15px;
+  box-shadow: 0 7px 28px #426f5933;
+}
+
+.modes button {
+  border: 0;
+  min-width: 106px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #7b8b75;
+}
+
+.modes button span {
+  font-size: 21px;
+}
+
+.modes button strong {
+  font-size: 13px;
+}
+
+.modes button.active {
+  background: #e3ecd9;
+  color: #3d6b49;
+}
+
+svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border-radius: 50%;
+  background: #e9efda;
+}
+
+.brand-mark svg {
+  width: 30px;
+  height: 30px;
+}
+
+.stat-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.modes svg {
+  width: 22px;
+  height: 22px;
+}
+
+.goal-card {
+  pointer-events: auto;
+}
+
+.top-actions {
+  position: relative;
+}
+
+.top-actions .quiet {
+  min-width: 44px;
+}
+
+.top-actions .reset {
+  color: #916b59;
+}
+
+.camera {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  display: flex;
+  gap: 5px;
+}
+
+.camera button {
+  width: 44px;
+  padding: 0;
+  font-size: 22px;
+  background: #faf9ed;
+}
+
+.warning,.notice {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 102px;
+  max-width: min(90%,520px);
+  padding: 10px 16px;
+  border-radius: 9px;
+  background: #fff2d5;
+  color: #765c37;
+  box-shadow: 0 4px 14px #526b4d33;
+  font-size: 13px;
+}
+
+.notice {
+  top: auto;
+  bottom: 100px;
+  background: #f7f6e6;
+  color: #41654a;
+}
+
+@media(max-width:800px) {
+
+  .topbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    height: auto;
+    min-height: 64px;
+    padding: 7px 9px;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .brand-mark {
+    font-size: 30px;
+  }
+
+  .brand strong {
+    font-size: 17px;
+  }
+
+  .brand small {
+    font-size: 8px;
+  }
+
+  .stats {
+    order: 3;
+    width: 100%;
+    gap: 9px;
+    justify-content: space-between;
+  }
+
+  .stat-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+
+  .stat {
+    gap: 4px;
+  }
+
+  .stat small {
+    font-size: 9px;
+  }
+
+  .stat strong {
+    font-size: 13px;
+  }
+
+  .sell {
+    font-size: 12px;
+    padding: 7px 9px;
+  }
+
+  .top-actions .quiet {
+    font-size: 11px;
+    padding: 4px;
+  }
+
+  .top-actions .reset {
+    max-width: 70px;
+    line-height: 1.1;
+  }
+
+  .goal-card {
+    top: 137px;
+    left: 10px;
+    width: 174px;
+    padding: 10px 12px;
+  }
+
+  .goal-card p {
+    font-size: 13px;
+  }
+
+  .context {
+    right: 9px;
+    top: auto;
+    bottom: 82px;
+    width: min(250px,66vw);
+    max-height: calc(45vh - 82px);
+  }
+
+  .context-inner {
+    padding: 13px;
+  }
+
+  .context h2 {
+    font-size: 18px;
+  }
+
+  .context p {
+    font-size: 12px;
+  }
+
+  .context button:not(.close) {
+    font-size: 12px;
+  }
+
+  .context .hint {
+    padding: 7px;
+  }
+
+  .camera {
+    left: 10px;
+    bottom: 87px;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .camera button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .modes {
+    bottom: max(8px,env(safe-area-inset-bottom));
+    width: calc(100% - 16px);
+    justify-content: space-around;
+    padding: 4px;
+  }
+
+  .modes button {
+    min-width: 0;
+    flex: 1;
+    gap: 1px;
+    flex-direction: column;
+    padding: 4px;
+  }
+
+  .modes button span {
+    font-size: 19px;
+    line-height: 20px;
+  }
+
+  .modes button strong {
+    font-size: 11px;
+  }
+
+  .notice {
+    bottom: 160px;
+  }
+
+  .warning {
+    top: 132px;
+    z-index: 4;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .brand-mark svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  .modes svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media(min-width:801px) {
+
+  #world {
+    inset: 86px 0 62px;
+  }
+}
+
+@media (min-width:801px) and (max-width:1050px) {
+  .topbar { gap: 12px; }
+  .brand { min-width: 155px; }
+  .brand strong { font-size: 19px; }
+  .stats { gap: 8px; }
+  .stat-icon { width: 30px; height: 30px; }
+  .top-actions { gap: 0; }
+  .top-actions .quiet { padding-inline: 6px; }
+}
+
+@media (max-width:800px) and (max-height:500px) and (orientation:landscape) {
+  .context { max-height: calc(100% - 205px); width: min(250px,40vw); }
+  .camera { flex-direction: row; }
+}
