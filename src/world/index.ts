@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { island } from '../game/config'
+import { island, isSpecies, speciesInfo } from '../game/config'
 import type { World, WorldView } from '../runtime/presentation'
 import { halfHeight, halfWidth, type Point } from './geometry'
 import { IslandScene } from './IslandScene'
@@ -99,16 +99,17 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
   })
   observer.observe(host)
   return {
-    effects(events, harvestPlot) {
+    effects(events) {
       if (events.some(e=>e.startsWith('RecipeRevealed:'))) current?.celebrate()
       for (const event of events) {
-        if (event.startsWith('HelperHarvested:')) {
-          const index = Number(event.split(':')[1])
-          current?.flyToPlot(index)
-          current?.collectEffect(index)
+        const [type, plot, species, count] = event.split(':')
+        if (type === 'HelperHarvested') current?.flyToPlot(Number(plot))
+        if (type === 'Harvested' && isSpecies(species)) {
+          const info = speciesInfo[species]
+          const name = view?.state.lang === 'en' ? info.nameEn : info.nameRu
+          current?.collectEffect(Number(plot), `+${count} ${name}`)
         }
       }
-      if (harvestPlot !== undefined) current?.collectEffect(harvestPlot)
     },
     render(next) {
       view = next

@@ -1,9 +1,8 @@
-import { experiments } from '../src/game/queries'
-import { recipes, hybridCounts } from '../src/game/config'
+import { recipes, hybridCounts, speciesInfo } from '../src/game/config'
 import type { Hybrid } from '../src/game/model'
 import { expect } from 'vitest'
 import type { Command, GameState, Plant } from '../src/game/model'
-import { advance, basketCapacity, execute, saleValue } from '../src/game'
+import { advance, execute } from '../src/game'
 
 type Harvest=Extract<Command,{type:'harvest'}>
 type Input=Exclude<Command,Harvest>|(Omit<Harvest,'expectedId'|'cycle'>&Partial<Pick<Harvest,'expectedId'|'cycle'>>)
@@ -35,34 +34,41 @@ export function plantAt(state: GameState, plot: number): Plant {
 }
 
 export function cross(state:GameState,plot:number,result:Hybrid) {
-  const experiment=experiments(state,plot).find(e=>e.result===result)
-  if(!experiment)throw Error('Missing experiment '+result)
-  return commit(state,{type:'harvest',seeds:true,plot,expectedId:plantAt(state,plot).id,experiment})
+  commit(state,{type:'harvest',plot})
+  const batch=state.basket.find(b=>b.pollination?.result===result)
+  if(!batch)throw Error('Missing pollinated harvest '+result)
+  return commit(state,{type:'extractSeeds',id:batch.id,count:batch.count})
 }
 export function legacySix(state:GameState) {
   const {variants,failures,rng,revealed,...rest}=structuredClone(state)
   const plant=(p:Plant)=>({id:p.id,species:p.species,progress:p.progress,mature:p.mature,readySince:p.readySince,propagation:0})
-  return {...rest,schemaVersion:6,recipeProgress:Object.fromEntries(recipes.map(r=>[r.result,revealed.includes(r.result)?r.harvests:0])),seeds:Object.fromEntries(Object.keys(hybridCounts()).map(id=>[id,state.seeds[id as Hybrid]])),
+  return {...rest,schemaVersion:6,balanceVersion:1,basket:rest.basket.flatMap(b=>Array.from({length:b.count},()=>({species:b.species,valueUnits:b.valueUnits}))),
+    recipeProgress:Object.fromEntries(recipes.map(r=>[r.result,revealed.includes(r.result)?r.harvests:0])),seeds:Object.fromEntries(Object.keys(hybridCounts()).map(id=>[id,state.seeds[id as Hybrid]])),
     plots:rest.plots.map(b=>({...b,plant:b.plant && plant(b.plant)})),nursery:rest.nursery.map(plant)}
 }
 
 export function earn(state: GameState, target: number): void {
-  // Harvest and sell through the public commands, stopping as soon as the target is funded.
-  for (let cycle = 0; cycle < 4000 && state.coins < target; cycle++) {
-    const renew:number[]=[]
-    state.plots.forEach(({ plant }, plot) => {
-      if (plant?.species==='radish' && plant.readySince !== null && state.basket.length < basketCapacity(state)
-          && state.coins + saleValue(state) < target) {
-        if(state.basket.length+2>basketCapacity(state))commit(state,{type:'sell'})
-        commit(state, { type: 'harvest', plot,seeds:plant.lives===1 && state.seeds.radish<=renew.length })
-        if(!state.plots[plot].plant)renew.push(plot)
-      }
-    })
-    commit(state, { type: 'sell' })
-    for(const plot of renew)commit(state,{type:'plant',plot,species:'radish',stock:{rarity:'common',plus:null,minus:null}})
-    if (state.coins < target) wait(state, 6)
+  for (let cycle = 0; cycle < 400 && state.coins < target; cycle++) {
+    let plots=state.plots.flatMap((p,plot)=>p.plant?.species==='radish' ? [plot] : [])
+    if (!plots.length) {
+      const plot=state.plots.findIndex(b=>b.open && !b.plant)
+      if (plot<0) throw Error('No space for a radish')
+      commit(state,{type:'plant',plot,species:'radish'})
+      plots=[plot]
+    }
+    wait(state,speciesInfo.radish.cycleSec)
+    for (const plot of plots) {
+      commit(state,{type:'harvest',plot})
+      commit(state,{type:'sell'})
+      commit(state,{type:'plant',plot,species:'radish'})
+    }
   }
   expect(state.coins).toBeGreaterThanOrEqual(target)
+}
+
+export function addLegacyFruit(state:GameState,count:number,valueUnits=30000) {
+  state.basket.push({id:state.nextId++,species:'radish',valueUnits,count,profile:null,pollination:null,
+    lots:[{size:count,remaining:count,seedYield:0,copyChance:0,copyPending:false,crossPending:false}]})
 }
 
 export function memoryStorage(): Storage {

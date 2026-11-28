@@ -1,47 +1,45 @@
 import { expect,it } from 'vitest'
 import { advance, initialState, speciesInfo } from '../src/game'
-import { chance, experiments, secondsLeft } from '../src/game/queries'
-import { rules } from '../src/game/genetics'
+import { chance, experiments, pollinationFor, secondsLeft } from '../src/game/queries'
+import { balance } from '../src/game/config'
+import { common, rules } from '../src/game/genetics'
 import { parseSave } from '../src/persistence/migration'
 import type { Command,Hybrid,Species } from '../src/game/model'
-import { commit,cross,reject } from './helpers'
+import { commit,cross,earn,wait } from './helpers'
 
-it.each([17,42,2026])('completes a legal garden with common parents, sequence %i',seed=>{
-  let s=initialState(seed),renewals=0,firstRenewal=0
-  // Sell ripe fruit across the island and reserve enough seeds to renew each producer.
-  function earn(amount:number){
-    while(s.coins<amount){
-      advance(s,6)
-      for(const [plot,bed] of s.plots.entries()){
-        const plant=bed.plant
-        if(!plant || plant.readySince===null)continue
-        commit(s,{type:'harvest',plot,seeds:plant.lives===1 && !s.seeds[plant.species]})
-        commit(s,{type:'sell'})
-        if(!s.plots[plot].plant){
-          commit(s,{type:'plant',species:plant.species,plot,stock:common})
-          renewals++;firstRenewal ||= s.playTime
-        }
-      }
-    }
-  }
-  function pay(command:Command,cost:number){earn(cost);commit(s,command)}
+it.each([17,42,2026])('completes all 12 species and 16 beds through public commands, sequence %i',seed=>{
+  let s=initialState(seed)
+  wait(s,speciesInfo.radish.cycleSec)
+  commit(s,{type:'harvest',plot:12})
+  const firstHarvest=s.playTime
+  const firstBatch=s.basket[0]
+  commit(s,{type:'extractSeeds',id:firstBatch.id,count:1})
+  commit(s,{type:'plant',species:'radish',plot:12,stock:common})
+  commit(s,{type:'sell'})
+  function pay(command:Command,cost:number){earn(s,cost);commit(s,command)}
   function open(plot:number){
     if(!s.plots[plot].open)pay({type:'clear',plot},balance.expansionCosts[s.plots.filter(b=>b.open).length-4])
   }
+  function stock(species:Species){
+    return s.seeds[species] ? common : s.variants.find(pack=>pack.species===species)
+  }
   function plant(plot:number,species:Species){
-    open(plot);pay({type:'plant',plot,species},speciesInfo[species].seedPrice??0)
+    open(plot)
+    pay({type:'plant',plot,species,stock:stock(species)},stock(species) ? 0 : speciesInfo[species].seedPrice??0)
   }
   function discover(plot:number,result:Hybrid){
-    for(let i=0;i<100 && !s.seeds[result];i++){
-      const p=s.plots[plot].plant!
-      if(p.lives===1 && !s.seeds[p.species]){
-        advance(s,secondsLeft(s,plot));commit(s,{type:'harvest',plot,seeds:true})
-      }else{
-        advance(s,secondsLeft(s,plot));cross(s,plot,result)
-      }
-      if(!s.plots[plot].plant)commit(s,{type:'plant',species:p.species,plot,stock:common})
+    const captured=pollinationFor(s,plot)
+    if (captured && captured.result!==result) {
+      advance(s,secondsLeft(s,plot))
+      cross(s,plot,captured.result)
     }
-    expect(s.seeds[result]).toBeGreaterThan(0)
+    for(let i=0;i<=rules.pity && !stock(result);i++){
+      const p=s.plots[plot].plant!
+      advance(s,secondsLeft(s,plot))
+      cross(s,plot,result)
+      if(!s.plots[plot].plant)plant(plot,p.species)
+    }
+    expect(stock(result)).toBeDefined()
   }
   plant(8,'strawberry');plant(9,'sunflower')
   discover(8,'solar_strawberry')
@@ -56,8 +54,8 @@ it.each([17,42,2026])('completes a legal garden with common parents, sequence %i
   pay({type:'upgrade',plot:15},750)
   const [a,b]=experiments(s,15)
   expect(a.donorId).not.toBe(b.donorId)
-  commit(s,{type:'move',from:14,to:12});advance(s,40)
-  reject(s,{type:'harvest',plot:15,expectedId:s.plots[15].plant!.id,seeds:true,experiment:a},'stalePlant')
+  commit(s,{type:'move',from:14,to:12})
+  expect(pollinationFor(s,15)).toBeNull()
   commit(s,{type:'move',from:12,to:14})
   const restored=parseSave(JSON.stringify(s))
   expect(restored).toEqual(s);s=restored as typeof s
@@ -65,21 +63,22 @@ it.each([17,42,2026])('completes a legal garden with common parents, sequence %i
   for(const plot of [1,2,3])open(plot)
   expect(s.planted).toHaveLength(12);expect(s.plots.every(p=>p.open)).toBe(true)
   expect(parseSave(JSON.stringify(s))).toEqual(s)
-  console.log({seed,first,firstRenewal,renewals,completion:s.playTime})
+  console.log({seed,firstHarvest,firstHybrid:first,completion:s.playTime})
 })
-import { balance } from '../src/game/config'
-import { common } from '../src/game/genetics'
 
-it('keeps failures across reload and relocation and guarantees the fifth selected cross',()=>{
+it('keeps failures across reload and relocation and guarantees the fifth extraction attempt',()=>{
   const s=initialState(1);s.coins=2000
   for(const [plot,species] of [[8,'strawberry'],[9,'sunflower']] as const)commit(s,{type:'plant',plot,species})
   advance(s,12);cross(s,8,'solar_strawberry')
-  for(let i=0;i<4;i++){
-    // This sequence gives a failed experiment after the ordinary quantity roll.
-    s.rng=1;advance(s,12)
-    expect(cross(s,8,'solar_strawberry')).toContain('ExperimentFailed')
+  for(let i=0;i<rules.pity;i++){
+    advance(s,12);commit(s,{type:'harvest',plot:8})
+    const batch=s.basket[0]
+    // The first sample from 1000 is ~.624, above the normal .3 success chance.
+    s.rng=1000
+    expect(commit(s,{type:'extractSeeds',id:batch.id,count:batch.count})).toContain('ExperimentFailed')
     expect(s.failures.solar_strawberry).toBe(i+1)
   }
+  commit(s,{type:'plant',plot:8,species:'strawberry',stock:common})
   commit(s,{type:'move',from:8,to:9})
   const copy=parseSave(JSON.stringify(s)) as typeof s
   expect(chance(copy,'solar_strawberry')).toBe(1)

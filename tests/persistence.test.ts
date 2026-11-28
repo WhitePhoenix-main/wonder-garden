@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { initialState } from '../src/game'
+import { initialState, saleValue } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
 import { validState } from '../src/persistence/validation'
-import { cross, commit, earn, memoryStorage, plantAt, wait } from './helpers'
+import { common } from '../src/game/genetics'
+import { cross, commit, earn, legacySix, memoryStorage, plantAt, wait } from './helpers'
 
 const primary = 'wonder-garden.save.v1'
 const backup = primary + '.backup'
@@ -16,7 +17,7 @@ describe('Sprint 01 persistence', () => {
     commit(state, { type: 'language', lang: 'en' })
     createPersistence(() => storage).save(state)
     expect(createPersistence(() => storage).load()).toEqual(state)
-    expect(plantAt(state, 12).progress).toBe(0)
+    expect(state.plots[12].plant).toBeNull()
   })
 
   it('SV-02: recovers last valid backup when primary is malformed or references unknown plants', () => {
@@ -47,10 +48,10 @@ describe('Sprint 01 persistence', () => {
     commit(state,{type:'plant',species:'sunflower',plot:9})
     function checkLegacy(fromBackup: boolean) {
       const storage = memoryStorage()
-      const {seeds,revealed,...rest} = structuredClone(state)
-      const legacyPlant = ({id,species,mature,readySince,progress}: NonNullable<typeof state.plots[number]['plant']>) => ({id,species,mature,readySince,progress})
+      const {seeds,...rest} = legacySix(state)
+      const legacyPlant = ({id,species,mature,readySince,progress}: typeof rest.nursery[number]) => ({id,species,mature,readySince,progress})
       const raw = JSON.stringify({...rest, schemaVersion:1, solarSeeds:seeds.solar_strawberry,
-        recipeProgress:revealed.includes('solar_strawberry')?3:0,
+        recipeProgress:state.revealed.includes('solar_strawberry')?3:0,
         plots:rest.plots.map(p => ({...p,plant:p.plant && legacyPlant(p.plant)})),
         nursery:rest.nursery.map(legacyPlant)})
       storage.setItem(fromBackup ? backup : primary,raw)
@@ -65,6 +66,9 @@ describe('Sprint 01 persistence', () => {
     checkLegacy(false)
     wait(state,12)
     cross(state,8,'solar_strawberry')
+    if (state.seeds.solar_strawberry>1) commit(state,{
+      type:'sellSeeds',species:'solar_strawberry',profile:common,count:state.seeds.solar_strawberry-1
+    })
     checkLegacy(true)
     commit(state,{type:'plant',plot:12,species:'solar_strawberry',replaceId:state.plots[12].plant!.id})
     commit(state,{type:'store',plot:12,expectedId:state.plots[12].plant!.id})
@@ -81,7 +85,7 @@ describe('Sprint 01 persistence', () => {
       storage.setItem(primary, raw)
       const persistence = createPersistence(() => storage)
       const session = persistence.load()
-      expect(session).toMatchObject({coins:20,schemaVersion:7})
+      expect(session).toMatchObject({coins:20,schemaVersion:8})
       expect(persistence.warning).toBe(warning)
       commit(session, { type: 'plant', plot: 8, species: 'radish' })
       persistence.save(session)
@@ -114,9 +118,10 @@ describe('Sprint 01 persistence', () => {
     expect(unavailable.warning).toBe('unavailable')
     wait(state, 6)
     commit(state, { type: 'harvest', plot: 12 })
+    const revenue=saleValue(state)
     commit(state, { type: 'sell' })
     unavailable.save(state)
-    expect([23,26]).toContain(state.coins)
+    expect(state.coins).toBe(20+revenue)
     expect(unavailable.warning).toBe('unavailable')
 
     const storage = memoryStorage()

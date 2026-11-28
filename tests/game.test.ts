@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { basketCapacity, canReplace, expansionCost, growthMultiplier, initialState } from '../src/game'
+import { basketCapacity, canReplace, expansionCost, growthMultiplier, initialState, saleValue, speciesInfo } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
-import { cross, legacySix, commit, earn, memoryStorage, plantAt, reject, wait } from './helpers'
+import { common } from '../src/game/genetics'
+import { addLegacyFruit, cross, commit, earn, memoryStorage, plantAt, reject, wait } from './helpers'
 
 describe('Sprint 01 gameplay', () => {
-  it('ST-01, GR-01, GR-03, HA-05: starts with two radishes and one fruit per active cycle', () => {
+  it('ST-01, GR-01, GR-03, HA-05: starts with two radishes, each ready for one crop', () => {
     const state = initialState(33)
     expect(state.coins).toBe(20)
     expect(state.planted).toEqual(['radish'])
-    expect(basketCapacity(state)).toBe(15)
+    expect(basketCapacity(state)).toBe(90)
     expect(state.plots.flatMap((p, i) => p.open ? [i] : [])).toEqual([8, 9, 12, 13])
     expect(state.plots.flatMap((p, i) => p.plant ? [i] : [])).toEqual([12, 13])
 
@@ -19,12 +20,14 @@ describe('Sprint 01 gameplay', () => {
     expect(plantAt(state, 12).mature).toBe(true)
     wait(state, 60)
     commit(state, { type: 'harvest', plot: 12 })
-    expect(state.basket.every(f=>f.valueUnits===30000)).toBe(true)
-    expect(plantAt(state, 12)).toMatchObject({ mature: true, progress: 0, readySince: null })
+    expect(state.basket[0]).toMatchObject({species:'radish',valueUnits:40000})
+    expect(state.basket[0].count).toBeGreaterThanOrEqual(4)
+    expect(state.plots[12].plant).toBeNull()
+    expect(state.coins).toBe(20)
     reject(state, { type: 'harvest', plot: 12 }, 'notReady')
     wait(state, 6)
-    commit(state, { type: 'harvest', plot: 12 })
-    const revenue=state.basket.length*3
+    commit(state, { type: 'harvest', plot: 13 })
+    const revenue=saleValue(state)
     commit(state, { type: 'sell' })
     expect(state.coins).toBe(20+revenue)
     expect(state.sold).toBe(true)
@@ -34,15 +37,11 @@ describe('Sprint 01 gameplay', () => {
 
   it('HA-02: refuses a harvest at capacity without altering the ready plant or basket', () => {
     const state = initialState(33)
-    for (let count = 0; count < basketCapacity(state); count++) {
-      wait(state, 6)
-      plantAt(state,12).fruitRoll=0
-      commit(state, { type: 'harvest', plot: 12 })
-    }
-    expect(state.basket).toHaveLength(15)
+    addLegacyFruit(state,basketCapacity(state))
+    wait(state,6)
     reject(state, { type: 'harvest', plot: 13 }, 'basketFull')
     commit(state, { type: 'sell' })
-    expect(state.coins).toBe(65)
+    expect(state.coins).toBe(20+basketCapacity(state)*3)
     commit(state, { type: 'harvest', plot: 13 })
     expect(state.basket).not.toHaveLength(0)
   })
@@ -74,14 +73,14 @@ describe('Sprint 01 gameplay', () => {
     wait(state, 12)
     commit(state, { type: 'harvest', plot: 8 })
     expect(state.revealed.includes('solar_strawberry')).toBe(false)
-    wait(state, 4.8)
+    wait(state, speciesInfo.strawberry.regrowSec * 0.4)
     const progress = plantAt(state, 8).progress
     expect(progress).toBeCloseTo(0.4)
     commit(state, { type: 'move', from: 13, to: 9 })
     expect(plantAt(state, 8).progress).toBe(progress)
     expect(growthMultiplier(state, 8)).toBeCloseTo(1.4)
     wait(state, 0.6)
-    expect(plantAt(state, 8).progress).toBeCloseTo(progress + 0.07)
+    expect(plantAt(state, 8).progress).toBeCloseTo(progress + 0.6*1.4/speciesInfo.strawberry.regrowSec)
     commit(state, { type: 'clear', plot: 10 })
     commit(state, { type: 'move', from: 12, to: 10 })
     commit(state, { type: 'plant', plot: 12, species: 'sunflower' })
@@ -107,7 +106,7 @@ describe('Sprint 01 gameplay', () => {
     expect(state.planted).toHaveLength(4)
     expect(state.seeds.solar_strawberry).toBe(0)
     wait(state, 12)
-    expect(commit(state, { type: 'harvest', plot: 8 })).toEqual(['Harvested'])
+    expect(commit(state, { type: 'harvest', plot: 8 })).toContain('Harvested')
     expect(state.seeds.solar_strawberry).toBe(0)
 
     earn(state, 250)
@@ -181,7 +180,7 @@ describe('Sprint 01 gameplay', () => {
     expect(state.coins).toBe(coins - 60)
     reject(state, { ...replacement, replaceId: oldFirst.id }, 'stalePlant')
     commit(state, { type: 'plant', plot: 9, species: 'sunflower', replaceId: oldSecond.id })
-    expect(state.coins).toBe(coins - 150)
+    expect(state.coins).toBe(coins - 60 - speciesInfo.sunflower.seedPrice!)
     expect(state.nursery).toEqual([oldFirst, oldSecond])
 
     for (let count = 0; count < 2; count++) {
@@ -200,18 +199,22 @@ describe('Sprint 01 gameplay', () => {
     commit(state, { type: 'move', from: 13, to: 9 })
     wait(state, 12)
     expect(cross(state,8,'solar_strawberry')).toContain('RecipeRevealed:solar_strawberry')
-    expect(state.seeds.solar_strawberry).toBe(1)
+    expect(state.seeds.solar_strawberry).toBeGreaterThanOrEqual(1)
     expect(state.nursery).toEqual([oldFirst, oldSecond])
     createPersistence(() => storage).save(state)
     state = createPersistence(() => storage).load()
     expect(state.revealed.includes('solar_strawberry')).toBe(true)
-    expect(state.seeds.solar_strawberry).toBe(1)
+    const seedCount = state.seeds.solar_strawberry
+    expect(seedCount).toBeGreaterThanOrEqual(1)
     const beforeHybrid = state.coins
     commit(state, { type: 'plant', plot: 12, species: 'solar_strawberry', replaceId: plantAt(state, 12).id })
-    expect(state.seeds.solar_strawberry).toBe(0)
+    expect(state.seeds.solar_strawberry).toBe(seedCount-1)
     expect(state.coins).toBe(beforeHybrid)
     expect(state.planted).toHaveLength(4)
     expect(state.plots.every(p => p.open && p.plant)).toBe(true)
+    while (state.seeds.solar_strawberry) {
+      commit(state, {type:'sellSeeds',species:'solar_strawberry',profile:common,count:state.seeds.solar_strawberry})
+    }
     reject(state, { type: 'plant', plot: 14, species: 'solar_strawberry', replaceId: plantAt(state, 14).id }, 'noSeeds')
   })
 })

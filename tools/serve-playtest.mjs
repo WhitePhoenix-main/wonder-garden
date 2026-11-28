@@ -1,8 +1,10 @@
 // Serve only the packaged production files, allowing a phone on the same LAN to join.
 import http from 'node:http'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { networkInterfaces } from 'node:os'
-const root=new URL('./dist/',import.meta.url)
+const adjacentDist = new URL('./dist/',import.meta.url)
+const root = existsSync(new URL('index.html',adjacentDist)) ? adjacentDist : new URL('../dist/',import.meta.url)
 const port=Number(process.argv[2] ?? 4173)
 const mime={html:'text/html; charset=utf-8',svg:'image/svg+xml',js:'text/javascript',css:'text/css'}
 const server=http.createServer(async(req,res)=>{

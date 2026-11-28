@@ -2,41 +2,51 @@ import type { GameState } from '../game/model'
 import { canReplace, isRecipeActive, recipes, speciesIds, speciesInfo } from '../game'
 
 import { saleValue } from '../game/queries'
+import { extractionYield } from '../game/trade'
 import { alpha } from './alpha'
 
 export function recoveryHint(state:GameState) {
   const a=alpha[state.lang], cost=speciesInfo.radish.seedPrice!
   if (state.nursery.length) return a.nursery
   if (state.variants.length || Object.values(state.seeds).some(Boolean)) return a.stock
+  if (state.basket.some(b=>extractionYield(b).seeds>0 || extractionYield(b).attempts>0)) return hints[state.lang].inventory
   if (state.coins>=cost) return a.buy
   return state.coins+saleValue(state)>=cost ? a.sell : a.empty
 }
 const solarRecipe = recipes.find(recipe => recipe.result === 'solar_strawberry')!
 const hints = {
   ru: {
-    harvest: 'Выберите созревший редис и нажмите «Собрать плоды».',
-    sell: 'Нажмите «Продать», чтобы обменять урожай на монеты.',
+    harvest: 'Нажмите на созревший редис, чтобы собрать урожай.',
+    inventory: 'Откройте инвентарь и извлеките семена из части урожая.',
+    seedPlant: 'Откройте инвентарь и посадите полученное семя.',
+    sell: 'В инвентаре продайте часть урожая. Остальное можно пустить на семена.',
+    cross: 'В инвентаре извлеките семена из опылённого урожая клубники.',
+    regrow: 'Клубника растёт снова после сбора, пока у неё остаются жизни.',
     saveFor: (name:string, price:number) => `Собирайте и продавайте урожай. ${name} стоит ${price} ◈.`,
     strawberry: 'В «Посадке» выберите клубнику и свободную грядку.',
     sunflower: 'Посадите подсолнечник на грядке сбоку от клубники.',
     hybrid: 'В «Посадке» выберите полученное семя солнечной клубники.',
     replace: (name:string) => `В «Посадке» выберите «${name}» и замените одно из растений.`,
     move: 'В «Стройке» разместите клубнику и подсолнечник на соседних по стороне грядках.',
-    breed: 'Откройте клубнику и выберите сбор семян с подсолнечником. Первый опыт гарантирован.',
+    breed: 'Соберите клубнику, опылённую подсолнечником.',
     explore: 'Выберите следующий опыт или обустройте уголок сада.',
     expand: 'Все виды изучены. Откройте оставшиеся грядки.',
     complete: 'Хранитель острова · сад полностью открыт'
   },
   en: {
-    harvest: 'Select a ripe radish and choose Collect fruit.',
-    sell: 'Press “Sell” to trade your harvest for coins.',
+    harvest: 'Tap a ripe radish to collect its harvest.',
+    inventory: 'Open the inventory and extract seeds from some harvest.',
+    seedPlant: 'Open the inventory and plant a seed you extracted.',
+    sell: 'Sell part of your harvest in the inventory. Keep some fruit for seeds.',
+    cross: 'Extract seeds from pollinated strawberries in the inventory.',
+    regrow: 'Strawberries regrow after harvest as long as they have lives left.',
     saveFor: (name:string, price:number) => `Harvest and sell crops. ${name} costs ${price} ◈.`,
     strawberry: 'In Plant, choose a strawberry seed and an empty bed.',
     sunflower: 'Plant a sunflower beside the strawberry.',
     hybrid: 'In Plant, choose the sunberry seed you discovered.',
     replace: (name:string) => `In Plant, choose ${name} and replace a plant in a bed.`,
     move: 'Use Build to place the strawberry and sunflower in beds that share a side.',
-    breed: 'Select the strawberry and collect seeds with a sunflower donor. The first cross is guaranteed.',
+    breed: 'Harvest a strawberry pollinated by a sunflower.',
     explore: 'Choose another experiment or create a garden corner.',
     expand: 'Every species studied. Open the remaining beds.',
     complete: 'Island Keeper · garden complete'
@@ -45,12 +55,16 @@ const hints = {
 
 export function gardenHint(state:GameState):string {
   const text = hints[state.lang]
-  if (!state.sold) return state.basket.length ? text.sell : text.harvest
+  if (!state.sold && state.basket.length) return text.sell
+  if (!state.firstExtraction && state.basket.some(b=>b.profile && extractionYield(b).seeds>0)) return text.inventory
+  if (!state.firstSeedPlanting && (Object.values(state.seeds).some(Boolean) || state.variants.length)) return text.seedPlant
+  if (!state.sold) return text.harvest
   if (state.planted.includes('solar_strawberry')) {
     if (state.planted.length < speciesIds.length) return text.explore
     return state.plots.every(plot => plot.open) ? text.complete : text.expand
   }
   const revealed = state.revealed.includes('solar_strawberry')
+  if (!revealed && state.basket.some(b=>b.pollination?.result==='solar_strawberry' && extractionYield(b).attempts>0)) return text.cross
   const has=(species:string)=>state.plots.some(p=>p.plant?.species===species)
   const seed = revealed ? 'solar_strawberry' : !has('strawberry') ? 'strawberry' :
     !has('sunflower') ? 'sunflower' : null
@@ -67,5 +81,5 @@ export function gardenHint(state:GameState):string {
     return alpha[state.lang].occupied
   }
   if (seed === 'strawberry') return text.strawberry
-  return seed === 'sunflower' ? text.sunflower : text.hybrid
+  return seed === 'sunflower' ? text.sunflower+' '+text.regrow : text.hybrid
 }

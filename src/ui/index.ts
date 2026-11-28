@@ -1,4 +1,5 @@
-import { common } from '../game/genetics'
+import { inventoryWords, type InventoryTab, type InventorySort } from './inventory'
+import { common, stockCount } from '../game/genetics'
 import { field } from './specimens'
 import type { Profile, Command, DecorType, Species } from '../game/model'
 import type { Mode, UI, UIActions, WorldView } from '../runtime/presentation'
@@ -6,6 +7,7 @@ import { alpha } from './alpha'
 import { plantingIssue } from '../game/queries'
 import { bedLevels, speciesInfo } from '../game/config'
 import { canRecoverGarden, canReplace, expansionCost } from '../game/queries'
+import { extractionYield, quickSaleEligible } from '../game/trade'
 import type { DecorChoice } from './panels/garden'
 import { uiMarkup, type CollectionFilter, type Overlay } from './render'
 import { plantName, words } from './strings'
@@ -25,6 +27,12 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   let pressing = false
   let returnId: number | null = null
   let overlay: Overlay|null = null
+  let inventoryFilter='all'
+  let inventoryTab:InventoryTab='harvest'
+  let inventorySort:InventorySort='species'
+  let inventoryAmounts:Record<string,number>={}
+  let inventoryMinimum=1
+  let inventoryDetail:string|null=null
   let collectionFilter: CollectionFilter = 'all'
   let entry: Species|null = null
   let chapter: number|null = null
@@ -52,6 +60,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   }
 
   function showRewards(events:string[]) {
+    const harvest=events.find(e=>e.startsWith('Harvested:'))?.split(':')
+    if(harvest) notice='+'+harvest[3]+' '+name(harvest[2] as Species)
     const discoveries=events.filter(event=>event.startsWith('RecipeRevealed:'))
     if (discoveries.length && discoveries.length===view.state.revealed.length) {
       firstSeeds=discoveries.map(event=>event.split(':')[1] as Species)
@@ -72,6 +82,12 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     else {
       notice = ''
       showRewards(result.events)
+      if (result.obtained?.length) {
+        const lang = view.state.lang
+        notice = inventoryWords[lang].obtained+' · ' + result.obtained
+          .map(p=>name(p.species)+' · '+field[lang][p.rarity]+' ×'+p.count).join(' / ')
+        if (result.events.includes('ExperimentFailed')) notice += ' · '+field[lang].miss
+      }
     }
     draw()
   }
@@ -79,6 +95,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (!view) return
     if (pressing) return
     const html = uiMarkup(view,{
+      inventoryFilter,inventoryTab,inventorySort,inventoryAmounts,inventoryMinimum,inventoryDetail,
       stock,cornerPlanted,firstSeeds,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
     })
     if (html === last) return
@@ -90,8 +107,9 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     host.innerHTML = html
     const inner = host.querySelector<HTMLElement>('.context-inner')
     if (inner) inner.scrollTop = scroll
-    if (active?.dataset.action && active && host !== active && !document.body.contains(active)) {
-      const candidate = [...host.querySelectorAll<HTMLElement>('[data-action]')].find(el => JSON.stringify({...el.dataset})===focusData)
+    if (active && focusData!=='{}' && !document.body.contains(active)) {
+      const candidate = [...host.querySelectorAll<HTMLElement>('[data-action],[data-inventory-filter],[data-inventory-sort],[data-inventory-minimum]')]
+        .find(el=>Object.entries(active.dataset).every(([key,value])=> key==='max' || el.dataset[key]===value))
       candidate?.focus({preventScroll:true})
     }
     last = html
@@ -103,6 +121,14 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     window.setTimeout(draw, 0)
   })
   window.addEventListener('pointercancel', () => { pressing = false; draw() })
+  host.addEventListener('change', event => {
+    const target=event.target as HTMLSelectElement|HTMLInputElement
+    if (target.matches('[data-inventory-filter]')) inventoryFilter=target.value
+    else if (target.matches('[data-inventory-sort]')) inventorySort=target.value as InventorySort
+    else if (target.matches('[data-inventory-minimum]')) inventoryMinimum=Math.max(0,Number(target.value)||0)
+    else return
+    draw()
+  })
   host.addEventListener('click', event => {
     const target = (event.target as Element).closest<HTMLButtonElement>('button[data-action]')
     if (!target || !view) return
@@ -112,6 +138,45 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       updateDecor()
       actions.changeView({mode:next,sunflower:false,selected:index,moveFrom:null,shovel})
     }
+    if(action==='inventory') {overlay=overlay==='inventory'?null:'inventory';draw();return}
+    if (action==='inventory-tab') {
+      inventoryTab=target.dataset.tab as InventoryTab
+      if (inventoryTab==='seeds' && (inventoryFilter==='pollinated' || inventoryFilter==='plain')) inventoryFilter='all'
+      if (inventoryTab==='seeds' && inventorySort==='pollination') inventorySort='species'
+      inventoryDetail=null
+      draw()
+      return
+    }
+    if (action==='inventory-detail') {
+      const key=target.dataset.key!
+      inventoryDetail=inventoryDetail===key?null:key
+      draw()
+      return
+    }
+    if(action==='inventory-minus'||action==='inventory-plus'||action==='inventory-all') {const key=target.dataset.key!, current=inventoryAmounts[key]??1;inventoryAmounts[key]=action==='inventory-minus'?Math.max(1,current-1):action==='inventory-all'?Number(target.dataset.max):Math.min(Number(target.dataset.max),current+1);draw();return}
+    if(action==='inventory-plant') {mode('plant');chosen=target.dataset.seed as Species;stock=JSON.parse(target.dataset.profile!);draw();return}
+    if (action==='inventory-sell-h' || action==='inventory-extract') {
+      const id=Number(target.dataset.id), batch=view.state.basket.find(b=>b.id===id)
+      if (!batch) return
+      const key=target.dataset.key!, count=Math.min(batch.count,inventoryAmounts[key]??1)
+      const sell=action==='inventory-sell-h'
+      const wouldLoseCross=extractionYield(batch,count).attempts>0
+      if (sell && (wouldLoseCross || !quickSaleEligible(view.state,batch) && count===batch.count) &&
+        !window.confirm(inventoryWords[view.state.lang].confirmHarvest)) return
+      delete inventoryAmounts[key]
+      run(sell?{type:'sellHarvest',id,count}:{type:'extractSeeds',id,count})
+      return
+    }
+    if (action==='inventory-sell-s') {
+      const species=target.dataset.seed as Species, profile=JSON.parse(target.dataset.profile!) as Profile
+      const key=target.dataset.key!, count=Math.min(stockCount(view.state,species,profile),inventoryAmounts[key]??1)
+      if (count<1) return
+      const remaining=view.state.seeds[species]+view.state.variants.filter(v=>v.species===species).reduce((n,v)=>n+v.count,0)-count
+      if (!remaining && !window.confirm(inventoryWords[view.state.lang].confirmSeed+' '+name(species)+' ×'+count)) return
+      delete inventoryAmounts[key]
+      run({type:'sellSeeds',species,profile,count})
+      return
+    }
     if(action==='nursery'){controller.nursery();return}
     if(action==='nursery-return'){mode('plant');returnId=Number(target.dataset.id);draw();return}
     if (action==='pick-bed') {controller.pick(Number(target.dataset.id));return}
@@ -119,7 +184,9 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action==='menu') {mode('garden');actions.menu();return}
     if (action==='new-game' || action==='reset') {
       if (!window.confirm(t().confirmReset+' · '+view.state.planted.length+'/12 · '+view.state.plots.filter(p=>p.open).length+'/16')) return
-      mode('garden');firstSeeds=[];cornerPlanted=false;branch=null;entry=null;chapter=null;collectionFilter='all';actions.reset();actions.enter();return
+      mode('garden');firstSeeds=[];cornerPlanted=false;branch=null;entry=null;chapter=null;collectionFilter='all'
+      inventoryAmounts={}; inventoryDetail=null; inventoryFilter='all'; inventoryTab='harvest'
+      actions.reset();actions.enter();return
     }
     if (action==='shovel') {mode('garden',!view.shovel,view.shovel ? null : selected);return}
     if (action==='branch-seed') {mode('plant');chosen=target.dataset.seed as Species;stock=view.state.seeds[chosen]?common:view.state.variants.find(p=>p.species===chosen);actions.changeView({sunflower:chosen==='sunflower'});return}
@@ -196,10 +263,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action === 'emergencyRadish') return run({type:'emergencyRadish',plot:selected})
     if (action === 'clear' && !window.confirm(`${t().confirmClear} ${expansionCost(view.state)} ◈`)) return
     if (action === 'upgrade' && !window.confirm(`${t().confirmUpgrade} ${bedLevels[plot.level === 1 ? 2 : 3].upgradeCost} ◈`)) return
-    if(action==='harvest' || action==='seed-harvest' || action==='experiment-harvest'){
-      if(action==='harvest' && plot.plant?.lives===1 && plot.plant.rarity!=='common' && !window.confirm(field[view.state.lang].last))return
-      return run({type:'harvest',plot:selected,expectedId:Number(target.dataset.id),cycle:Number(target.dataset.cycle),seeds:action!=='harvest',experiment:target.dataset.experiment?JSON.parse(target.dataset.experiment):undefined})
-    }
+    if(action==='harvest') return run({type:'harvest',plot:selected,expectedId:Number(target.dataset.id),cycle:Number(target.dataset.cycle)})
     if (action === 'clear' || action === 'upgrade') return run({type:action,plot:selected})
   })
   const controller:UI = {
@@ -213,6 +277,10 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       if (view.shovel) { actions.select(index); return }
       const plot = view.state.plots[index]
 
+      if (view.mode === 'garden' && plot.plant?.readySince != null) {
+        run({type:'harvest',plot:index,expectedId:plot.plant.id,cycle:plot.plant.lives})
+        return
+      }
       if (view.mode === 'build' && view.moveFrom !== null) {
         const from = view.moveFrom
         run({type:'move',from,to:index})

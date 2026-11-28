@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "startCoins": 20,
   "plants": [
     {
@@ -10,18 +10,21 @@
       "generation": 0,
       "seedPrice": 10,
       "cycleSec": 6,
-      "fruitValue": 3,
+      "fruitValue": 4,
       "harmony": 10,
       "propagationThreshold": 0,
       "fruits": [
-        1,
-        2
+        4,
+        5
       ],
       "ownSeeds": [
-        1,
+        2,
         3
       ],
-      "lives": 20
+      "lives": 1,
+      "lifecycle": "single",
+      "regrowSec": 0,
+      "seedValue": 2
     },
     {
       "id": "strawberry",
@@ -35,14 +38,17 @@
       "harmony": 10,
       "propagationThreshold": 0,
       "fruits": [
-        1,
+        2,
         3
       ],
       "ownSeeds": [
         1,
         2
       ],
-      "lives": 12
+      "lives": 5,
+      "lifecycle": "multi",
+      "regrowSec": 9,
+      "seedValue": 4
     },
     {
       "id": "blueberry",
@@ -50,9 +56,9 @@
       "nameEn": "Blueberry",
       "family": "earth",
       "generation": 0,
-      "seedPrice": 180,
+      "seedPrice": 160,
       "cycleSec": 25,
-      "fruitValue": 12,
+      "fruitValue": 16,
       "harmony": 10,
       "propagationThreshold": 0,
       "fruits": [
@@ -63,7 +69,10 @@
         1,
         2
       ],
-      "lives": 10
+      "lives": 6,
+      "lifecycle": "multi",
+      "regrowSec": 18,
+      "seedValue": 10
     },
     {
       "id": "sunflower",
@@ -71,20 +80,23 @@
       "nameEn": "Sunflower",
       "family": "solar",
       "generation": 0,
-      "seedPrice": 90,
-      "cycleSec": 12,
-      "fruitValue": 2,
+      "seedPrice": 60,
+      "cycleSec": 15,
+      "fruitValue": 14,
       "harmony": 10,
       "propagationThreshold": 0,
       "fruits": [
-        1,
-        2
+        5,
+        6
       ],
       "ownSeeds": [
-        1,
-        2
+        2,
+        3
       ],
-      "lives": 16
+      "lives": 1,
+      "lifecycle": "single",
+      "regrowSec": 0,
+      "seedValue": 9
     },
     {
       "id": "clover",
@@ -92,20 +104,23 @@
       "nameEn": "Clover",
       "family": "earth",
       "generation": 0,
-      "seedPrice": 120,
+      "seedPrice": 100,
       "cycleSec": 15,
-      "fruitValue": 3,
+      "fruitValue": 13,
       "harmony": 10,
       "propagationThreshold": 0,
       "fruits": [
-        1,
-        2
-      ],
-      "ownSeeds": [
         2,
         3
       ],
-      "lives": 14
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 5,
+      "lifecycle": "multi",
+      "regrowSec": 11,
+      "seedValue": 7
     },
     {
       "id": "moonflower",
@@ -113,20 +128,23 @@
       "nameEn": "Moonflower",
       "family": "lunar",
       "generation": 0,
-      "seedPrice": 450,
+      "seedPrice": 250,
       "cycleSec": 20,
-      "fruitValue": 5,
+      "fruitValue": 18,
       "harmony": 10,
       "propagationThreshold": 0,
       "fruits": [
-        1,
-        2
+        3,
+        4
       ],
       "ownSeeds": [
         1,
         2
       ],
-      "lives": 14
+      "lives": 7,
+      "lifecycle": "multi",
+      "regrowSec": 16,
+      "seedValue": 12
     },
     {
       "id": "solar_strawberry",
@@ -136,18 +154,21 @@
       "generation": 1,
       "seedPrice": null,
       "cycleSec": 15,
-      "fruitValue": 12,
+      "fruitValue": 15,
       "harmony": 20,
       "propagationThreshold": 6,
       "fruits": [
-        1,
-        2
+        2,
+        3
       ],
       "ownSeeds": [
         1,
         2
       ],
-      "lives": 10
+      "lives": 6,
+      "lifecycle": "multi",
+      "regrowSec": 11,
+      "seedValue": 10
     },
     {
       "id": "moonberry",
@@ -157,18 +178,21 @@
       "generation": 1,
       "seedPrice": null,
       "cycleSec": 30,
-      "fruitValue": 22,
+      "fruitValue": 26,
       "harmony": 20,
       "propagationThreshold": 6,
       "fruits": [
-        1,
-        3
+        3,
+        4
       ],
       "ownSeeds": [
         1,
         2
       ],
-      "lives": 10
+      "lives": 6,
+      "lifecycle": "multi",
+      "regrowSec": 23,
+      "seedValue": 16
     },
     {
       "id": "honey_clover",
@@ -178,18 +202,21 @@
       "generation": 1,
       "seedPrice": null,
       "cycleSec": 20,
-      "fruitValue": 6,
+      "fruitValue": 16,
       "harmony": 20,
       "propagationThreshold": 6,
       "fruits": [
-        1,
-        2
-      ],
-      "ownSeeds": [
         2,
         3
       ],
-      "lives": 12
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 5,
+      "lifecycle": "multi",
+      "regrowSec": 14,
+      "seedValue": 11
     },
     {
       "id": "golden_flower",
@@ -198,19 +225,22 @@
       "family": "solar",
       "generation": 1,
       "seedPrice": null,
-      "cycleSec": 36,
-      "fruitValue": 20,
+      "cycleSec": 32,
+      "fruitValue": 29,
       "harmony": 20,
       "propagationThreshold": 6,
       "fruits": [
+        5,
+        7
+      ],
+      "ownSeeds": [
         2,
         3
       ],
-      "ownSeeds": [
-        1,
-        2
-      ],
-      "lives": 10
+      "lives": 1,
+      "lifecycle": "single",
+      "regrowSec": 0,
+      "seedValue": 20
     },
     {
       "id": "crystal_flower",
@@ -219,19 +249,22 @@
       "family": "crystal",
       "generation": 2,
       "seedPrice": null,
-      "cycleSec": 30,
-      "fruitValue": 6,
+      "cycleSec": 26,
+      "fruitValue": 24,
       "harmony": 35,
       "propagationThreshold": 10,
       "fruits": [
-        1,
-        2
+        5,
+        6
       ],
       "ownSeeds": [
-        1,
-        2
+        2,
+        3
       ],
-      "lives": 10
+      "lives": 1,
+      "lifecycle": "single",
+      "regrowSec": 0,
+      "seedValue": 19
     },
     {
       "id": "star_orchid",
@@ -241,18 +274,21 @@
       "generation": 3,
       "seedPrice": null,
       "cycleSec": 40,
-      "fruitValue": 26,
+      "fruitValue": 34,
       "harmony": 50,
       "propagationThreshold": 15,
       "fruits": [
-        2,
-        3
+        4,
+        5
       ],
       "ownSeeds": [
         1,
         2
       ],
-      "lives": 8
+      "lives": 6,
+      "lifecycle": "multi",
+      "regrowSec": 28,
+      "seedValue": 28
     }
   ],
   "recipes": [
@@ -384,19 +420,19 @@
   ],
   "basketLevels": [
     {
-      "capacity": 15,
+      "capacity": 90,
       "upgradeCost": 0
     },
     {
-      "capacity": 30,
+      "capacity": 240,
       "upgradeCost": 60
     },
     {
-      "capacity": 60,
+      "capacity": 720,
       "upgradeCost": 180
     },
     {
-      "capacity": 120,
+      "capacity": 2400,
       "upgradeCost": 500
     }
   ],
@@ -518,6 +554,29 @@
     "fragile": 1,
     "slow": 0.1,
     "small": 0.1,
-    "sparse": 0.1
+    "sparse": 0.1,
+    "rarityFruitPrice": [
+      1,
+      1.1,
+      1.2
+    ],
+    "raritySeedYield": [
+      0,
+      0.06,
+      0.12
+    ],
+    "seedyYield": [
+      0.1,
+      0.2
+    ],
+    "raritySeedPrice": [
+      1,
+      1.35,
+      1.7
+    ],
+    "seedTraitPrice": {
+      "plus": 0.15,
+      "minus": 0.15
+    }
   }
 }

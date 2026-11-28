@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 7,
+  "basketLevel": 0,
+  "firstHarvest": true,
+  "firstPropagation": false,
+  "musicMuted": true,
+  "tutorialSkipped": false,
+  "occupiedHintShown": false,
+  "muted": false,
+  "decorations": [],
+  "helperLevel": 0,
+  "autoSell": false,
+  "harvestRemaining": 0,
+  "sellRemaining": 0,
+  "balanceVersion": 1,
+  "playTime": 758.2,
+  "nextId": 7,
+  "coins": 20,
+  "basket": [
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    },
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    },
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    },
+    {
+      "species": "strawberry",
+      "valueUnits": 150000
+    }
+  ],
+  "sold": true,
+  "planted": [
+    "radish",
+    "strawberry",
+    "sunflower",
+    "blueberry",
+    "moonflower"
+  ],
+  "seeds": {
+    "radish": 0,
+    "strawberry": 0,
+    "sunflower": 0,
+    "blueberry": 0,
+    "moonflower": 0,
+    "clover": 0,
+    "solar_strawberry": 1,
+    "moonberry": 0,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "lang": "en",
+  "revealed": [
+    "solar_strawberry"
+  ],
+  "tutorialBranch": null,
+  "pendingHybrid": null,
+  "variants": [
+    {
+      "species": "radish",
+      "rarity": "rare",
+      "plus": "seedy",
+      "minus": "sparse",
+      "count": 5
+    }
+  ],
+  "failures": {
+    "solar_strawberry": 0,
+    "moonberry": 1,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "plots": [
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 6,
+        "species": "moonflower",
+        "rarity": "common",
+        "plus": null,
+        "minus": null,
+        "lives": 14,
+        "maxLives": 14,
+        "fruitRoll": 0.5229462049901485,
+        "progress": 0.7100000000000001,
+        "mature": false,
+        "readySince": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 2,
+      "plant": {
+        "id": 3,
+        "species": "strawberry",
+        "rarity": "uncommon",
+        "plus": "hardy",
+        "minus": null,
+        "lives": 2,
+        "maxLives": 13,
+        "fruitRoll": 0.2679291998501867,
+        "progress": 0.43799999999999994,
+        "mature": true,
+        "readySince": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 4,
+        "species": "sunflower",
+        "rarity": "common",
+        "plus": null,
+        "minus": null,
+        "lives": 16,
+        "maxLives": 16,
+        "fruitRoll": 0.08744860487058759,
+        "progress": 1,
+        "mature": true,
+        "readySince": 720
+      }
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 1,
+        "species": "radish",
+        "rarity": "rare",
+        "plus": "hardy",
+        "minus": null,
+        "lives": 8,
+        "maxLives": 22,
+        "fruitRoll": 0.6250901876483113,
+        "progress": 1,
+        "mature": true,
+        "readySince": 714
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 2,
+        "species": "radish",
+        "rarity": "common",
+        "plus": null,
+        "minus": null,
+        "lives": 20,
+        "maxLives": 20,
+        "fruitRoll": 0.48066327814012766,
+        "progress": 1,
+        "mature": true,
+        "readySince": 712.2857142857143
+      }
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    }
+  ],
+  "nursery": [
+    {
+      "id": 5,
+      "species": "blueberry",
+      "rarity": "common",
+      "plus": null,
+      "minus": null,
+      "lives": 10,
+      "maxLives": 10,
+      "fruitRoll": 0.27911416883580387,
+      "progress": 1,
+      "mature": true,
+      "readySince": 725.8571428571429
+    }
+  ],
+  "rng": 1198786227
+}
