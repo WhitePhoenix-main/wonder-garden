@@ -1,0 +1,763 @@
+{
+  "schemaVersion": 9,
+  "tutorialBranch": null,
+  "pendingHybrid": null,
+  "basketLevel": 0,
+  "firstHarvest": true,
+  "firstExtraction": true,
+  "firstSeedPlanting": true,
+  "firstPropagation": true,
+  "musicMuted": false,
+  "tutorialSkipped": false,
+  "occupiedHintShown": false,
+  "muted": false,
+  "activeIsland": "valley",
+  "greenhouseLevel": 2,
+  "stallLevel": 3,
+  "crosses": [
+    {
+      "id": 20,
+      "parents": [
+        18,
+        19
+      ],
+      "species": "radish",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "parentProfiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        },
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ],
+      "startsAt": 0,
+      "readyAt": 15,
+      "collected": false
+    }
+  ],
+  "orders": [
+    {
+      "id": 21,
+      "buyer": "alchemist",
+      "requirements": [
+        {
+          "kind": "seed",
+          "species": "radish",
+          "rarity": "rare",
+          "trait": "early",
+          "clean": true,
+          "count": 1
+        }
+      ],
+      "reward": 12
+    },
+    {
+      "id": 22,
+      "buyer": "botanist",
+      "requirements": [
+        {
+          "kind": "seed",
+          "species": "radish",
+          "rarity": "common",
+          "clean": true,
+          "count": 2
+        }
+      ],
+      "reward": 12
+    }
+  ],
+  "orderRefreshAt": 0,
+  "ordersCompleted": 0,
+  "collection": [
+    {
+      "species": "radish",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 4,
+      "harvested": 5,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "strawberry",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "sunflower",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "blueberry",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "moonflower",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "clover",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "solar_strawberry",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "moonberry",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "honey_clover",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "golden_flower",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "crystal_flower",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    },
+    {
+      "species": "star_orchid",
+      "rarity": "common",
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "planted": 1,
+      "harvested": 0,
+      "profiles": [
+        {
+          "rarity": "common",
+          "plus": [],
+          "minus": null
+        }
+      ]
+    }
+  ],
+  "achievements": [
+    "gardenComplete",
+    "harmony100",
+    "harmony200",
+    "allSpecies",
+    "all_common",
+    "advancedStall",
+    "bridgeRestored",
+    "seedReserve"
+  ],
+  "rank": 5,
+  "protectedPlants": [],
+  "protectedProfiles": [],
+  "favorites": [],
+  "reserves": {
+    "radish": 2
+  },
+  "automation": {
+    "enabled": false,
+    "replant": true,
+    "extractPollinated": false,
+    "sellSeeds": false,
+    "preferred": null,
+    "sellFruit": true,
+    "saleRarity": null
+  },
+  "decorations": [
+    {
+      "id": 15,
+      "type": "statue",
+      "slot": "northeast"
+    },
+    {
+      "id": 16,
+      "type": "fountain",
+      "slot": "southwest"
+    }
+  ],
+  "helperLevel": 1,
+  "autoSell": true,
+  "harvestRemaining": 3,
+  "sellRemaining": 3,
+  "balanceVersion": 3,
+  "playTime": 7,
+  "nextId": 24,
+  "coins": 10670,
+  "plots": [
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 3,
+        "species": "radish",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 1,
+        "maxLives": 1,
+        "fruitRoll": 0,
+        "progress": 1,
+        "mature": true,
+        "readySince": 5.714285714285714,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 4,
+        "species": "strawberry",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 5,
+        "maxLives": 5,
+        "fruitRoll": 0,
+        "progress": 0.8575,
+        "mature": false,
+        "readySince": null,
+        "pollination": {
+          "result": "solar_strawberry",
+          "donor": {
+            "species": "sunflower",
+            "rarity": "common",
+            "plus": [],
+            "minus": null
+          },
+          "supporting": []
+        }
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 5,
+        "species": "sunflower",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 1,
+        "maxLives": 1,
+        "fruitRoll": 0,
+        "progress": 0.49000000000000005,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 6,
+        "species": "blueberry",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 6,
+        "maxLives": 6,
+        "fruitRoll": 0,
+        "progress": 0.4115999999999999,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 7,
+        "species": "moonflower",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 7,
+        "maxLives": 7,
+        "fruitRoll": 0,
+        "progress": 0.3675,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 8,
+        "species": "clover",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 5,
+        "maxLives": 5,
+        "fruitRoll": 0,
+        "progress": 0.49000000000000005,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 9,
+        "species": "solar_strawberry",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 6,
+        "maxLives": 6,
+        "fruitRoll": 0,
+        "progress": 0.784,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 10,
+        "species": "moonberry",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 6,
+        "maxLives": 6,
+        "fruitRoll": 0,
+        "progress": 0.24500000000000002,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 11,
+        "species": "honey_clover",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 5,
+        "maxLives": 5,
+        "fruitRoll": 0,
+        "progress": 0.3675,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 12,
+        "species": "golden_flower",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 1,
+        "maxLives": 1,
+        "fruitRoll": 0,
+        "progress": 0.3675,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 13,
+        "species": "crystal_flower",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 1,
+        "maxLives": 1,
+        "fruitRoll": 0,
+        "progress": 0.2826923076923077,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 14,
+        "species": "star_orchid",
+        "rarity": "common",
+        "plus": [],
+        "minus": null,
+        "lives": 6,
+        "maxLives": 6,
+        "fruitRoll": 0,
+        "progress": 0.29400000000000004,
+        "mature": false,
+        "readySince": null,
+        "pollination": null
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null,
+      "policy": {
+        "mode": "seed",
+        "priority": 0,
+        "harvest": true,
+        "replant": {
+          "species": "radish",
+          "profile": {
+            "rarity": "common",
+            "plus": [],
+            "minus": null
+          }
+        },
+        "target": 2
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    }
+  ],
+  "nursery": [
+    {
+      "id": 18,
+      "species": "radish",
+      "rarity": "common",
+      "plus": [],
+      "minus": null,
+      "lives": 1,
+      "maxLives": 1,
+      "fruitRoll": 0,
+      "progress": 0,
+      "mature": false,
+      "readySince": null,
+      "pollination": null
+    },
+    {
+      "id": 19,
+      "species": "radish",
+      "rarity": "common",
+      "plus": [],
+      "minus": null,
+      "lives": 1,
+      "maxLives": 1,
+      "fruitRoll": 0,
+      "progress": 0,
+      "mature": false,
+      "readySince": null,
+      "pollination": null
+    }
+  ],
+  "basket": [
+    {
+      "id": 23,
+      "species": "radish",
+      "valueUnits": 40000,
+      "count": 5,
+      "profile": {
+        "rarity": "common",
+        "plus": [],
+        "minus": null
+      },
+      "pollination": null,
+      "lots": [
+        {
+          "size": 5,
+          "remaining": 5,
+          "seedYield": 2,
+          "copyChance": 0.3,
+          "copyPending": false,
+          "crossPending": false,
+          "origin": {
+            "plot": 16,
+            "mode": "seed",
+            "specimen": 17,
+            "protected": false
+          }
+        }
+      ]
+    }
+  ],
+  "sold": true,
+  "planted": [
+    "radish",
+    "strawberry",
+    "sunflower",
+    "blueberry",
+    "moonflower",
+    "clover",
+    "solar_strawberry",
+    "moonberry",
+    "honey_clover",
+    "golden_flower",
+    "crystal_flower",
+    "star_orchid"
+  ],
+  "revealed": [
+    "solar_strawberry",
+    "moonberry",
+    "honey_clover",
+    "golden_flower",
+    "crystal_flower",
+    "star_orchid"
+  ],
+  "seeds": {
+    "radish": 5,
+    "strawberry": 0,
+    "sunflower": 0,
+    "blueberry": 0,
+    "moonflower": 0,
+    "clover": 0,
+    "solar_strawberry": 0,
+    "moonberry": 0,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "variants": [
+    {
+      "species": "radish",
+      "rarity": "rare",
+      "plus": [
+        "early"
+      ],
+      "minus": null,
+      "count": 2
+    }
+  ],
+  "failures": {
+    "solar_strawberry": 0,
+    "moonberry": 0,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "rng": 110225632,
+  "lang": "ru"
+}

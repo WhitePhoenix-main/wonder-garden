@@ -3,6 +3,7 @@ import { common, sameProfile, stockCount, traits, changeStock } from './genetics
 import { buyers, rarities, type GameState, type Order, type OrderRequirement, type Profile, type Result, type Species } from './model'
 import { allSeedPacks, availableStock, hasOtherSource, protectedHarvest } from './stock-policy'
 import { consumeHarvest, seedSaleValue } from './trade'
+import { marketQuote, recordDelivery } from './market'
 
 type OrderItem = {id?:number; species:Species; profile?:Profile; count:number}
 
@@ -60,13 +61,16 @@ export function orderQuote(state:GameState,order:Order) {
 export function fulfillOrder(state:GameState,id:number):Result {
   const order=state.orders.find(order=>order.id===id)
   if (!order) return {ok:false,reason:'itemChanged'}
-  const {complete,availableState}=plan(state,order)
+  const {complete,lines,availableState}=plan(state,order)
   if (!complete) return {ok:false,reason:'orderResources'}
   if (!Number.isSafeInteger(state.coins+order.reward)) return {ok:false,reason:'coinLimit'}
   state.coins+=order.reward
   state.basket=availableState.basket
   state.seeds=availableState.seeds
   state.variants=availableState.variants
+  for (const line of lines) for (const item of line.items) {
+    recordDelivery(state,item.species,item.id===undefined ? 'seed' : 'fruit',item.count)
+  }
   state.orders=state.orders.filter(order=>order.id!==id)
   state.ordersCompleted++
   state.orderRefreshAt=state.playTime+evolution.orderCooldown
@@ -87,7 +91,7 @@ export function refreshOrders(state:GameState):boolean {
     const [min,max]=evolution.orderFruitCount
     const fruit:OrderRequirement={kind:'fruit',species:target,count:Math.min(max,min+state.stallLevel-1)}
     let requirements=[fruit]
-    let basis=fruit.count*speciesInfo[target].fruitValue
+    let basis=fruit.count*speciesInfo[target].fruitValue*marketQuote(state,target,'fruit').pricePercent/100
     if (state.stallLevel>=4 && fruitSources.length && buyer==='florist') {
       const item=fruitSources[id%fruitSources.length]
       const count=Math.min(item.count,fruit.count)
@@ -95,7 +99,7 @@ export function refreshOrders(state:GameState):boolean {
       const enhanced:OrderRequirement={kind:'fruit',tier,rarity:item.profile?.rarity,count}
       if (orderQuote(state,{id,buyer,reward:0,requirements:[enhanced]}).complete) {
         requirements=[enhanced]
-        basis=count*speciesInfo[item.species].fruitValue
+        basis=count*speciesInfo[item.species].fruitValue*marketQuote(state,item.species,'fruit').pricePercent/100
       }
     }
     if (state.stallLevel>=3 && offers.length && ['alchemist','botanist','collector'].includes(buyer)) {
@@ -104,7 +108,7 @@ export function refreshOrders(state:GameState):boolean {
       const seed:OrderRequirement={kind:'seed',species:pack.species,rarity:pack.rarity,trait:traits(pack)[0],
         clean:pack.minus===null,count}
       requirements=state.stallLevel===5 ? [...requirements,seed] : [seed]
-      basis=(state.stallLevel===5 ? basis : 0)+count*seedSaleValue(pack.species,pack)
+      basis=(state.stallLevel===5 ? basis : 0)+count*seedSaleValue(pack.species,pack,state)
     }
     state.orders.push({id,buyer,requirements,reward:Math.max(evolution.orderMinReward,Math.ceil(basis*evolution.orderBonus))})
   }

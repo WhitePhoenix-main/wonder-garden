@@ -5,7 +5,7 @@ const origin = process.argv[2] ?? 'http://127.0.0.1:4284'
 const scenario = process.argv[3] ?? 'desktop'
 const suite = process.argv[4] ?? 'intro'
 assert.ok(['desktop','mobile'].includes(scenario),'Expected desktop or mobile')
-assert.ok(['intro','advanced','all'].includes(suite),'Expected intro, advanced or all')
+assert.ok(['intro','advanced','market','all'].includes(suite),'Expected intro, advanced, market or all')
 const mobile = scenario === 'mobile'
 const width = mobile ? 390 : 1366
 const height = mobile ? 844 : 768
@@ -96,7 +96,7 @@ async function menu() {
 }
 async function screenshot(label) {
   const shot=await send('Page.captureScreenshot',{format:'png'})
-  await writeFile(new URL(`alpha05-${scenario}-${label}.png`,resultDir),Buffer.from(shot.data,'base64'))
+  await writeFile(new URL(`alpha06-${scenario}-${label}.png`,resultDir),Buffer.from(shot.data,'base64'))
 }
 async function buy(id,plot) {
   await btn('seed',`[data-seed="${id}"]:not([data-profile])`)
@@ -400,14 +400,14 @@ async function intro() {
   const legacy=JSON.parse(await readFile(new URL('../tests/fixtures/alpha03.json',import.meta.url),'utf8'))
   await install(legacy)
   const migrated=await snap()
-  assert.equal(migrated.schemaVersion,9)
+  assert.equal(migrated.schemaVersion,10)
   assert.equal(migrated.coins,legacy.coins)
   assert.equal(migrated.basket.reduce((sum,b)=>sum+b.count,0),legacy.basket.length)
   assert.equal(migrated.basket.every(b=>b.profile===null && b.pollination===null),true)
   const alpha04=JSON.parse(await readFile(new URL('../tests/fixtures/alpha04.json',import.meta.url),'utf8'))
   await install(alpha04)
   const restored=await snap()
-  assert.equal(restored.schemaVersion,9)
+  assert.equal(restored.schemaVersion,10)
   assert.equal(restored.coins,alpha04.coins)
   assert.equal(restored.stallLevel,2)
   assert.equal(restored.helperLevel,alpha04.helperLevel)
@@ -417,6 +417,64 @@ async function intro() {
   console.log(scenario,`${width}×${height}`,'passed; no browser, console or resource errors')
 }
 
+async function market() {
+  const alpha05=JSON.parse(await readFile(new URL('../tests/fixtures/alpha05.json',import.meta.url),'utf8'))
+  await install(alpha05)
+  const migrated=await snap()
+  assert.equal(migrated.schemaVersion,10)
+  assert.equal(migrated.coins,alpha05.coins)
+  assert.equal(migrated.activeIsland,'valley')
+  assert.deepEqual(migrated.orders,alpha05.orders)
+  assert.deepEqual(migrated.crosses,alpha05.crosses)
+  assert.deepEqual(migrated.basket,alpha05.basket)
+  assert.equal(migrated.market.tick,0)
+
+  migrated.automation.sellFruit=false
+  migrated.basketLevel=1
+  const add=(count)=>{
+    const id=migrated.nextId++
+    migrated.basket.push({id,species:'radish',count,valueUnits:40000,profile:null,pollination:null,
+      lots:[{size:count,remaining:count,seedYield:0,copyChance:0,copyPending:false,crossPending:false}]})
+    return id
+  }
+  const shipment=add(120)
+  const later=add(8)
+  await install(migrated)
+  await btn('inventory')
+  await btn('market')
+  const price=()=>read('Number(document.querySelector(\'[data-market-species="radish"] [data-market-price]\').dataset.marketPrice)')
+  assert.equal(await price(),100)
+  await btn('close')
+  await btn('inventory')
+  await btn('inventory-all',itemKey(shipment))
+  await btn('inventory-sell-h',batchAttr(shipment))
+  const sale=await snap()
+  assert.equal(sale.coins,migrated.coins+480)
+  assert.equal(sale.market.goods.radish.fruit.delivered,120)
+  await btn('market')
+  await until(async()=>await price()===70,'radish fruit market saturation',18000)
+  await screenshot('market')
+  await btn('market-product','[data-kind="seed"]')
+  assert.equal(await price(),100)
+  await btn('close')
+  await btn('inventory')
+  await btn('inventory-all',itemKey(later))
+  const selector=JSON.stringify(`[data-action="inventory-sell-h"]${batchAttr(later)}`)
+  const buttonValue=await read(`document.querySelector(${selector}).textContent`)
+  assert.match(buttonValue,/22/)
+  await btn('inventory-sell-h',batchAttr(later))
+  const settled=await snap()
+  assert.equal(settled.coins,sale.coins+22)
+  await menu();await btn('enter')
+  const resumed=await snap()
+  assert.equal(resumed.market.tick,settled.market.tick)
+  assert.deepEqual(resumed.market.goods,settled.market.goods)
+  assert.ok(resumed.market.remaining<=settled.market.remaining)
+  assert.equal(await read('document.documentElement.scrollWidth'),width)
+  assert.deepEqual(errors,[])
+  console.log(scenario,`${width}×${height}`,'Alpha 06 market passed (schema 9 migration, saturation, price, seed isolation and reload)')
+}
+
 try {
   await mkdir(resultDir,{recursive:true})
   for (const domain of ['Page','Runtime','Log','Network']) await send(domain+'.enable')
@@ -424,6 +482,7 @@ try {
   await send('Emulation.setTouchEmulationEnabled',{enabled:mobile})
   if (suite==='intro' || suite==='all') await intro()
   if (suite==='advanced' || suite==='all') await advanced()
+  if (suite==='market' || suite==='all') await market()
 } finally {
   ws.close()
 }

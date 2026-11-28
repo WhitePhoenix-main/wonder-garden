@@ -5,8 +5,9 @@ import { record, integer } from './shape'
 import { initialEvolution, initialState, newPlant } from '../game/state'
 import { canonical, maxLives, nextRandom, rules } from '../game/genetics'
 import { milestones, recordPlanting } from '../game/collection'
+import { initialMarket } from '../game/market'
 import type { PollinationSnapshot } from '../game/model'
-import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
+import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaFive, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
 
 // Keep the existing storage key so either snapshot from the first sprint can be recovered.
 function migrateFirstSprint(value: Record<string, unknown>): GameState|null {
@@ -80,7 +81,7 @@ function upgradeAlphaFour(old:AlphaFourState):GameState {
   })
   const plant=(p:Plant):Plant=>({...p,...canonical(p),pollination:snapshot(p.pollination)})
   return backfill({
-    ...old,...initialEvolution(),schemaVersion:saveVersion,balanceVersion:balance.version,stallLevel:old.autoSell ? 2 : 1,
+    ...old,...initialEvolution(),market:initialMarket(),schemaVersion:saveVersion,balanceVersion:balance.version,stallLevel:old.autoSell ? 2 : 1,
     plots:old.plots.map(p=>({...p,plant:p.plant && plant(p.plant)})),
     nursery:old.nursery.map(plant),
     variants:old.variants.map(pack=>({...pack,...canonical(pack)})),
@@ -105,7 +106,7 @@ function upgrade(old:LegacyState):GameState {
     const {id,species,progress,readySince,mature}=p
     return {...newPlant(id,species,undefined,nextRandom(stream)),progress,readySince,mature}
   }
-  const state:GameState={...rest,...initialEvolution(),...convertBasket(old.basket,old.nextId),schemaVersion:saveVersion,balanceVersion:balance.version,
+  const state:GameState={...rest,...initialEvolution(),market:initialMarket(),...convertBasket(old.basket,old.nextId),schemaVersion:saveVersion,balanceVersion:balance.version,
     stallLevel:old.autoSell ? 2 : 1,
     revealed:[],tutorialBranch:null,pendingHybrid:null,firstExtraction:old.firstPropagation,firstSeedPlanting:old.planted.some(isHybrid),
     seeds:{...fresh.seeds,...old.seeds},variants:[],failures:hybridCounts(),
@@ -115,7 +116,7 @@ function upgrade(old:LegacyState):GameState {
   }else state.revealed.push(r.result)
   return backfill(state)
 }
-export function parseSave(raw: string | null) {
+export function parseSave(raw: string | null):GameState|'future'|null {
   if (raw === null) return null
   try {
     const value: unknown = JSON.parse(raw)
@@ -138,6 +139,7 @@ export function parseSave(raw: string | null) {
     if (validLegacy(value)) return upgrade(value)
     if (validAlphaThree(value)) return upgradeAlphaThree(value)
     if (validAlphaFour(value)) return upgradeAlphaFour(value)
+    if (validAlphaFive(value)) return {...value,schemaVersion:saveVersion,balanceVersion:balance.version,market:initialMarket()}
     if (validState(value)) return value
     if (record(value) && (Number(value.schemaVersion) > saveVersion || Number(value.balanceVersion) > balance.version)) return 'future'
   } catch { /* Try the backup below. */ }

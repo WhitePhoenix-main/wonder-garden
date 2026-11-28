@@ -4,6 +4,7 @@ import { sellSurplusSeeds, workGarden } from './automation'
 import { cycleSeconds, pollinationFor } from './queries'
 import { sellBasket } from './trade'
 import { refreshOrders } from './orders'
+import { settleMarket } from './market'
 
 // Only planted instances grow during active game time.
 function grow(state: GameState, seconds: number): void {
@@ -29,11 +30,19 @@ export function advance(state: GameState, seconds: number): string[] {
   if (!Number.isFinite(seconds)) return events
   while (seconds > 0) {
     const orderDeadline=state.orderRefreshAt>state.playTime ? state.orderRefreshAt-state.playTime : Infinity
+    const marketActive=state.sold
     const dt = Math.min(seconds, orderDeadline, state.helperLevel ? state.harvestRemaining : Infinity,
-      state.autoSell ? state.sellRemaining : Infinity)
+      state.autoSell ? state.sellRemaining : Infinity, marketActive ? state.market.remaining : Infinity)
     const before=state.playTime
     grow(state, dt)
     seconds -= dt
+    if (marketActive) {
+      state.market.remaining-=dt
+      if (state.market.remaining<=1e-9) {
+        settleMarket(state)
+        events.push('MarketUpdated')
+      }
+    }
     if (state.autoSell) state.sellRemaining -= dt
     if (state.helperLevel) {
       state.harvestRemaining -= dt

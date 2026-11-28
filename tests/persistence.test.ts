@@ -85,7 +85,7 @@ describe('Sprint 01 persistence', () => {
       storage.setItem(primary, raw)
       const persistence = createPersistence(() => storage)
       const session = persistence.load()
-      expect(session).toMatchObject({coins:20,schemaVersion:9})
+      expect(session).toMatchObject({coins:20,schemaVersion:10})
       expect(persistence.warning).toBe(warning)
       commit(session, { type: 'plant', plot: 8, species: 'radish' })
       persistence.save(session)

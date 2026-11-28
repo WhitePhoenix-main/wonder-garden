@@ -2,7 +2,7 @@ import { availableStock, defaultPolicy, profileKey, protectedProfile } from '../
 import { inventoryWords, type InventoryTab, type InventorySort } from './inventory'
 import { common, stockCount } from '../game/genetics'
 import { describe, field } from './specimens'
-import type { BedLevel, BulkItem, Profile, Command, DecorType, Species, PlotMode, Rarity } from '../game/model'
+import type { BedLevel, BulkItem, Profile, Command, DecorType, Species, PlotMode, Rarity, MarketKind } from '../game/model'
 import { speciesIds } from '../game/config'
 import { harvestSaleValue, seedSaleValue } from '../game/trade'
 import { plotCount, plotIndices } from '../game/config'
@@ -32,6 +32,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   let pressing = false
   let returnId: number | null = null
   let overlay: Overlay|null = null
+  let marketKind:MarketKind='fruit'
   let crossParents:number[]=[]
   let inventorySelected:string[]=[]
   let favoriteOnly=false
@@ -105,7 +106,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (!view) return
     if (pressing) return
     const html = uiMarkup(view,{
-      inventoryFilter,inventoryTab,inventorySort,inventoryAmounts,inventoryMinimum,inventoryDetail,crossParents,inventorySelected,favoriteOnly,inventorySearch,inventoryPage,
+      inventoryFilter,inventoryTab,inventorySort,inventoryAmounts,inventoryMinimum,inventoryDetail,crossParents,inventorySelected,favoriteOnly,inventorySearch,inventoryPage,marketKind,
       stock,cornerPlanted,firstSeeds,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
     })
     if (html === last) return
@@ -173,6 +174,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       actions.changeView({mode:next,sunflower:false,selected:index,moveFrom:null,shovel})
     }
     if(action==='evolution') {overlay=overlay==='evolution'?null:'evolution';draw();return}
+    if(action==='market') {overlay=overlay==='market'?null:'market';draw();return}
+    if(action==='market-product') {marketKind=target.dataset.kind==='seed'?'seed':'fruit';draw();return}
     if(action==='cross-parent') {
       const id=Number(target.dataset.id)
       crossParents=crossParents.includes(id)?crossParents.filter(p=>p!==id):[...crossParents,id].slice(-2)
@@ -233,7 +236,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
             continue
           }
           commands.push(command)
-          total+=selling?harvestSaleValue(batch,count):yieldInfo.seeds
+          total+=selling?harvestSaleValue(batch,count,view.state):yieldInfo.seeds
         }
       } else {
         for(const species of speciesIds) {
@@ -247,7 +250,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
               excluded.push(name(species)+' · '+describe(view.state.lang,pack));continue
             }
             commands.push(command)
-            total+=count*seedSaleValue(species,pack)
+            total+=count*seedSaleValue(species,pack,view.state)
           }
         }
       }

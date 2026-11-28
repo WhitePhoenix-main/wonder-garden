@@ -789,3 +789,9 @@ svg {
 .collection-matrix table { border-collapse: collapse; min-width: 100%; }
 .collection-matrix th, .collection-matrix td { padding: 0.4rem; text-align: center; }
 .collection-matrix th:first-child { text-align: left; }
+.market-table { border-collapse:collapse; width:100%; font-size:.81rem; }
+.market-table :is(th,td) { padding:8px 3px; border-bottom:1px solid #dedfc8; text-align:right; }
+.market-table th:first-child { text-align:left; }
+.market-table td { font-variant-numeric:tabular-nums; }
+.market-up { color:#2d6945; font-weight:700; }
+.market-down { color:#8b4936; font-weight:700; }

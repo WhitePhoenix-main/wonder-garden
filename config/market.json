@@ -1,0 +1,23 @@
+{
+  "tickSeconds": 15,
+  "demandPeriodTicks": 5,
+  "demandPercent": [120, 110, 105, 100, 100, 95, 90, 100, 100, 95, 105, 100],
+  "minimumPricePercent": 70,
+  "maximumPricePercent": 120,
+  "saturationPenalty": 40,
+  "recoveryPercentPerTick": 22,
+  "capacity": {
+    "radish": { "fruit": 120, "seed": 48 },
+    "strawberry": { "fruit": 55, "seed": 24 },
+    "sunflower": { "fruit": 80, "seed": 35 },
+    "blueberry": { "fruit": 50, "seed": 24 },
+    "moonflower": { "fruit": 60, "seed": 28 },
+    "clover": { "fruit": 50, "seed": 24 },
+    "solar_strawberry": { "fruit": 50, "seed": 24 },
+    "moonberry": { "fruit": 45, "seed": 22 },
+    "honey_clover": { "fruit": 50, "seed": 24 },
+    "golden_flower": { "fruit": 65, "seed": 28 },
+    "crystal_flower": { "fruit": 60, "seed": 28 },
+    "star_orchid": { "fruit": 45, "seed": 22 }
+  }
+}

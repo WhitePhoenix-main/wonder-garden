@@ -31,19 +31,20 @@ describe('Leafy and the market stall', () => {
     const state = initialState(33)
     earn(state,150)
     commit(state,{type:'upgradeHelper',target:1})
-    expect(advance(state,5)).toEqual([])
+    const helperEvents=(seconds:number)=>advance(state,seconds).filter(event=>event!=='MarketUpdated')
+    expect(helperEvents(5)).toEqual([])
     advance(state,1)
     expect(oldestReadyPlot(state)).toBe(12)
     addLegacyFruit(state,basketCapacity(state))
     const plots=structuredClone(state.plots)
-    expect(advance(state,4)).toEqual([])
+    expect(helperEvents(4)).toEqual([])
     expect(state.plots).toEqual(plots)
     expect(state.harvestRemaining).toBe(5)
     commit(state,{type:'sell'})
-    expect(advance(state,4.9)).toEqual([])
+    expect(helperEvents(4.9)).toEqual([])
     expect(advance(state,0.1)).toContain('HelperHarvested:12')
     expect(advance(state,5)).toContain('HelperHarvested:13')
-    expect(advance(state,15)).toEqual([])
+    expect(helperEvents(15)).toEqual([])
   })
 
   it('HA-01/AT-05: manual and automatic harvest yield the same crop and cannot both collect it', () => {
@@ -128,6 +129,7 @@ describe('Leafy and the market stall', () => {
     addLegacyFruit(state,basketCapacity(state)-4)
     plantAt(state,12).fruitRoll=0
     state.sellRemaining=state.harvestRemaining
+    state.market.remaining=10
     const manual=structuredClone(state), before=state.coins
     expect(commit(manual,{type:'harvest',plot:12})).not.toContain('Sold')
     expect(basketCount(manual)).toBe(basketCapacity(manual))
@@ -135,7 +137,7 @@ describe('Leafy and the market stall', () => {
     const events=advance(state,5)
     expect(events.filter(e=>e==='Sold')).toHaveLength(1)
     expect(events).toContain('HelperHarvested:12')
-    expect(state.coins).toBe(before+(basketCapacity(state)-4)*3+16)
+    expect(state.coins).toBe(before+saleValue(manual))
     expect(state.sellRemaining).toBe(10)
   })
 

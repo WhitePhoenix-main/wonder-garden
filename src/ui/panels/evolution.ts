@@ -6,6 +6,7 @@ import { availableTraits, plantStats, rarityOdds } from '../../game/genetics'
 import { rarities } from '../../game/model'
 import { describe, field } from '../specimens'
 import { plantName } from '../strings'
+import { marketWords } from './market'
 
 const words = {
   ru: { title:'Развитие сада', greenhouse:'Селекционная теплица', level:'Уровень', improve:'Улучшить', parents:'Выберите два растения одного вида в питомнике', selected:'Выбрано', cross:'Начать эксперимент', waiting:'Осталось', collect:'Получить семя', island:'Территория', green:'Зелёный остров', valley:'Цветочная долина', bridge:'Восстановить мост', orders:'Заказы', complete:'Выполнить', decline:'Отказаться', empty:'Пока нет заказов', reward:'Награда', nursery:'Питомник', seconds:'с' },
@@ -32,6 +33,7 @@ export function evolutionPanel(state:GameState, parents:number[]) {
   const w=words[state.lang]
   const name=(id:Species)=>plantName(state.lang,id)
   let html=`<h2>${w.title}</h2><h3>${w.island}</h3>`
+  html+=button('market',marketWords[state.lang].title)
   html+=button('travel-green',w.green, `aria-pressed="${state.activeIsland==='green'}"`)
   html+=state.plots.length>plotCount ? button('travel-valley',w.valley,`aria-pressed="${state.activeIsland==='valley'}"`) : button('restore-bridge',w.bridge+' · '+evolution.bridge.cost+' ◈', '', !!bridgeIssue(state))
   if(state.plots.length<=plotCount) {
