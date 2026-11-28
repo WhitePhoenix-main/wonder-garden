@@ -10,9 +10,18 @@
       "generation": 0,
       "seedPrice": 10,
       "cycleSec": 6,
-      "fruitValue": 5,
+      "fruitValue": 3,
       "harmony": 10,
-      "propagationThreshold": 0
+      "propagationThreshold": 0,
+      "fruits": [
+        1,
+        2
+      ],
+      "ownSeeds": [
+        1,
+        3
+      ],
+      "lives": 20
     },
     {
       "id": "strawberry",
@@ -22,9 +31,18 @@
       "generation": 0,
       "seedPrice": 60,
       "cycleSec": 12,
-      "fruitValue": 15,
+      "fruitValue": 8,
       "harmony": 10,
-      "propagationThreshold": 0
+      "propagationThreshold": 0,
+      "fruits": [
+        1,
+        3
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 12
     },
     {
       "id": "blueberry",
@@ -34,9 +52,18 @@
       "generation": 0,
       "seedPrice": 180,
       "cycleSec": 25,
-      "fruitValue": 36,
+      "fruitValue": 12,
       "harmony": 10,
-      "propagationThreshold": 0
+      "propagationThreshold": 0,
+      "fruits": [
+        2,
+        4
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 10
     },
     {
       "id": "sunflower",
@@ -46,9 +73,18 @@
       "generation": 0,
       "seedPrice": 90,
       "cycleSec": 12,
-      "fruitValue": 3,
+      "fruitValue": 2,
       "harmony": 10,
-      "propagationThreshold": 0
+      "propagationThreshold": 0,
+      "fruits": [
+        1,
+        2
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 16
     },
     {
       "id": "clover",
@@ -58,9 +94,18 @@
       "generation": 0,
       "seedPrice": 120,
       "cycleSec": 15,
-      "fruitValue": 4,
+      "fruitValue": 3,
       "harmony": 10,
-      "propagationThreshold": 0
+      "propagationThreshold": 0,
+      "fruits": [
+        1,
+        2
+      ],
+      "ownSeeds": [
+        2,
+        3
+      ],
+      "lives": 14
     },
     {
       "id": "moonflower",
@@ -70,9 +115,18 @@
       "generation": 0,
       "seedPrice": 450,
       "cycleSec": 20,
-      "fruitValue": 8,
+      "fruitValue": 5,
       "harmony": 10,
-      "propagationThreshold": 0
+      "propagationThreshold": 0,
+      "fruits": [
+        1,
+        2
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 14
     },
     {
       "id": "solar_strawberry",
@@ -81,10 +135,19 @@
       "family": "solar",
       "generation": 1,
       "seedPrice": null,
-      "cycleSec": 12,
-      "fruitValue": 18,
+      "cycleSec": 15,
+      "fruitValue": 12,
       "harmony": 20,
-      "propagationThreshold": 6
+      "propagationThreshold": 6,
+      "fruits": [
+        1,
+        2
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 10
     },
     {
       "id": "moonberry",
@@ -94,9 +157,18 @@
       "generation": 1,
       "seedPrice": null,
       "cycleSec": 30,
-      "fruitValue": 44,
+      "fruitValue": 22,
       "harmony": 20,
-      "propagationThreshold": 6
+      "propagationThreshold": 6,
+      "fruits": [
+        1,
+        3
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 10
     },
     {
       "id": "honey_clover",
@@ -106,9 +178,18 @@
       "generation": 1,
       "seedPrice": null,
       "cycleSec": 20,
-      "fruitValue": 10,
+      "fruitValue": 6,
       "harmony": 20,
-      "propagationThreshold": 6
+      "propagationThreshold": 6,
+      "fruits": [
+        1,
+        2
+      ],
+      "ownSeeds": [
+        2,
+        3
+      ],
+      "lives": 12
     },
     {
       "id": "golden_flower",
@@ -118,9 +199,18 @@
       "generation": 1,
       "seedPrice": null,
       "cycleSec": 36,
-      "fruitValue": 50,
+      "fruitValue": 20,
       "harmony": 20,
-      "propagationThreshold": 6
+      "propagationThreshold": 6,
+      "fruits": [
+        2,
+        3
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 10
     },
     {
       "id": "crystal_flower",
@@ -130,9 +220,18 @@
       "generation": 2,
       "seedPrice": null,
       "cycleSec": 30,
-      "fruitValue": 8,
+      "fruitValue": 6,
       "harmony": 35,
-      "propagationThreshold": 10
+      "propagationThreshold": 10,
+      "fruits": [
+        1,
+        2
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 10
     },
     {
       "id": "star_orchid",
@@ -142,9 +241,18 @@
       "generation": 3,
       "seedPrice": null,
       "cycleSec": 40,
-      "fruitValue": 60,
+      "fruitValue": 26,
       "harmony": 50,
-      "propagationThreshold": 15
+      "propagationThreshold": 15,
+      "fruits": [
+        2,
+        3
+      ],
+      "ownSeeds": [
+        1,
+        2
+      ],
+      "lives": 8
     }
   ],
   "recipes": [
@@ -236,7 +344,7 @@
     {
       "source": "honey_clover",
       "kind": "propagation",
-      "bonus": 1,
+      "bonus": 0.4,
       "targets": "hybrids"
     }
   ],
@@ -355,5 +463,61 @@
     100,
     200,
     300
-  ]
+  ],
+  "genetics": {
+    "success": 0.3,
+    "pity": 4,
+    "rarity": [
+      [
+        65,
+        25,
+        10
+      ],
+      [
+        55,
+        30,
+        15
+      ],
+      [
+        45,
+        35,
+        20
+      ],
+      [
+        35,
+        40,
+        25
+      ],
+      [
+        25,
+        40,
+        35
+      ]
+    ],
+    "inheritedPlus": 0.8,
+    "newFlaw": 0.1,
+    "oneFlaw": 0.35,
+    "twoFlaws": 0.6,
+    "copy": 0.3,
+    "seedCopy": [
+      0.35,
+      0.4
+    ],
+    "hardy": [
+      1,
+      2
+    ],
+    "early": [
+      0.05,
+      0.1
+    ],
+    "fruitful": [
+      0.1,
+      0.2
+    ],
+    "fragile": 1,
+    "slow": 0.1,
+    "small": 0.1,
+    "sparse": 0.1
+  }
 }

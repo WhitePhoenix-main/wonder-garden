@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { basketCapacity, canReplace, expansionCost, growthMultiplier, initialState } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
-import { commit, earn, memoryStorage, plantAt, reject, wait } from './helpers'
+import { cross, legacySix, commit, earn, memoryStorage, plantAt, reject, wait } from './helpers'
 
 describe('Sprint 01 gameplay', () => {
   it('ST-01, GR-01, GR-03, HA-05: starts with two radishes and one fruit per active cycle', () => {
-    const state = initialState()
+    const state = initialState(33)
     expect(state.coins).toBe(20)
     expect(state.planted).toEqual(['radish'])
     expect(basketCapacity(state)).toBe(15)
@@ -19,34 +19,36 @@ describe('Sprint 01 gameplay', () => {
     expect(plantAt(state, 12).mature).toBe(true)
     wait(state, 60)
     commit(state, { type: 'harvest', plot: 12 })
-    expect(state.basket).toEqual([{ species: 'radish', valueUnits: 50_000 }])
+    expect(state.basket.every(f=>f.valueUnits===30000)).toBe(true)
     expect(plantAt(state, 12)).toMatchObject({ mature: true, progress: 0, readySince: null })
     reject(state, { type: 'harvest', plot: 12 }, 'notReady')
     wait(state, 6)
     commit(state, { type: 'harvest', plot: 12 })
+    const revenue=state.basket.length*3
     commit(state, { type: 'sell' })
-    expect(state.coins).toBe(30)
+    expect(state.coins).toBe(20+revenue)
     expect(state.sold).toBe(true)
     expect(commit(state, { type: 'sell' })).toEqual([])
-    expect(state.coins).toBe(30)
+    expect(state.coins).toBe(20+revenue)
   })
 
   it('HA-02: refuses a harvest at capacity without altering the ready plant or basket', () => {
-    const state = initialState()
+    const state = initialState(33)
     for (let count = 0; count < basketCapacity(state); count++) {
       wait(state, 6)
+      plantAt(state,12).fruitRoll=0
       commit(state, { type: 'harvest', plot: 12 })
     }
     expect(state.basket).toHaveLength(15)
     reject(state, { type: 'harvest', plot: 13 }, 'basketFull')
     commit(state, { type: 'sell' })
-    expect(state.coins).toBe(95)
+    expect(state.coins).toBe(65)
     commit(state, { type: 'harvest', plot: 13 })
-    expect(state.basket).toHaveLength(1)
+    expect(state.basket).not.toHaveLength(0)
   })
 
   it('EX-01, EX-02, MV-02: requires first sale, adjacency, funds and replacement permission', () => {
-    const state = initialState()
+    const state = initialState(33)
     reject(state, { type: 'clear', plot: 10 }, 'firstSale')
     reject(state, { type: 'upgrade', plot: 8 }, 'firstSale')
     reject(state, { type: 'plant', plot: 8, species: 'sunflower' }, 'seedLocked')
@@ -63,7 +65,7 @@ describe('Sprint 01 gameplay', () => {
   })
 
   it('GR-02, AU-01, BR-02, BR-03: only orthogonal auras apply and repeats do not stack', () => {
-    const state = initialState()
+    const state = initialState(33)
     earn(state, 300)
     commit(state, { type: 'plant', plot: 8, species: 'strawberry' })
     commit(state, { type: 'move', from: 13, to: 9 })
@@ -71,7 +73,7 @@ describe('Sprint 01 gameplay', () => {
     expect(growthMultiplier(state, 8)).toBe(1)
     wait(state, 12)
     commit(state, { type: 'harvest', plot: 8 })
-    expect(state.recipeProgress.solar_strawberry).toBe(0)
+    expect(state.revealed.includes('solar_strawberry')).toBe(false)
     wait(state, 4.8)
     const progress = plantAt(state, 8).progress
     expect(progress).toBeCloseTo(0.4)
@@ -86,21 +88,16 @@ describe('Sprint 01 gameplay', () => {
     expect(growthMultiplier(state, 8)).toBeCloseTo(1.4)
     wait(state, 12)
     commit(state, { type: 'harvest', plot: 8 })
-    expect(state.recipeProgress.solar_strawberry).toBe(1)
+    expect(state.revealed.includes('solar_strawberry')).toBe(false)
   })
 
   it('BR-01, BR-08, PR-01, UP-01, MV-01, NU-01: plays from a new garden through a planted hybrid, II, swap and nursery', () => {
-    const state = initialState()
+    const state = initialState(33)
     earn(state, 60)
     commit(state, { type: 'plant', plot: 8, species: 'strawberry' })
     earn(state, 90)
     commit(state, { type: 'plant', plot: 9, species: 'sunflower' })
-    for (let count = 1; count <= 3; count++) {
-      wait(state, 12)
-      const events = commit(state, { type: 'harvest', plot: 8 })
-      expect(events.includes('RecipeRevealed:solar_strawberry')).toBe(count === 3)
-      expect(state.recipeProgress.solar_strawberry).toBe(count)
-    }
+    wait(state,12);cross(state,8,'solar_strawberry')
     expect(state.seeds.solar_strawberry).toBe(1)
     expect(state.planted).toHaveLength(3)
 
@@ -145,7 +142,7 @@ describe('Sprint 01 gameplay', () => {
   })
 
   it('SL-01, EX-03, BR-05: restores progression after filling the island with radishes and reloading', () => {
-    let state = initialState()
+    let state = initialState(33)
     for (const plot of [8, 9]) commit(state, { type: 'plant', plot, species: 'radish' })
     let totalClearCost = 0
     for (const plot of [4, 5, 0, 1, 2, 3, 6, 7, 10, 11, 14, 15]) {
@@ -162,7 +159,7 @@ describe('Sprint 01 gameplay', () => {
     expect(expansionCost(state)).toBeNull()
     expect(state.plots.every(p => p.open && p.plant?.species === 'radish')).toBe(true)
     expect(state.planted).toEqual(['radish'])
-    expect(state.recipeProgress.solar_strawberry).toBe(0)
+    expect(state.revealed.includes('solar_strawberry')).toBe(false)
     expect(canReplace(state)).toBe(true)
     const storage = memoryStorage()
     createPersistence(() => storage).save(state)
@@ -196,18 +193,18 @@ describe('Sprint 01 gameplay', () => {
     const saved = structuredClone(state)
     state = createPersistence(() => storage).load()
     expect(state).toEqual(saved)
-    expect(state.recipeProgress.solar_strawberry).toBe(2)
+    expect(state.revealed.includes('solar_strawberry')).toBe(false)
     wait(state, 12)
     commit(state, { type: 'harvest', plot: 8 })
-    expect(state.recipeProgress.solar_strawberry).toBe(2)
+    expect(state.revealed.includes('solar_strawberry')).toBe(false)
     commit(state, { type: 'move', from: 13, to: 9 })
     wait(state, 12)
-    expect(commit(state, { type: 'harvest', plot: 8 })).toEqual(['Harvested', 'RecipeRevealed:solar_strawberry'])
+    expect(cross(state,8,'solar_strawberry')).toContain('RecipeRevealed:solar_strawberry')
     expect(state.seeds.solar_strawberry).toBe(1)
     expect(state.nursery).toEqual([oldFirst, oldSecond])
     createPersistence(() => storage).save(state)
     state = createPersistence(() => storage).load()
-    expect(state.recipeProgress.solar_strawberry).toBe(3)
+    expect(state.revealed.includes('solar_strawberry')).toBe(true)
     expect(state.seeds.solar_strawberry).toBe(1)
     const beforeHybrid = state.coins
     commit(state, { type: 'plant', plot: 12, species: 'solar_strawberry', replaceId: plantAt(state, 12).id })

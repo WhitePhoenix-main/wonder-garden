@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest'
 import { initialState } from '../src/game'
 import { gardenHint } from '../src/ui/onboarding'
-import { commit, earn, wait } from './helpers'
+import { cross, legacySix, commit, earn, wait } from './helpers'
 
 it('guides the first sale, parent placement, recipe progress and planting in a full starting garden', () => {
-  const state = initialState()
+  const state = initialState(33)
   expect(gardenHint(state)).toMatch(/созревший редис/)
   wait(state,6)
   commit(state,{type:'harvest',plot:12})
@@ -18,19 +18,15 @@ it('guides the first sale, parent placement, recipe progress and planting in a f
   commit(state,{type:'move',from:9,to:13})
   expect(gardenHint(state)).toMatch(/Стройке.*соседних по стороне/)
   commit(state,{type:'move',from:13,to:9})
-  expect(gardenHint(state)).toMatch(/0\/3/)
-  for (let count=1;count<=3;count++) {
-    wait(state,12)
-    commit(state,{type:'harvest',plot:8})
-    if (count < 3) expect(gardenHint(state)).toContain(`${count}/3`)
-  }
+  expect(gardenHint(state)).toMatch(/сбор семян/)
+  wait(state,12);cross(state,8,'solar_strawberry')
   expect(gardenHint(state)).toMatch(/Солнечная клубника.*замените/)
   commit(state,{type:'plant',species:'solar_strawberry',plot:12,replaceId:state.plots[12].plant!.id})
   expect(gardenHint(state)).toMatch(/уголок сада/)
 })
 
 it('points to the shovel when all open plots are full and replacement is still locked', () => {
-  const state = initialState()
+  const state = initialState(33)
   for (const plot of [8,9]) commit(state,{type:'plant',species:'radish',plot})
   earn(state,120)
   expect(gardenHint(state)).toMatch(/лопатой/)

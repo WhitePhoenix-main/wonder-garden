@@ -9,7 +9,7 @@ export function plantName(lang: Lang, id: Species): string {
 export const words = {
   ru: {
     decorChanged:'Выберите предмет и место заново.', basketLevel:'Уровень корзины уже изменился.', funds:'Недостаточно монет',
-    title:'Чудо-сад', subtitle:'ЗЕЛЁНЫЙ ОСТРОВ', coins:'Монеты', basket:'Корзина', sell:'Продать', collection:'Коллекция',
+    title:'Чудо-сад', subtitle:'ЗЕЛЁНЫЙ ОСТРОВ', coins:'Монеты', basket:'Корзина', sell:'Продать', collection:'Альманах',
     garden:'Сад', plant:'Посадка', breed:'Селекция', build:'Стройка', goal:'Сейчас в саду',
     plot:'Грядка', closed:'Заросший участок', empty:'Свободная грядка', ready:'Готово к сбору', growing:'Растёт',
     level:'Уровень', selectPlot:'Выберите грядку на острове', chooseSeed:'Выберите семя, затем грядку',
@@ -22,19 +22,19 @@ export const words = {
     harvests:'подходящих сборов',
     revealed:'Рецепт открыт',
     error:'Действие сейчас недоступно', noCoins:'Недостаточно монет', firstSale:'Сначала продайте урожай', notAdjacent:'Участок должен соседствовать с открытой грядкой',
-    basketFull:'Корзина полна', noSeeds:'Нет семян', seedLocked:'Семя пока недоступно', occupied:'Грядка занята',
+    basketFull:'Продайте урожай, чтобы освободить место для всего сбора.', noSeeds:'Нет семян', seedLocked:'Семя пока недоступно', occupied:'Грядка занята',
     replacementLocked:'Замена пока недоступна', stalePlant:'Растение изменилось, выберите его снова',
     future:'Сохранение создано новой версией игры. Оно защищено от перезаписи.', damaged:'Сохранение повреждено. Оно защищено от перезаписи до сброса.', recovered:'Восстановлена резервная копия сада.', unavailable:'Сохранение недоступно. Сад работает в памяти браузера.',
-    close:'Закрыть', harvest:'Собрать', seedHint:'Сначала посадите клубнику',
+    close:'Закрыть', harvest:'Собрать плоды', seedHint:'Сначала посадите клубнику',
     confirmClear:'Расчистить выбранный участок?', confirmUpgrade:'Улучшить выбранную грядку?',
     chooseReturn:'Выберите свободную грядку для растения.', settings:'Настройки',
     replaceHint:'Можно заменить растение, сохранив прежнее в питомнике.',
-    all:'Все', base:'Базовые', hybrids:'Гибриды', cycle:'Цикл', sec:'с', aura:'Аура', growth:'Рост', price:'Цена', propagation:'Размножение', allPlants:'все растения', earned:'Получено семя', studied:'Изучено', unknown:'Не изучено', multiply:'Размножение', finished:'Хранитель острова · сад полностью открыт', needBlue:'Сначала посадите чернику', needRecipe:'Откройте первый рецепт',
+    all:'Все', base:'Базовые', hybrids:'Гибриды', cycle:'Цикл', sec:'с', aura:'Аура', growth:'Рост', price:'Цена', propagation:'Копирование черт', allPlants:'все растения', earned:'Получено семя', studied:'Изучено', unknown:'Не изучено', multiply:'Размножение', finished:'Хранитель острова · сад полностью открыт', needBlue:'Сначала посадите чернику', needRecipe:'Откройте первый рецепт',
     confirmOld:'В питомник', confirmNew:'Посадить', seedUnit:'семя'
   },
   en: {
     decorChanged:'Choose the item and spot again.', basketLevel:'The basket level has already changed.', funds:'Not enough coins',
-    title:'Wonder Garden', subtitle:'THE GREEN ISLAND', coins:'Coins', basket:'Basket', sell:'Sell', collection:'Collection',
+    title:'Wonder Garden', subtitle:'THE GREEN ISLAND', coins:'Coins', basket:'Basket', sell:'Sell', collection:'Almanac',
     garden:'Garden', plant:'Plant', breed:'Breeding', build:'Build', goal:'In the garden',
     plot:'Bed', closed:'Overgrown plot', empty:'Empty bed', ready:'Ready to harvest', growing:'Growing',
     level:'Level', selectPlot:'Choose a bed on the island', chooseSeed:'Choose a seed, then a bed',
@@ -47,14 +47,14 @@ export const words = {
     harvests:'matching harvests',
     revealed:'Recipe discovered',
     error:'This action is unavailable', noCoins:'Not enough coins', firstSale:'Sell a harvest first', notAdjacent:'Choose a plot next to an open bed',
-    basketFull:'Basket is full', noSeeds:'No seeds available', seedLocked:'Seed is still locked', occupied:'Bed is occupied',
+    basketFull:'Sell your basket to make room for the whole harvest.', noSeeds:'No seeds available', seedLocked:'Seed is still locked', occupied:'Bed is occupied',
     replacementLocked:'Replacement is unavailable', stalePlant:'The plant changed. Select it again.',
     future:'This save was created by a newer version. It is protected from overwriting.', damaged:'The save is damaged and protected until reset.', recovered:'The backup garden was restored.', unavailable:'Saving is unavailable. Your garden is running in browser memory.',
-    close:'Close', harvest:'Harvest', seedHint:'Plant a strawberry first',
+    close:'Close', harvest:'Collect fruit', seedHint:'Plant a strawberry first',
     confirmClear:'Clear the selected plot?', confirmUpgrade:'Upgrade the selected bed?',
     chooseReturn:'Choose an empty bed for the plant.', settings:'Settings',
     replaceHint:'You can replace a plant and keep the previous one in the nursery.',
-    all:'All', base:'Base', hybrids:'Hybrids', cycle:'Cycle', sec:'s', aura:'Aura', growth:'Growth', price:'Price', propagation:'Propagation', allPlants:'all plants', earned:'Seed received', studied:'Studied', unknown:'Undiscovered', multiply:'Propagation', finished:'Island Keeper · garden complete', needBlue:'Plant a blueberry first', needRecipe:'Discover a recipe first',
+    all:'All', base:'Base', hybrids:'Hybrids', cycle:'Cycle', sec:'s', aura:'Aura', growth:'Growth', price:'Price', propagation:'Trait copying', allPlants:'all plants', earned:'Seed received', studied:'Studied', unknown:'Undiscovered', multiply:'Propagation', finished:'Island Keeper · garden complete', needBlue:'Plant a blueberry first', needRecipe:'Discover a recipe first',
     confirmOld:'Move to nursery', confirmNew:'Plant', seedUnit:'seed'
   }
 } as const

@@ -1,4 +1,5 @@
-import type { GameState, Recipe, Species } from './model'
+import { common, rules, stockCount, strength } from './genetics'
+import type { Experiment, Profile, GameState, Recipe, Species } from './model'
 import { adjacent, auras, balance, basketLevels, bedLevels, island, isHybrid, isSpecies, recipes, speciesInfo, valueScale } from './config'
 
 export function basketCapacity(state:Pick<GameState,'basketLevel'>):number {
@@ -7,12 +8,12 @@ export function basketCapacity(state:Pick<GameState,'basketLevel'>):number {
 
 export function canRecoverGarden(state:GameState):boolean {
   return state.coins + saleValue(state) < speciesInfo.radish.seedPrice! && !state.nursery.length &&
-    !Object.values(state.seeds).some(Boolean) && state.plots.every(plot => !plot.plant) &&
+    !state.variants.length && !Object.values(state.seeds).some(Boolean) && state.plots.every(plot => !plot.plant) &&
     state.plots.some(plot => plot.open)
 }
 
 export function isRecipeRevealed(state: GameState): boolean {
-  return recipes.some(recipe => state.recipeProgress[recipe.result] === recipe.harvests)
+  return state.revealed.length>0
 }
 
 export function canReplace(state: GameState): boolean {
@@ -23,7 +24,7 @@ export function seedUnlocked(state: GameState, species: Species): boolean {
   if (species === 'moonflower') return state.planted.includes('blueberry')
   if (species === 'clover') return isRecipeRevealed(state)
   if (species === 'sunflower' || species === 'blueberry') return state.planted.includes('strawberry')
-  if (isHybrid(species)) return recipes.some(r => r.result === species && state.recipeProgress[species] === r.harvests)
+  if (isHybrid(species)) return state.revealed.includes(species)
   return true
 }
 
@@ -49,11 +50,22 @@ function neighborSpecies(state: GameState, index: number): Set<Species> {
 export function isRecipeActive(state: GameState, index: number, recipe: Recipe): boolean {
   const plot = state.plots[index]
   if (!plot?.plant || plot.plant.species !== recipe.primary
-    || plot.level < recipe.minBedLevel || state.recipeProgress[recipe.result] === recipe.harvests) return false
+    || plot.level < recipe.minBedLevel) return false
   const neighbors = neighborSpecies(state, index)
   return recipe.neighbors.every(id => neighbors.has(id))
 }
 
+export function experiments(state:GameState,index:number):Experiment[] {
+  const near=adjacent(index)
+  const layout=[state.plots[index].level,...near.map(i=>state.plots[i].plant?.id??0)].join('.')
+  return recipes.filter(r=>isRecipeActive(state,index,r)).flatMap(r=>near.flatMap(i=>{
+    const donor=state.plots[i].plant
+    return donor && r.neighbors.includes(donor.species)?[{result:r.result,donorId:donor.id,layout}]:[]
+  }))
+}
+export function chance(state:GameState,result:Recipe['result']) {
+  return result==='solar_strawberry' && !seedUnlocked(state,result) || state.failures[result]>=rules.pity ? 1 : rules.success
+}
 export function auraBonus(state: GameState, index: number, kind: 'growth' | 'price' | 'propagation'): number {
   const species = state.plots[index]?.plant?.species
   if (!species) return 0
@@ -71,7 +83,9 @@ export function auraBonus(state: GameState, index: number, kind: 'growth' | 'pri
 
 export function growthMultiplier(state: GameState, index: number): number {
   const plot = state.plots[index]
-  return plot ? bedLevels[plot.level].growthMultiplier * (1 + auraBonus(state, index, 'growth')) : 1
+  const p=plot?.plant
+  const time=p?.plus==='early'?1-rules.early[strength(p)]:p?.minus==='slow'?1+rules.slow:1
+  return plot ? bedLevels[plot.level].growthMultiplier * (1 + auraBonus(state, index, 'growth')) / time : 1
 }
 
 export function secondsLeft(state:GameState, index:number):number {
@@ -86,20 +100,20 @@ export function removalIssue(state:GameState, plot:number, expectedId:number, ac
   if (action === 'compost' && !state.sold) return 'firstSale'
   if (!plant || plant.id !== expectedId) return 'stalePlant'
   const species = plant.species
-  if (action === 'compost' && isHybrid(species) && !state.seeds[species] &&
+  if (action === 'compost' && isHybrid(species) && !state.seeds[species] && !state.variants.some(v=>v.species===species) &&
       !state.nursery.some(p => p.species === species) &&
       !state.plots.some(p => p.plant?.species === species && p.plant.id !== expectedId)) return 'lastHybrid'
   return null
 }
 
-export function plantingIssue(state:GameState, index:number, species:Species, replaceId?:number) {
+export function plantingIssue(state:GameState, index:number, species:Species, replaceId?:number, stock?:Profile) {
   const plot = state.plots[index]
   if (!plot?.open) return 'plotClosed'
   if (replaceId !== undefined && plot.plant?.id !== replaceId) return 'stalePlant'
   if (plot.plant && !canReplace(state)) return 'replacementLocked'
   if (plot.plant && replaceId === undefined) return 'occupied'
   if (!isSpecies(species) || !seedUnlocked(state,species)) return 'seedLocked'
-  if (isHybrid(species) && !state.seeds[species]) return 'noSeeds'
+  if (stock || isHybrid(species)) return stockCount(state,species,stock??common)>0 ? null : 'noSeeds'
   if (state.coins < (speciesInfo[species].seedPrice ?? 0)) return 'noCoins'
   return null
 }
@@ -109,7 +123,7 @@ export function oldestReadyPlot(state: GameState): number|null {
   let target: number|null = null
   // Row-major iteration keeps the lower plot index on an equal timestamp.
   state.plots.forEach(({plant}, index) => {
-    if (plant?.readySince != null && plant.readySince < oldest) {
+    if (plant?.readySince != null && (plant.rarity==='common' || plant.lives>1) && plant.readySince < oldest) {
       oldest = plant.readySince
       target = index
     }

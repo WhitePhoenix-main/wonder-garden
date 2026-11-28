@@ -23,7 +23,7 @@ if (!view.started) {
   } catch { /* Use defaults if preferences cannot be read. */ }
 }
 let ui: UI
-const world = createWorld(document.querySelector<HTMLElement>('#world')!, index => ui.pick(index), slot => ui.pickDecor(slot))
+const world = createWorld(document.querySelector<HTMLElement>('#world')!, index => ui.pick(index), slot => ui.pickDecor(slot),()=>ui.nursery())
 function render() {
   document.documentElement.lang = view.state.lang
   world.render(view)

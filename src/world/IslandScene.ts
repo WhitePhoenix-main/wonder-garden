@@ -158,8 +158,8 @@ export class IslandScene extends Phaser.Scene {
     }
   }
 
-  paint({ state, shovel, selected, moveFrom, mode, decorEditing, decorPreview }: WorldView): void {
-    const key = JSON.stringify([state.lang,shovel,state.tutorialSkipped,mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,
+  paint({ state, sunflower, shovel, selected, moveFrom, mode, decorEditing, decorPreview }: WorldView): void {
+    const key = JSON.stringify([state.lang,sunflower,shovel,state.tutorialSkipped,mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,
       state.helperLevel,isRecipeRevealed(state),state.decorations,
       state.plots.map((p,i) => [secondsLeft(state,i),p.open,p.level,p.plant?.species,p.plant && plantTexture(p.plant)])])
     if (key === this.lastPaint) return
@@ -201,7 +201,8 @@ export class IslandScene extends Phaser.Scene {
       if (plot.plant) this.art.setTexture(cell.plant,plantTexture(plot.plant))
 
       if (mode === 'plant' && plot.open && !plot.plant) {
-        outline(this.highlights,pos,0xe6efb6,0.84,0.25)
+        const match=sunflower && adjacent(i).some(j=>state.plots[j].plant?.species==='strawberry')
+        outline(this.highlights,pos,match?0xffbf42:0xe6efb6,1,match?.65:.25)
       }
       if (mode === 'build' && state.sold && !plot.open && adjacent(i).some(j => state.plots[j].open)) {
         outline(this.highlights,pos,0xf7d79d,0.9,0.20)
