@@ -1,9 +1,9 @@
 import type { Command, GameState, Result } from './model'
 import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, speciesIds, speciesInfo } from './config'
-import { basketCapacity, canRecoverGarden, plantingIssue, removalIssue, expansionCost } from './queries'
+import { canRecoverGarden, plantingIssue, removalIssue, expansionCost } from './queries'
 import { decorate } from './decor'
 import { newPlant } from './state'
-import { sellBasket } from './trade'
+import { sellBasket, trade } from './trade'
 import { harvest } from './harvest'
 import { common, changeStock, nextRandom } from './genetics'
 
@@ -20,6 +20,9 @@ export function execute(state: GameState, command: Command): Result {
     case 'dismissHybrid': state.pendingHybrid=null;return success('HintDismissed')
     case 'tutorialBranch': state.tutorialBranch=command.branch;return success('BranchChosen')
     case 'sell': return success(...sellBasket(state))
+    case 'sellHarvest':
+    case 'sellSeeds':
+    case 'extractSeeds': return trade(state,command)
     case 'upgradeHelper': {
       if (!state.sold) return failure('firstSale')
       if (state.helperLevel === 3 || command.target !== state.helperLevel + 1) return failure('helperLevel')
@@ -37,9 +40,7 @@ export function execute(state: GameState, command: Command): Result {
       state.coins -= autoSellOffer.cost
       state.autoSell = true
       state.sellRemaining = autoSellOffer.intervalSec
-      const events = ['AutoSellEnabled']
-      if (state.basket.length === basketCapacity(state)) events.push(...sellBasket(state))
-      return success(...events)
+      return success('AutoSellEnabled')
     }
     case 'buyDecor':
     case 'placeDecor':
@@ -121,7 +122,10 @@ export function execute(state: GameState, command: Command): Result {
       if (issue) return failure(issue)
       const price = speciesInfo[command.species].seedPrice
 
-      if (command.stock || isHybrid(command.species)) changeStock(state,command.species,command.stock??common,-1)
+      if (command.stock || isHybrid(command.species)) {
+        changeStock(state,command.species,command.stock??common,-1)
+        state.firstSeedPlanting = true
+      }
       else if (price !== null) state.coins -= price
       if (displaced) state.nursery.push(displaced)
       plot.plant = newPlant(state.nextId++, command.species,command.stock,nextRandom(state))

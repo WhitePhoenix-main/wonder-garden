@@ -1,15 +1,17 @@
 import type { GameState } from './model'
-import { autoSellOffer, helperLevels, speciesInfo } from './config'
+import { autoSellOffer, helperLevels } from './config'
 import { execute } from './commands'
-import { growthMultiplier, oldestReadyPlot } from './queries'
+import { cycleSeconds, oldestReadyPlot, pollinationFor } from './queries'
 import { sellBasket } from './trade'
 
 // Only planted instances grow during active game time.
 function grow(state: GameState, seconds: number): void {
   state.playTime += seconds
   state.plots.forEach(({plant}, index) => {
-    if (!plant || plant.readySince !== null) return
-    const rate = growthMultiplier(state, index) / speciesInfo[plant.species].cycleSec
+    if (!plant) return
+    if (!plant.pollination) plant.pollination = pollinationFor(state, index)
+    if (plant.readySince !== null) return
+    const rate = 1 / cycleSeconds(state, index)
     const timeToRipe = (1 - plant.progress) / rate
     plant.progress += seconds * rate
     if (plant.progress >= 1 - 1e-10) {
@@ -43,7 +45,7 @@ export function advance(state: GameState, seconds: number): string[] {
       }
     }
     if (state.autoSell && state.sellRemaining <= 1e-9) {
-      events.push(...sellBasket(state))
+      events.push(...sellBasket(state, true))
       state.sellRemaining = autoSellOffer.intervalSec
     }
   }

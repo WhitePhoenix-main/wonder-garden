@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialState, basketCapacity } from '../src/game'
+import { initialState, basketCapacity, basketCount, saleValue } from '../src/game'
 import { decorationAt, harmony } from '../src/game/decor'
 import { journal } from '../src/game/journal'
 import { createPersistence } from '../src/persistence/storage'
@@ -118,14 +118,18 @@ describe('Garden building and progress', () => {
     delete old.firstHarvest
     data.setItem('wonder-garden.save.v1',JSON.stringify(old))
     const persistence = createPersistence(()=>data)
-    expect(persistence.load()).toMatchObject({coins:state.coins,basket:state.basket})
+    const migrated=persistence.load()
+    expect(migrated.coins).toBe(state.coins)
+    expect(basketCount(migrated)).toBe(basketCount(state))
+    expect(saleValue(migrated)).toBe(saleValue(state))
+    expect(migrated.basket[0].profile).toBeNull()
     const coins = state.coins
-    for (const [target,capacity] of [[1,30],[2,60],[3,120]]) {
+    for (const [target,capacity] of [[1,240],[2,720],[3,2400]]) {
       commit(state,{type:'upgradeBasket',target})
       expect(basketCapacity(state)).toBe(capacity)
       reject(state,{type:'upgradeBasket',target},'basketLevel')
     }
-    expect(state.basket.length).toBeGreaterThan(0);expect(state.basket.every(f=>f.valueUnits===30000)).toBe(true)
+    expect(state.basket.length).toBeGreaterThan(0);expect(state.basket.every(f=>f.valueUnits===40000)).toBe(true)
     expect(state.coins).toBe(coins-740)
     commit(state,{type:'sound',muted:true})
     persistence.save(state)

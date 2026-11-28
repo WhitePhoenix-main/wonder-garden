@@ -43,7 +43,8 @@ export function gardenAudio() {
     } catch { /* Sound is optional. */ }
   }
   const cues:Record<string,number[]> = {Planted:[330,494],Harvested:[440,660],Sold:[523,659,784],
-    Composted:[220,147],BedUpgraded:[196,294,392],Discovery:[523,659,880,1047]}
+    SeedsExtracted:[370,494,740],RareSeed:[440,554,740,988],Composted:[220,147],BedUpgraded:[196,294,392],
+    Discovery:[523,659,880,1047]}
   function play(events:string[],muted:boolean,automatic=false) {
     if (!ctx || muted || document.hidden) return
     const key=events.some(e=>e.startsWith('RecipeRevealed:')) ? 'Discovery' :

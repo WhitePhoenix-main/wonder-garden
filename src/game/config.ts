@@ -103,14 +103,18 @@ function readSpecies(id: Species): Readonly<(typeof balance.plants)[number]> {
   const data = matches[0]
   requireConfig(data.nameRu && data.nameEn, `plants.${id} name`)
   requireConfig(Number.isFinite(data.cycleSec) && data.cycleSec > 0, `plants.${id} cycleSec`)
+  requireConfig(data.lifecycle === 'single' ? data.lives === 1 && data.regrowSec === 0 :
+    data.lifecycle === 'multi' && data.lives > 1 && Number.isFinite(data.regrowSec) && data.regrowSec > 0,
+  `plants.${id} lifecycle`)
   requireConfig(nonnegativeInteger(data.harmony), 'plants.' + id + '.harmony')
   requireConfig(positiveInteger(data.lives) && [data.fruits,data.ownSeeds].every(range=>range.length===2 &&
     range.every(positiveInteger) && range[1]>=range[0]), 'yield and lives '+id)
   requireConfig(positiveInteger(data.fruitValue), `plants.${id} fruitValue`)
+  requireConfig(positiveInteger(data.seedValue), `plants.${id} seedValue`)
   requireConfig(isHybrid(id) ? positiveInteger(data.propagationThreshold) : data.propagationThreshold === 0, 'propagationThreshold')
   requireConfig(isHybrid(id)
     ? data.seedPrice === null
-    : data.seedPrice !== null && nonnegativeInteger(data.seedPrice), `plants.${id} seedPrice`)
+    : data.seedPrice !== null && positiveInteger(data.seedPrice) && data.seedValue < data.seedPrice, `plants.${id} seedPrice`)
   return data
 }
 
@@ -144,10 +148,15 @@ requireConfig(genetics.rarity.length===5 && genetics.rarity.every(row=>row.lengt
   row.every(nonnegativeInteger) && row.reduce((sum,n)=>sum+n,0)===100),'rarity')
 requireConfig([genetics.success,genetics.inheritedPlus,genetics.newFlaw,genetics.oneFlaw,genetics.twoFlaws,
   genetics.copy,genetics.sparse,genetics.small,genetics.slow].every(probability) &&
-  [genetics.seedCopy,genetics.fruitful,genetics.early].every(pair=>pair.length===2 && pair.every(probability)) &&
+  [genetics.seedCopy,genetics.fruitful,genetics.early,genetics.seedyYield].every(pair=>pair.length===2 && pair.every(probability)) &&
+  genetics.early.every(modifier=>modifier < 1) && genetics.small < 1 &&
   positiveInteger(genetics.pity) && genetics.hardy.length===2 && genetics.hardy.every(positiveInteger) &&
   positiveInteger(genetics.fragile),'genetics')
-requireConfig(balance.version === 1, 'balance.version')
+requireConfig([genetics.rarityFruitPrice,genetics.raritySeedPrice].every(ranks=>ranks.length===3 &&
+  ranks.every(n=>Number.isFinite(n) && n>0)) && genetics.raritySeedYield.length===3 &&
+  genetics.raritySeedYield.every(probability) && probability(genetics.seedTraitPrice.plus) &&
+  probability(genetics.seedTraitPrice.minus) && genetics.seedTraitPrice.minus < 1,'rarity economy')
+requireConfig(balance.version === 2, 'balance.version')
 requireConfig(nonnegativeInteger(balance.startCoins), 'balance.startCoins')
 requireConfig(balance.expansionCosts.length === plotCount - island.startOpen.length
   && balance.expansionCosts.every(nonnegativeInteger), 'balance.expansionCosts')

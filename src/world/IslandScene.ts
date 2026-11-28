@@ -37,8 +37,7 @@ export class IslandScene extends Phaser.Scene {
   private cells: CellArt[] = []
   private decorations = new Map<string,Phaser.GameObjects.Image>()
   private sparks!: Phaser.GameObjects.Graphics
-  private effectTarget:number|null = null
-  private effectAge = 0
+  private harvestEffects = new Map<number,{age:number; text:Phaser.GameObjects.Text; stationary:boolean}>()
   private lastPaint = ''
   private highlights!: Phaser.GameObjects.Graphics
   private markers!: Phaser.GameObjects.Graphics
@@ -127,10 +126,12 @@ export class IslandScene extends Phaser.Scene {
     else this.tweens.add({ targets:this.helper, x, y, duration:360, ease:'Sine.easeOut' })
   }
 
-  collectEffect(index:number) {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    this.effectTarget = index
-    this.effectAge = 0
+  collectEffect(index:number, message:string) {
+    const point = plotPosition(index)
+    this.harvestEffects.get(index)?.text.destroy()
+    const text = this.label(point.x,point.y-84,'#fff4c8','#385748').setDepth(920)
+    text.setText(message).setScale(1/this.cameras.main.zoom)
+    this.harvestEffects.set(index,{age:0,text,stationary:window.matchMedia('(prefers-reduced-motion: reduce)').matches})
   }
 
   update(_time:number, dt:number) {
@@ -141,20 +142,28 @@ export class IslandScene extends Phaser.Scene {
       const text=scale>2.7 && i!==this.selectedPlot ? '•' : cell.countdown
       if (cell.timer.text!==text) cell.timer.setText(text)
     })
-    if (this.effectTarget === null) return
+    if (!this.harvestEffects.size) return
     this.sparks.clear()
-    this.effectAge += dt
-    const phase = this.effectAge / 460
-    if (phase >= 1) {
-      this.effectTarget = null
-      return
-    }
-    const point = plotPosition(this.effectTarget)
-    this.sparks.fillStyle(0xffe3a1, 1-phase)
-    for (let i=0;i<6;i++) {
-      const angle = i*Math.PI/3
-      this.sparks.fillCircle(point.x + Math.cos(angle)*(12+22*phase),
-        point.y - 28 - phase*28 + Math.sin(angle)*15,3-phase)
+    for (const [index, effect] of this.harvestEffects) {
+      const point = plotPosition(index)
+      effect.age += dt
+      if (effect.age >= 900) {
+        effect.text.destroy()
+        this.harvestEffects.delete(index)
+        continue
+      }
+      effect.text.setScale(scale)
+      if (effect.stationary) continue
+      effect.text.setY(point.y-84-Math.min(effect.age/650,1)*21*scale)
+      effect.text.setAlpha(Math.min(1,(900-effect.age)/260))
+      const phase = effect.age / 460
+      if (phase >= 1) continue
+      this.sparks.fillStyle(0xffe3a1, 1-phase)
+      for (let i=0;i<6;i++) {
+        const angle = i*Math.PI/3
+        this.sparks.fillCircle(point.x + Math.cos(angle)*(12+22*phase),
+          point.y - 28 - phase*28 + Math.sin(angle)*15,3-phase)
+      }
     }
   }
 

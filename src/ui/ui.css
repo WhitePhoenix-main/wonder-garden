@@ -1,4 +1,5 @@
 [data-guide="sell"] .sell,[data-guide="collect"] [data-action="collect"],[data-guide="plant"] [data-mode="plant"],[data-guide="shovel"] .shovel,
+[data-guide="inventory"] [data-action="inventory"],
 [data-guide-seed="strawberry"] [data-seed="strawberry"],[data-guide-seed="sunflower"] [data-seed="sunflower"],[data-guide-seed="solar_strawberry"] [data-seed="solar_strawberry"] {outline:2px solid #bd9144;outline-offset:1px}
 .keyboard-beds button:not(:focus){clip-path:inset(100%);width:1px;height:1px;min-height:0;position:absolute;overflow:hidden;padding:0}
 .keyboard-beds button:focus{position:absolute;bottom:8rem;left:1rem;z-index:8}
@@ -749,3 +750,23 @@ svg {
 [data-profile][aria-pressed="true"] {border-color:#557c5a;background:#e7efda}
 .reward p {grid-column:1/-1;margin:4px}
 .notice:not(.reward){pointer-events:none}
+
+.context.inventory-context { width: min(390px, calc(100% - 48px)); }
+.inventory-card { padding: 12px; margin: 10px 0; border: 1px solid #d2b087; border-radius: 12px; background: #fff5dc; }
+.inventory-card header { display: flex; align-items: center; gap: 8px; }
+.inventory-card header img { width: 34px; height: 34px; object-fit: contain; }
+.inventory-card p { margin: 6px 0; }
+.inventory-quantity { display:grid; grid-template-columns:44px 1fr 44px auto; align-items:center; gap:6px; text-align:center; }
+.context .inventory-quantity button:not(.close) { min-width:44px; min-height:44px; margin:0; text-align:center; }
+.inventory-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.context .inventory-actions button:not(.close) { width:auto; flex: 1 0 auto; }
+.inventory-actions p { flex-basis:100%; }
+.inventory-tools { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.inventory-tools label { font-size:12px; display:grid; min-width:0; }
+.inventory-tools :is(select,input) { width:100%; min-height:44px; padding:0 6px; border:1px solid #d2b087; border-radius:8px; background:#fffaef; color:#385a43; font:inherit; }
+[data-action="inventory"] { min-height:44px; }
+@media (max-width:600px) {
+  .context.inventory-context { right:9px; left:9px; width:auto; max-height:57dvh; }
+}
+
+[data-inventory-filter] { min-height:44px; max-width:100%; }

@@ -7,7 +7,7 @@ import type { Profile } from './model'
 
 export function newPlant(id: number, species: Species, profile:Profile=common, fruitRoll=0): Plant {
   const lives=maxLives(species,profile)
-  return { id, species, rarity:profile.rarity, plus:profile.plus, minus:profile.minus, lives,maxLives:lives,fruitRoll, progress: 0, mature: false, readySince: null }
+  return { id, species, rarity:profile.rarity, plus:profile.plus, minus:profile.minus, lives,maxLives:lives,fruitRoll, progress: 0, mature: false, readySince: null, pollination:null }
 }
 
 export const inactiveAutomation = {
@@ -15,7 +15,9 @@ export const inactiveAutomation = {
 } as const
 
 export const initialAmenities = {
-  tutorialBranch:null, pendingHybrid:null, basketLevel: 0, firstHarvest: false, firstPropagation: false, musicMuted:false, tutorialSkipped:false, occupiedHintShown:false, muted: false
+  tutorialBranch:null, pendingHybrid:null, basketLevel: 0, firstHarvest: false, firstExtraction: false,
+  firstSeedPlanting: false, firstPropagation: false, musicMuted:false, tutorialSkipped:false,
+  occupiedHintShown:false, muted: false
 } as const
 
 export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameState {

@@ -10,7 +10,7 @@ export interface WorldView {
   state:GameState; selected:number|null; mode:Mode; moveFrom:number|null
 }
 export interface World {
-  effects(events:string[], harvestPlot?:number):void; render(view:WorldView):void; center():void; zoom(delta:number):void; destroy():void
+  effects(events:string[]):void; render(view:WorldView):void; center():void; zoom(delta:number):void; destroy():void
 }
 export interface UIActions {
   enter():void; menu():void

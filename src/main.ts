@@ -32,8 +32,9 @@ function render() {
 function command(cmd: Command) {
   const result = execute(view.state, cmd)
   if (result.ok && result.events.length) {
-    world.effects(result.events, cmd.type === 'harvest' ? cmd.plot : undefined)
-    audio.play(result.events,view.state.muted)
+    world.effects(result.events)
+    const cue = result.obtained?.some(seed=>seed.rarity==='rare') ? ['RareSeed',...result.events] : result.events
+    audio.play(cue,view.state.muted)
     if (cmd.type === 'sound' || cmd.type === 'music' || cmd.type === 'language') {
       const {lang,muted,musicMuted}=view.state
       try { localStorage.setItem(prefKey,JSON.stringify({lang,muted,musicMuted})) } catch { /* In-memory preferences remain active. */ }

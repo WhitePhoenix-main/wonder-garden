@@ -7,7 +7,7 @@ export type Lang = 'ru' | 'en'
 export type HelperLevel = 0 | 1 | 2 | 3
 export const decorIds = ['bench','lantern','flower_arch','sakura'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 7
+export const saveVersion = 8
 
 export interface Recipe {
   result: Hybrid
@@ -27,7 +27,30 @@ export interface Profile {
 }
 export interface SeedPack extends Profile {species:Species; count:number}
 export interface Experiment {result:Hybrid; donorId:number; layout:string}
+export interface PollinationSnapshot {
+  result: Hybrid
+  donor: Profile & {species:Species}
+  supporting: (Profile & {species:Species})[]
+}
+export interface HarvestLot {
+  size: number
+  remaining: number
+  seedYield: number
+  copyChance: number
+  copyPending: boolean
+  crossPending: boolean
+}
+export interface HarvestBatch {
+  id: number
+  species: Species
+  valueUnits: number
+  count: number
+  profile: Profile|null
+  pollination: PollinationSnapshot|null
+  lots: HarvestLot[]
+}
 export interface Plant extends Profile {
+  pollination: PollinationSnapshot|null
   lives:number
   maxLives:number
   fruitRoll:number
@@ -60,13 +83,15 @@ export interface GameState {
   nursery: Plant[]
   decorations: Decoration[]
   basketLevel: number
-  basket: { species: Species; valueUnits: number }[]
+  basket: HarvestBatch[]
   helperLevel: HelperLevel
   autoSell: boolean
   harvestRemaining: number
   sellRemaining: number
   sold: boolean
   firstHarvest: boolean
+  firstExtraction: boolean
+  firstSeedPlanting: boolean
   firstPropagation: boolean
   planted: Species[]
   revealed: Hybrid[]
@@ -84,7 +109,10 @@ export interface GameState {
 }
 export type Command =
   | {type:'clear'|'upgrade';plot:number}
-  | {type:'harvest';plot:number;expectedId:number;cycle:number; seeds?:boolean; experiment?:Experiment}
+  | {type:'harvest';plot:number;expectedId:number;cycle:number}
+  | {type:'sellHarvest';id:number;count:number}
+  | {type:'extractSeeds';id:number;count:number}
+  | {type:'sellSeeds';species:Species;profile:Profile;count:number}
   | {type:'store'|'compost';plot:number;expectedId:number}
   | {type:'dismissHybrid'} | {type:'tutorialBranch';branch:'experiment'|'corner'}
   | {type:'music';muted:boolean} | {type:'skipTutorial'|'showOccupiedHint'}
@@ -99,4 +127,4 @@ export type Command =
   | {type:'emergencyRadish'; plot:number}
   | {type:'sound'; muted:boolean}
   | {type:'sell'} | {type:'language';lang:Lang}
-export type Result = {ok:true; events:string[]} | {ok:false;reason:string}
+export type Result = {ok:true; events:string[]; obtained?:SeedPack[]} | {ok:false;reason:string}

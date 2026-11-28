@@ -1,6 +1,6 @@
 import { common, compatible, maxLives, rules, sameProfile } from '../game/genetics'
 import { speciesIds } from '../game/config'
-import { positives, negatives, rarities, type Hybrid, type Profile, saveVersion, type GameState, type Plant } from '../game/model'
+import { positives, negatives, rarities, type Hybrid, type Profile, type Species, saveVersion, type GameState, type Plant } from '../game/model'
 import { adjacent, balance, island, isSpecies, plotCount, recipes, isHybrid, speciesInfo, helperLevels, autoSellOffer, basketLevels, isDecorType, isDecorSlot } from '../game/config'
 import { record, integer, finite } from './shape'
 
@@ -8,15 +8,64 @@ function profile(v:Record<string,unknown>):boolean {
   return rarities.some(r=>r===v.rarity) && (v.rarity==='common'?v.plus===null:positives.some(t=>t===v.plus)) &&
     (v.minus===null || negatives.some(t=>t===v.minus)) && compatible(v as unknown as Profile)
 }
-export function validState(v:unknown):v is GameState {return validate(v,false)}
+export const legacyBalanceVersion = 1
+const previousCapacity = [15,30,60,120]
+const previousLives: Record<Species, number> = {
+  radish:20, strawberry:12, blueberry:10, sunflower:16, clover:14, moonflower:14,
+  solar_strawberry:10, moonberry:10, honey_clover:12, golden_flower:10, crystal_flower:10, star_orchid:8
+}
+type OldFruit = {species:Species; valueUnits:number}
+type AlphaThreePlant = Omit<Plant,'pollination'>
+type AlphaThreePlot = Omit<GameState['plots'][number],'plant'> & {plant:AlphaThreePlant|null}
+export type AlphaThreeState = Omit<GameState,'schemaVersion'|'firstExtraction'|'firstSeedPlanting'|'plots'|'nursery'|'basket'> & {
+  schemaVersion:7; plots:AlphaThreePlot[]; nursery:AlphaThreePlant[]; basket:OldFruit[]
+}
+export function validState(v:unknown):v is GameState {return validate(v,saveVersion)}
+export function validAlphaThree(v:unknown):v is AlphaThreeState {return validate(v,7)}
 export type LegacyPlant=Pick<Plant,'id'|'species'|'progress'|'mature'|'readySince'> & {propagation:number}
-export type LegacyState=Omit<GameState,'revealed'|'schemaVersion'|'plots'|'nursery'|'seeds'|'rng'|'variants'|'failures'|'tutorialBranch'|'pendingHybrid'> & {
+export type LegacyState=Omit<AlphaThreeState,'revealed'|'schemaVersion'|'plots'|'nursery'|'seeds'|'rng'|'variants'|'failures'|'tutorialBranch'|'pendingHybrid'> & {
   schemaVersion:6; recipeProgress:Record<Hybrid,number>; seeds:Record<Hybrid,number>
   plots:(Omit<GameState['plots'][number],'plant'> & {plant:LegacyPlant|null})[];nursery:LegacyPlant[]
 }
-export function validLegacy(v:unknown):v is LegacyState {return validate(v,true)}
-function validate(v: unknown,legacy:boolean): boolean {
-  if (!record(v) || v.schemaVersion !== (legacy?6:saveVersion) || v.balanceVersion !== balance.version ||
+export function validLegacy(v:unknown):v is LegacyState {return validate(v,6)}
+
+function validPollination(value:unknown, mother:Species, known:Set<unknown>):boolean {
+  if (value === null) return true
+  if (!record(value) || !isHybrid(value.result) || !Array.isArray(value.supporting) || !record(value.donor)) return false
+  const recipe = recipes.find(r => r.result === value.result)
+  const parents = [value.donor, ...value.supporting]
+  return !!recipe && mother === recipe.primary && parents.length === recipe.neighbors.length &&
+    parents.every(p => record(p) && isSpecies(p.species) && known.has(p.species) && profile(p)) &&
+    recipe.neighbors.every(species => parents.some(p => p.species === species))
+}
+
+function validHarvest(value:unknown, seen:Set<number>, nextId:number, known:Set<unknown>): value is GameState['basket'][number] {
+  if (!record(value) || !integer(value.id) || value.id >= nextId || seen.has(value.id) ||
+    !isSpecies(value.species) || !integer(value.count) || !value.count || !integer(value.valueUnits) || !value.valueUnits ||
+    !Array.isArray(value.lots) || !value.lots.length || !validPollination(value.pollination,value.species,known)) return false
+  const genome = value.profile
+  if (genome === null ? value.pollination !== null : !record(genome) || !profile(genome) || !known.has(value.species)) return false
+  const hasTraits = record(genome) && (genome.plus !== null || genome.minus !== null)
+  let count = 0
+  for (const lot of value.lots) {
+    if (!record(lot) || !integer(lot.size) || !integer(lot.remaining) || !lot.remaining || lot.remaining > lot.size ||
+      !integer(lot.seedYield) || !finite(lot.copyChance) || lot.copyChance > 1 ||
+      typeof lot.copyPending !== 'boolean' || typeof lot.crossPending !== 'boolean' ||
+      lot.crossPending && value.pollination === null ||
+      lot.copyPending && !hasTraits ||
+      (genome === null ? lot.seedYield !== 0 || lot.copyChance !== 0 : !lot.seedYield ||
+        lot.size > speciesInfo[value.species].fruits[1] || lot.seedYield > speciesInfo[value.species].ownSeeds[1])) return false
+    count += lot.remaining
+  }
+  if (count !== value.count) return false
+  seen.add(value.id)
+  return true
+}
+
+function validate(v: unknown,version:6|7|typeof saveVersion): boolean {
+  const current = version === saveVersion
+  const legacy = version === 6
+  if (!record(v) || v.schemaVersion !== version || v.balanceVersion !== (current ? balance.version : legacyBalanceVersion) ||
       !finite(v.playTime) || !integer(v.nextId) || !integer(v.coins) || typeof v.sold !== 'boolean' ||
       (v.lang !== 'ru' && v.lang !== 'en') || !Array.isArray(v.planted) || !v.planted.every(isSpecies) ||
       !v.planted.includes('radish') || new Set(v.planted).size !== v.planted.length) return false
@@ -30,15 +79,16 @@ function validate(v: unknown,legacy:boolean): boolean {
   if (!integer(v.basketLevel) || !basketLevels[v.basketLevel] || (v.basketLevel > 0 && !v.sold) ||
       typeof v.firstHarvest !== 'boolean' || typeof v.firstPropagation !== 'boolean' ||
       typeof v.muted !== 'boolean' || typeof v.musicMuted !== 'boolean' || typeof v.tutorialSkipped !== 'boolean' || typeof v.occupiedHintShown !== 'boolean' || !Array.isArray(v.decorations)) return false
-  const capacity = basketLevels[v.basketLevel].capacity
+  if (current && (typeof v.firstExtraction !== 'boolean' || typeof v.firstSeedPlanting !== 'boolean')) return false
+  const capacity = current ? basketLevels[v.basketLevel].capacity : previousCapacity[v.basketLevel]
   const progress = legacy?v.recipeProgress:v.failures
   const revealed = v.revealed
   if(!legacy && (!Array.isArray(revealed) || !revealed.every(isHybrid) || new Set(revealed).size!==revealed.length))return false
   const seeds = v.seeds
   if (!record(progress) || !record(seeds) || Object.keys(progress).length !== recipes.length ||
       Object.keys(seeds).length !== (legacy?recipes.length:speciesIds.length) || !Array.isArray(v.basket) || v.basket.length > capacity ||
-      (v.autoSell && v.basket.length === capacity) ||
-      !v.basket.every(f => record(f) && isSpecies(f.species) && integer(f.valueUnits) && f.valueUnits > 0)) return false
+      (!current && ((v.autoSell && v.basket.length === capacity) ||
+        !v.basket.every(f => record(f) && isSpecies(f.species) && integer(f.valueUnits) && f.valueUnits > 0)))) return false
   if (!Array.isArray(v.plots) || v.plots.length !== plotCount || !Array.isArray(v.nursery)) return false
   if(!legacy){
     if(v.tutorialBranch!==null && v.tutorialBranch!=='experiment' && v.tutorialBranch!=='corner')return false
@@ -64,8 +114,11 @@ function validate(v: unknown,legacy:boolean): boolean {
         !known.has(p.species) || !finite(p.progress) || p.progress > 1 || typeof p.mature !== 'boolean') return false
     if (legacy && (!integer(p.propagation) || (isHybrid(p.species) ? p.propagation >= speciesInfo[p.species].propagationThreshold : p.propagation !== 0))) return false
     if (p.progress === 1 ? !p.mature || !finite(p.readySince) || p.readySince > playTime : p.readySince !== null) return false
-    if(!legacy && (!profile(p) || p.maxLives!==maxLives(p.species,p as unknown as Profile) ||
+    if(!legacy && (!profile(p) || p.maxLives!==(current ? maxLives(p.species,p as unknown as Profile) :
+        previousLives[p.species] + (p.plus==='hardy' ? rules.hardy[p.rarity==='rare' ? 1 : 0] : 0) -
+        (p.minus==='fragile' ? rules.fragile : 0)) ||
       !integer(p.lives) || !p.lives || p.lives>Number(p.maxLives) || !finite(p.fruitRoll) || p.fruitRoll>=1))return false
+    if (current && !validPollination(p.pollination,p.species,known)) return false
     seen.add(p.id)
     return true
   }
@@ -89,6 +142,8 @@ function validate(v: unknown,legacy:boolean): boolean {
     if (!isDecorSlot(item.slot) || decorSlots.has(item.slot)) return false
     decorSlots.add(item.slot)
   }
+  if (current && (!v.basket.every(f => validHarvest(f,seen,nextId,known)) ||
+      v.basket.reduce((sum, f) => sum + f.count, 0) > capacity)) return false
   return recipes.every(({ result, primary, neighbors, harvests }) => {
     const count = progress[result], stock = seeds[result]
     if (!integer(count) || count > (legacy?harvests:rules.pity) || !integer(stock)) return false

@@ -1,13 +1,17 @@
-import { common, rules, stockCount, strength } from './genetics'
-import type { Experiment, Profile, GameState, Recipe, Species } from './model'
+import { common, plantStats, rules, stockCount } from './genetics'
+import type { Experiment, Plant, PollinationSnapshot, Profile, GameState, Recipe, Species } from './model'
 import { adjacent, auras, balance, basketLevels, bedLevels, island, isHybrid, isSpecies, recipes, speciesInfo, valueScale } from './config'
 
 export function basketCapacity(state:Pick<GameState,'basketLevel'>):number {
   return basketLevels[state.basketLevel].capacity
 }
 
+export function basketCount(state:Pick<GameState, 'basket'>):number {
+  return state.basket.reduce((sum, batch) => sum + batch.count, 0)
+}
+
 export function canRecoverGarden(state:GameState):boolean {
-  return state.coins + saleValue(state) < speciesInfo.radish.seedPrice! && !state.nursery.length &&
+  return state.coins < speciesInfo.radish.seedPrice! && !state.basket.length && !state.nursery.length &&
     !state.variants.length && !Object.values(state.seeds).some(Boolean) && state.plots.every(plot => !plot.plant) &&
     state.plots.some(plot => plot.open)
 }
@@ -34,7 +38,7 @@ export function expansionCost(state: GameState): number | null {
 }
 
 export function saleValue(state: GameState): number {
-  const units = state.basket.reduce((sum, fruit) => sum + fruit.valueUnits, 0)
+  const units = state.basket.reduce((sum, batch) => sum + batch.valueUnits * batch.count, 0)
   return Math.round(units / valueScale)
 }
 
@@ -63,8 +67,25 @@ export function experiments(state:GameState,index:number):Experiment[] {
     return donor && r.neighbors.includes(donor.species)?[{result:r.result,donorId:donor.id,layout}]:[]
   }))
 }
-export function chance(state:GameState,result:Recipe['result']) {
-  return result==='solar_strawberry' && !seedUnlocked(state,result) || state.failures[result]>=rules.pity ? 1 : rules.success
+
+function parentProfile({species, rarity, plus, minus}:Plant):Profile & {species:Species} {
+  return {species, rarity, plus, minus}
+}
+
+export function pollinationFor(state:GameState,index:number):PollinationSnapshot|null {
+  const plant = state.plots[index]?.plant
+  if (!plant) return null
+  if (plant.pollination) return plant.pollination
+  const active = recipes.filter(recipe => isRecipeActive(state, index, recipe))
+  const recipe = active.find(recipe => !state.revealed.includes(recipe.result)) ?? active[0]
+  if (!recipe) return null
+  const neighbors = adjacent(index).flatMap(neighbor => state.plots[neighbor].plant ?? [])
+  const [donor, ...supporting] = recipe.neighbors.map(species =>
+    parentProfile(neighbors.find(neighbor => neighbor.species === species)!))
+  return {result: recipe.result, donor, supporting}
+}
+export function chance(state:Pick<GameState,'revealed'|'failures'>,result:Recipe['result']) {
+  return result==='solar_strawberry' && !state.revealed.includes(result) || state.failures[result]>=rules.pity ? 1 : rules.success
 }
 export function auraBonus(state: GameState, index: number, kind: 'growth' | 'price' | 'propagation'): number {
   const species = state.plots[index]?.plant?.species
@@ -83,15 +104,23 @@ export function auraBonus(state: GameState, index: number, kind: 'growth' | 'pri
 
 export function growthMultiplier(state: GameState, index: number): number {
   const plot = state.plots[index]
-  const p=plot?.plant
-  const time=p?.plus==='early'?1-rules.early[strength(p)]:p?.minus==='slow'?1+rules.slow:1
-  return plot ? bedLevels[plot.level].growthMultiplier * (1 + auraBonus(state, index, 'growth')) / time : 1
+  if (!plot) return 1
+  const plant = plot.plant
+  const traitFactor = plant ? speciesInfo[plant.species].cycleSec / plantStats(plant.species, plant).growthSec : 1
+  return bedLevels[plot.level].growthMultiplier * (1 + auraBonus(state, index, 'growth')) * traitFactor
+}
+
+export function cycleSeconds(state:GameState, index:number):number {
+  const plant = state.plots[index]?.plant
+  if (!plant) return 0
+  const data = speciesInfo[plant.species]
+  return (plant.mature ? data.regrowSec || data.cycleSec : data.cycleSec) / growthMultiplier(state,index)
 }
 
 export function secondsLeft(state:GameState, index:number):number {
   const plant = state.plots[index]?.plant
   return plant && plant.readySince === null
-    ? Math.ceil((1 - plant.progress) * speciesInfo[plant.species].cycleSec / growthMultiplier(state,index)) : 0
+    ? Math.ceil((1 - plant.progress) * cycleSeconds(state,index)) : 0
 }
 
 export function removalIssue(state:GameState, plot:number, expectedId:number, action:'store'|'compost') {
@@ -123,7 +152,7 @@ export function oldestReadyPlot(state: GameState): number|null {
   let target: number|null = null
   // Row-major iteration keeps the lower plot index on an equal timestamp.
   state.plots.forEach(({plant}, index) => {
-    if (plant?.readySince != null && (plant.rarity==='common' || plant.lives>1) && plant.readySince < oldest) {
+    if (plant?.readySince != null && plant.readySince < oldest) {
       oldest = plant.readySince
       target = index
     }

@@ -32,9 +32,9 @@ export function recipeCard(s: GameState, r: Recipe, selected: number|null) {
   const neighbors = selected === null ? [] : adjacent(selected).map(i => s.plots[i].plant?.species)
   const mark = (met:boolean) => plot ? (met ? ' ✓' : ' ✗') : ''
   const revealed = s.revealed.includes(r.result)
-  return `<section class="recipe-card"><h3>${name(r.result)}</h3>
+  return `<section class="recipe-card"><h3>${revealed ? name(r.result) : w.mystery}</h3>
     <p>${w.harvest} · ${name(r.primary)}${mark(plot?.plant?.species === r.primary)}<br>
     ${w.neighbors} · ${r.neighbors.map(id => name(id) + mark(neighbors.includes(id))).join(' + ')}<br>
     ${w.bed} ≥ ${r.minBedLevel}${mark(!!plot && plot.level >= r.minBedLevel)}</p>
-    <p><b>${chance(s,r.result)*100}%</b> · ${s.lang==='ru'?'Сбор семян':'Seed harvest'} ${revealed?' · '+w.revealed:''}</p></section>`
+    <p><b>${chance(s,r.result)*100}%</b> · ${s.lang==='ru'?'Извлечение семян':'Seed extraction'} ${revealed?' · '+w.revealed:''}</p></section>`
 }

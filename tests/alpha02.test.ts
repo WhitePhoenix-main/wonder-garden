@@ -3,7 +3,7 @@ import { initialState, speciesInfo } from '../src/game'
 import { recoveryHint } from '../src/ui/onboarding'
 import { canRecoverGarden, plantingIssue, removalIssue, secondsLeft } from '../src/game/queries'
 import { parseSave } from '../src/persistence/migration'
-import { cross, legacySix, commit, earn, reject, wait } from './helpers'
+import { addLegacyFruit, cross, legacySix, commit, earn, reject, wait } from './helpers'
 
 it('migrates Alpha 02 v5 and remembers the occupied-bed hint across reload',()=>{
   const state=initialState(33)
@@ -77,7 +77,7 @@ it('uses liquid resources and existing stock before emergency planting',()=>{
   s.coins=0
   const cost=speciesInfo.radish.seedPrice!
   expect(canRecoverGarden(s)).toBe(true)
-  s.basket.push({species:'radish',valueUnits:cost*10000})
+  addLegacyFruit(s,1,cost*10000)
   expect(canRecoverGarden(s)).toBe(false)
   commit(s,{type:'sell'});expect(canRecoverGarden(s)).toBe(false)
   s.coins=0;s.seeds.moonberry=1
@@ -101,7 +101,7 @@ it('recomputes remaining seconds on changes to neighbors, bed level and position
   expect(s.plots[8].level).toBe(2)
   wait(s,15);expect(secondsLeft(s,12)).toBe(0)
   commit(s,{type:'harvest',plot:12})
-  expect(secondsLeft(s,12)).toBe(speciesInfo.strawberry.cycleSec)
+  expect(secondsLeft(s,12)).toBe(speciesInfo.strawberry.regrowSec)
 })
 
 it('guides an empty garden through every available recovery path',()=>{
@@ -115,7 +115,7 @@ it('guides an empty garden through every available recovery path',()=>{
   state.seeds.solar_strawberry=0
   expect(recoveryHint(state)).toMatch(/каталога/)
   state.coins=0
-  state.basket.push({species:'radish',valueUnits:speciesInfo.radish.seedPrice!*10000})
+  addLegacyFruit(state,1,speciesInfo.radish.seedPrice!*10000)
   expect(recoveryHint(state)).toMatch(/Продайте/)
   state.basket=[]
   expect(recoveryHint(state)).toMatch(/аварийного/)
@@ -124,11 +124,13 @@ it('guides an empty garden through every available recovery path',()=>{
 it('restarts the countdown after a helper harvest and rejects an outdated nursery selection',()=>{
   const s=initialState(33)
   earn(s,1000)
+  commit(s,{type:'move',from:12,to:8})
+  commit(s,{type:'plant',plot:12,species:'strawberry'})
   commit(s,{type:'upgradeHelper',target:1})
   const picked=s.plots[12].plant!
-  wait(s,6)
-  if(picked.readySince!==null) wait(s,5)
+  wait(s,20)
   expect(secondsLeft(s,12)).toBeGreaterThan(0)
+  expect(picked.lives).toBe(picked.maxLives-1)
   s.revealed.push('solar_strawberry')
   const id=s.plots[12].plant!.id
   commit(s,{type:'move',from:12,to:13})
