@@ -116,6 +116,8 @@ describe('Alpha-4 harvest and inventory',()=>{
     const mother=plantAt(state,8)
     expect(mother.pollination?.donor).toEqual({species:'sunflower',...donor})
     const onBed=reload(state)
+    expect(execute(onBed,{type:'compost',plot:9,expectedId:plantAt(onBed,9).id})).toEqual({ok:false,reason:'lastProfile'})
+    onBed.variants.push({species:'sunflower',...donor,count:1})
     commit(onBed,{type:'compost',plot:9,expectedId:plantAt(onBed,9).id})
     commit(onBed,{type:'harvest',plot:8})
     commit(onBed,{type:'compost',plot:8,expectedId:mother.id})
@@ -171,7 +173,7 @@ describe('Alpha-4 harvest and inventory',()=>{
   it('migrates validated d4b0232 data once and keeps progress, lifetimes, prices and genetics',()=>{
     const result=parseSave(JSON.stringify(alpha03))
     if(!result || result==='future') throw Error('Expected migration of Alpha-3 fixture')
-    expect(result).toMatchObject({schemaVersion:10,coins:alpha03.coins,
+    expect(result).toMatchObject({schemaVersion:11,coins:alpha03.coins,
       variants:alpha03.variants.map(pack=>({...pack,plus:pack.plus===null ? [] : [pack.plus]})),
       revealed:alpha03.revealed,seeds:alpha03.seeds,lang:alpha03.lang,rng:alpha03.rng,
       musicMuted:alpha03.musicMuted,tutorialSkipped:alpha03.tutorialSkipped})

@@ -61,7 +61,13 @@ export function gardenHint(state:GameState):string {
   if (!state.firstSeedPlanting && (Object.values(state.seeds).some(Boolean) || state.variants.length)) return text.seedPlant
   if (!state.sold) return text.harvest
   if (state.planted.includes('solar_strawberry')) {
+    const ru=state.lang==='ru'
+    if (!state.helperLevel) return ru?'Наймите Листика для первого автоматического сбора.':'Hire Leafy for your first automatic harvest.'
+    if (state.greenhouseLevel<2) return ru?'Улучшите теплицу до II для селекции одного вида.':'Upgrade the greenhouse to II to breed plants of one species.'
+    if (!state.crosses.length) return ru?'Поместите два растения одного вида в питомник и начните опыт.':'Store two plants of one species in the nursery and start an experiment.'
+    if (state.stallLevel<2) return ru?'Откройте автопродажу в торговой лавке.':'Unlock automatic sales at the stall.'
     if (state.planted.length < speciesIds.length) return text.explore
+    if (state.plots.length===plotCount && state.plots.every(p=>p.open)) return ru?'Восстановите мост в панели «Развитие».':'Restore the bridge in Develop.'
     return state.plots.slice(0,plotCount).every(plot => plot.open) ? text.complete : text.expand
   }
   const revealed = state.revealed.includes('solar_strawberry')

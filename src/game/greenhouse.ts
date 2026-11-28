@@ -1,9 +1,26 @@
 import { evolution, speciesInfo } from './config'
-import { canonical, changeStock, inherit, nextRandom, stockCount } from './genetics'
-import type { GameState, Result } from './model'
+import { canonical, changeStock, inherit, nextRandom, rarityOdds, stockCount } from './genetics'
+import { rarities, type GameState, type Plant, type Result } from './model'
 
 export function isBusy(state:GameState, id:number):boolean {
-  return state.crosses.some(c=>!c.collected && c.readyAt>state.playTime && c.parents.includes(id))
+  return state.crosses.some(c=>!c.collected && c.readyAt>state.playTime && c.parents.includes(id)) ||
+    state.clones.some(c=>c.readyAt>state.playTime && c.parent===id)
+}
+
+export function freeGreenhouseSlots(state:GameState):number {
+  return evolution.crossSlots[state.greenhouseLevel-1] -
+    state.crosses.filter(c=>!c.collected).length - state.clones.length
+}
+
+export function crossingQuote(state:GameState,a:Plant,b:Plant) {
+  const base=rarityOdds(a.rarity,b.rarity)
+  const highestParent=Math.max(rarities.indexOf(a.rarity),rarities.indexOf(b.rarity))
+  const higher=base.map((weight,rank)=>rank>highestParent ? weight : 0)
+  const target=higher.findIndex(Boolean)
+  const key=target<0 ? null : a.species+'/'+rarities[target]
+  const failures=key ? state.rarityProgress[key]??0 : 0
+  const weights=failures>=evolution.rarityGuarantee-1 ? higher : base
+  return {key,highestParent,failures,weights,base,...evolution.experiments[speciesInfo[a.species].generation]}
 }
 
 export function startCross(state:GameState, parents:[number,number]):Result {
@@ -13,15 +30,48 @@ export function startCross(state:GameState, parents:[number,number]):Result {
   const [a,b]=parents.map(id=>state.nursery.find(p=>p.id===id))
   if (!a || !b || a.species!==b.species) return {ok:false,reason:'invalidParents'}
   if (parents.some(id=>isBusy(state,id))) return {ok:false,reason:'parentsBusy'}
-  if (state.crosses.filter(c=>!c.collected).length>=evolution.crossSlots[level-1]) return {ok:false,reason:'crossSlotsFull'}
-  const offer=evolution.experiments[speciesInfo[a.species].generation]
+  if (freeGreenhouseSlots(state)<=0) return {ok:false,reason:'crossSlotsFull'}
+  const offer=crossingQuote(state,a,b)
   if (state.coins<offer.cost) return {ok:false,reason:'noCoins'}
-  const profile=inherit(a,b,()=>nextRandom(state),a.species,level===5 ? evolution.levelFiveInheritance : undefined)
+  const profile=inherit(a,b,()=>nextRandom(state),a.species,level===5 ? evolution.levelFiveInheritance : undefined,offer.weights)
+  if (offer.key) {
+    if (rarities.indexOf(profile.rarity)>offer.highestParent) delete state.rarityProgress[offer.key]
+    else state.rarityProgress[offer.key]=offer.failures+1
+  }
   state.coins-=offer.cost
   state.crosses.push({id:state.nextId++,parents:[...parents],species:a.species,profile,
     parentProfiles:[canonical(a),canonical(b)],
     startsAt:state.playTime,readyAt:state.playTime+offer.seconds,collected:false})
   return {ok:true,events:['CrossStarted']}
+}
+
+export function canClone(plant:Plant):boolean {
+  return plant.lives>0 && rarities.indexOf(plant.rarity)>=rarities.indexOf('rare')
+}
+
+export function startClone(state:GameState,id:number):Result {
+  if (state.greenhouseLevel<3) return {ok:false,reason:'greenhouseLocked'}
+  const plant=state.nursery.find(p=>p.id===id)
+  if (!plant || !canClone(plant)) return {ok:false,reason:'cloneParent'}
+  if (isBusy(state,id)) return {ok:false,reason:'parentsBusy'}
+  if (freeGreenhouseSlots(state)<=0) return {ok:false,reason:'crossSlotsFull'}
+  const offer=evolution.cloning[speciesInfo[plant.species].generation]
+  if (state.coins<offer.cost) return {ok:false,reason:'noCoins'}
+  state.coins-=offer.cost
+  state.clones.push({id:state.nextId++,parent:id,species:plant.species,profile:canonical(plant),
+    startsAt:state.playTime,readyAt:state.playTime+offer.seconds})
+  return {ok:true,events:['CloneStarted']}
+}
+
+export function collectClone(state:GameState,id:number):Result {
+  const index=state.clones.findIndex(operation=>operation.id===id)
+  if (index<0) return {ok:false,reason:'itemChanged'}
+  const {species,profile,readyAt}=state.clones[index]
+  if (readyAt>state.playTime) return {ok:false,reason:'crossNotReady'}
+  if (!Number.isSafeInteger(stockCount(state,species,profile)+1)) return {ok:false,reason:'invalidQuantity'}
+  changeStock(state,species,profile,1)
+  state.clones.splice(index,1)
+  return {ok:true,events:['CloneCollected'],obtained:[{species,...profile,count:1}]}
 }
 
 export function collectCross(state:GameState,id:number):Result {

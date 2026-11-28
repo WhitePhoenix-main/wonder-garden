@@ -19,8 +19,10 @@ const server=http.createServer(async(req,res)=>{
   } catch {res.writeHead(404).end()}
 })
 server.on('error',e=>{console.error(e.message);process.exitCode=1})
-server.listen(port,'0.0.0.0',()=>{
+const loopback=process.argv.includes('--loopback')
+server.listen(port,loopback?'127.0.0.1':'0.0.0.0',()=>{
   console.log('PC: http://127.0.0.1:'+port)
+  if (loopback) return
   let interfaces={}
   try { interfaces=networkInterfaces() } catch { console.log('LAN address unavailable. Use the PC network settings to find its IPv4 address.') }
   for(const group of Object.values(interfaces))for(const ip of group??[]){

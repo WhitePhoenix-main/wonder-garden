@@ -3,7 +3,7 @@ import { balance, island, plotCount, hybridCounts, isSpecies } from './config'
 
 import { canonical, common, maxLives, nextRandom } from './genetics'
 import { recordPlanting } from './collection'
-import { initialMarket } from './market'
+import { initialMarket, initialTrading } from './market'
 import { speciesIds } from './config'
 import type { Profile } from './model'
 
@@ -12,11 +12,11 @@ export function newPlant(id: number, species: Species, profile:Profile=common, f
   return { id, species, ...canonical(profile), lives,maxLives:lives,fruitRoll, progress: 0, mature: false, readySince: null, pollination:null }
 }
 
-export function initialEvolution(): Pick<GameState,'activeIsland'|'greenhouseLevel'|'stallLevel'|'crosses'|'orders'|
-  'orderRefreshAt'|'ordersCompleted'|'collection'|'achievements'|'rank'|'protectedPlants'|'protectedProfiles'|'favorites'|'reserves'|'automation'> {
-  return {activeIsland:'green',greenhouseLevel:1,stallLevel:1,crosses:[],orders:[],orderRefreshAt:0,ordersCompleted:0,
+export function initialEvolution(): Pick<GameState,'activeIsland'|'greenhouseLevel'|'stallLevel'|'crosses'|'clones'|'rarityProgress'|'orders'|
+  'orderRefreshAt'|'ordersCompleted'|'collection'|'achievements'|'rank'|'protectedPlants'|'protectedProfiles'|'favorites'|'reserves'|'automation'|'trading'> {
+  return {activeIsland:'green',greenhouseLevel:1,stallLevel:1,crosses:[],clones:[],rarityProgress:{},orders:[],orderRefreshAt:0,ordersCompleted:0,
     collection:[],achievements:[],rank:0,protectedPlants:[],protectedProfiles:[],favorites:[],reserves:{},
-    automation:{enabled:true,replant:false,extractPollinated:false,sellSeeds:false,preferred:null,sellFruit:true,saleRarity:null}}
+    trading:initialTrading(),automation:{enabled:true,replant:false,extractPollinated:false,sellSeeds:false,preferred:null,sellFruit:true,saleRarity:null}}
 }
 export const inactiveAutomation = {
   helperLevel: 0, autoSell: false, harvestRemaining: 0, sellRemaining: 0

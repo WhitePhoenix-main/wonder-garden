@@ -1,3 +1,5 @@
+import { isValuablePlant, protectedHarvest } from '../game/stock-policy'
+import { canonical } from '../game/genetics'
 import { availableStock, defaultPolicy, profileKey, protectedProfile } from '../game/evolution'
 import { inventoryWords, type InventoryTab, type InventorySort } from './inventory'
 import { common, stockCount } from '../game/genetics'
@@ -13,9 +15,12 @@ import { bedLevels, speciesInfo } from '../game/config'
 import { canRecoverGarden, canReplace, expansionCost } from '../game/queries'
 import { extractionYield, harvestSaleIssue, quickSaleEligible, quickSaleValue, seedSaleIssue, trade } from '../game/trade'
 import type { DecorChoice } from './panels/garden'
-import { uiMarkup, type CollectionFilter, type Overlay } from './render'
+import { uiMarkup, type RepeatChoice, type CollectionFilter, type Overlay } from './render'
 import { plantName, words } from './strings'
 import { evolutionErrors } from './panels/evolution'
+import type { MarketSort } from './panels/market'
+import { templateDetails } from './panels/automation'
+import { plotModes } from '../game/model'
 import './ui.css'
 
 export function createUI(host: HTMLElement, actions: UIActions): UI {
@@ -27,12 +32,16 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   let cornerPlanted=false
   let branch:'experiment'|'corner'|null=null
   let confirmId:number|null=null
+  let lastHarvest:RepeatChoice|null=null
+  let statsWindow:60|300=60
+  let statsByVolume=false
   let notice = ''
   let last = ''
   let pressing = false
   let returnId: number | null = null
   let overlay: Overlay|null = null
   let marketKind:MarketKind='fruit'
+  let marketSort:MarketSort='price'
   let crossParents:number[]=[]
   let inventorySelected:string[]=[]
   let favoriteOnly=false
@@ -83,9 +92,20 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (rewards.length) notice = rewards.map((e,i) => t().earned + ' · ' + name(e.split(':')[1] as Species)+(i===0 && count?' ×'+count:'')).join(' / ')
     if(events.includes('ExperimentFailed'))notice+=' · '+field[view.state.lang].miss
     if(events.includes('Withered'))notice+=' · '+field[view.state.lang].wilt
+    if(events.includes('CrossReady') || events.includes('CloneReady')) {
+      notice=view.state.lang==='ru'?'В теплице можно получить семя.':'A seed is ready to collect in the greenhouse.'
+    }
   }
   function run(command: Command) {
+    const plant=command.type==='harvest' ? view.state.plots[command.plot]?.plant : null
+    if (plant?.lives===1 && isValuablePlant(view.state,plant) &&
+      !window.confirm(view.state.lang==='ru'?'Последняя жизнь. Собрать урожай и потерять этот экземпляр?':'Last life. Harvest and lose this specimen?')) return
+    const coins=view.state.coins
     const result = actions.command(command)
+    if (result.ok && result.events.length) {
+      lastHarvest=command.type==='harvest' && plant && result.events.includes('Withered') ?
+        {plot:command.plot,species:plant.species,profile:canonical(plant)} : null
+    }
     if (!result.ok) {
       const dict = t() as Record<string,string>
       notice = dict[result.reason] ?? evolutionErrors[view.state.lang][result.reason] ?? dict.error
@@ -93,6 +113,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     else {
       notice = ''
       showRewards(result.events)
+      if (result.events.includes('Sold')) notice='+'+(view.state.coins-coins)+' ◈'
       if (result.obtained?.length) {
         const lang = view.state.lang
         notice = inventoryWords[lang].obtained+' · ' + result.obtained
@@ -105,8 +126,13 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   function draw() {
     if (!view) return
     if (pressing) return
-    const html = uiMarkup(view,{
-      inventoryFilter,inventoryTab,inventorySort,inventoryAmounts,inventoryMinimum,inventoryDetail,crossParents,inventorySelected,favoriteOnly,inventorySearch,inventoryPage,marketKind,
+    let repeat=lastHarvest
+    if (repeat?.profile && !availableStock(view.state,repeat.species,repeat.profile)) {
+      if (availableStock(view.state,repeat.species,common)) repeat={...repeat,profile:common}
+      else repeat=speciesInfo[repeat.species].seedPrice===null ? null : {...repeat,profile:undefined}
+    }
+    const html = uiMarkup(view,{repeat,statsWindow,statsByVolume,
+      inventoryFilter,inventoryTab,inventorySort,inventoryAmounts,inventoryMinimum,inventoryDetail,crossParents,inventorySelected,favoriteOnly,inventorySearch,inventoryPage,marketKind,marketSort,
       stock,cornerPlanted,firstSeeds,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
     })
     if (html === last) return
@@ -143,6 +169,12 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   })
   host.addEventListener('change', event => {
     const target=event.target as HTMLSelectElement|HTMLInputElement
+    if (target.matches('[data-sale-strategy],[data-sale-minimum]')) {
+      const settings={...view.state.trading}
+      if (target.matches('[data-sale-strategy]')) settings.strategy=target.value as typeof settings.strategy
+      else settings.minimum=Number(target.value)
+      return run({type:'setTrading',settings})
+    }
     if(target.matches('[data-automation-preferred],[data-sale-rarity]')) {
       const settings={...view.state.automation}
       if(target.matches('[data-automation-preferred]')) settings.preferred=(target.value||null) as PlotMode|null
@@ -173,9 +205,31 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       updateDecor()
       actions.changeView({mode:next,sunflower:false,selected:index,moveFrom:null,shovel})
     }
+    if (action==='plant-again' && lastHarvest && !view.state.plots[lastHarvest.plot].plant) {
+      const {plot,species,profile}=lastHarvest
+      const stock=profile && availableStock(view.state,species,profile)>0 ? profile :
+        availableStock(view.state,species,common)>0 ? common : undefined
+      return run({type:'plant',plot,species,stock})
+    }
+    if (action==='statistics') {overlay='statistics';draw();return}
+    if (action==='stats-window') {statsWindow=target.dataset.window==='300'?300:60;draw();return}
+    if (action==='stats-sort') {statsByVolume=!statsByVolume;draw();return}
     if(action==='evolution') {overlay=overlay==='evolution'?null:'evolution';draw();return}
     if(action==='market') {overlay=overlay==='market'?null:'market';draw();return}
     if(action==='market-product') {marketKind=target.dataset.kind==='seed'?'seed':'fruit';draw();return}
+    if(action==='market-sort') {marketSort=target.dataset.sort==='value'?'value':'price';draw();return}
+    if(action==='trading-toggle') {
+      const key=target.dataset.setting==='overflow'?'overflow':'reserveOrders'
+      return run({type:'setTrading',settings:{...view.state.trading,[key]:!view.state.trading[key]}})
+    }
+    if(action==='plot-template-all') {
+      const plots=plotIndices(view.state.activeIsland).filter(i=>view.state.plots[i]?.open)
+      const template=target.dataset.mode as PlotMode
+      const details=templateDetails[view.state.lang][plotModes.indexOf(template)]
+      const count=view.state.lang==='ru' ? 'Грядок' : 'Beds'
+      if (!window.confirm(`${details}. ${count} · ${plots.length}`)) return
+      return run({type:'plotTemplate',mode:template,plots})
+    }
     if(action==='cross-parent') {
       const id=Number(target.dataset.id)
       crossParents=crossParents.includes(id)?crossParents.filter(p=>p!==id):[...crossParents,id].slice(-2)
@@ -185,6 +239,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       run({type:'startCross',parents:[crossParents[0],crossParents[1]]});crossParents=[];return
     }
     if(action==='cross-collect') return run({type:'collectCross',id:Number(target.dataset.id)})
+    if(action==='clone-start') return run({type:'startClone',id:Number(target.dataset.id)})
+    if(action==='clone-collect') return run({type:'collectClone',id:Number(target.dataset.id)})
     if(action==='greenhouse-upgrade') return run({type:'upgradeGreenhouse',target:Number(target.dataset.level)})
     if(action==='stall-upgrade') return run({type:'upgradeStall',target:Number(target.dataset.level)})
     if(action==='restore-bridge') return run({type:'restoreBridge'})
@@ -230,8 +286,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
           const count=Math.min(batch.count,inventoryAmounts['h'+batch.id]??1)
           const yieldInfo=extractionYield(batch,count)
           const command={type:selling?'sellHarvest':'extractSeeds',id:batch.id,count} as const
-          if (selling ? yieldInfo.attempts || harvestSaleIssue(draft,batch,count) || !trade(draft,command).ok
-            : !batch.profile || !yieldInfo.seeds && !yieldInfo.attempts) {
+          if (selling ? batch.lots.some(lot=>lot.crossPending) || harvestSaleIssue(draft,batch,count) || !trade(draft,command).ok
+            : protectedHarvest(draft,batch) || !batch.profile || !yieldInfo.seeds && !yieldInfo.attempts) {
             excluded.push(name(batch.species)+' #'+batch.id)
             continue
           }
@@ -256,8 +312,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       }
       const exclusions=excluded.slice(0,8).join(', ')+(excluded.length>8 ? ' …' : '')
       const message=view.state.lang==='ru'
-        ? `Операций ${commands.length}. Исключено ${excluded.length}. ${exclusions} Итог ${total} ${selling?'монет':'собственных семян'}.`
-        : `${commands.length} operations. ${excluded.length} excluded. ${exclusions} Total ${total} ${selling?'coins':'own seeds'}.`
+        ? `Количество ${commands.reduce((n,c)=>n+('count' in c?c.count:0),0)}. Операций ${commands.length}. Исключено ${excluded.length}. ${exclusions} Итог ${total} ${selling?'монет':'собственных семян'}.`
+        : `${commands.reduce((n,c)=>n+('count' in c?c.count:0),0)} items. ${commands.length} operations. ${excluded.length} excluded. ${exclusions} Total ${total} ${selling?'coins':'own seeds'}.`
       if(!commands.length) { notice=message;draw();return }
       if(!window.confirm(message)) return
       inventorySelected=[]
@@ -342,7 +398,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
         ' · '+view.state.plots.slice(0,plotCount).filter(p=>p.open).length+'/'+plotCount)) return
       mode('garden');firstSeeds=[];cornerPlanted=false;branch=null;entry=null;chapter=null;collectionFilter='all'
       inventoryAmounts={}; inventoryDetail=null; inventoryFilter='all'; inventoryTab='harvest'
-      actions.reset();actions.enter();return
+      lastHarvest=null;actions.reset();actions.enter();return
     }
     if (action==='shovel') {mode('garden',!view.shovel,view.shovel ? null : selected);return}
     if (action==='branch-seed') {mode('plant');chosen=target.dataset.seed as Species;stock=view.state.seeds[chosen]?common:view.state.variants.find(p=>p.species===chosen);actions.changeView({sunflower:chosen==='sunflower'});return}
@@ -421,12 +477,9 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action === 'move' && selected !== null) { actions.changeView({mode:view.mode,selected,moveFrom:selected}); return }
     if (selected === null || !plot) return
     if(action==='plant-protect' && plot.plant) return run({type:'protectPlant',id:plot.plant.id,enabled:!view.state.protectedPlants.includes(plot.plant.id)})
-    if(action==='plot-mode' || action==='plot-harvest' || action==='plot-replant') {
+    if(action==='plot-mode') return run({type:'plotTemplate',plots:[selected],mode:target.dataset.mode as PlotMode})
+    if(action==='plot-harvest' || action==='plot-replant') {
       const policy={...(plot.policy ?? defaultPolicy)}
-      if(action==='plot-mode') {
-        policy.mode=target.dataset.mode as typeof policy.mode
-        policy.harvest=policy.mode!=='manual'
-      }
       if(action==='plot-harvest') policy.harvest=!policy.harvest
       if(action==='plot-replant' && plot.plant) policy.replant=policy.replant ? null :
         {species:plot.plant.species,profile:{rarity:plot.plant.rarity,plus:plot.plant.plus,minus:plot.plant.minus}}
@@ -434,7 +487,6 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
     if (action === 'emergencyRadish') return run({type:'emergencyRadish',plot:selected})
     if (action === 'clear' && !window.confirm(`${t().confirmClear} ${expansionCost(view.state)} ◈`)) return
-    if (action === 'upgrade' && !window.confirm(`${t().confirmUpgrade} ${bedLevels[(plot.level+1) as BedLevel].upgradeCost} ◈`)) return
     if(action==='harvest') return run({type:'harvest',plot:selected,expectedId:Number(target.dataset.id),cycle:Number(target.dataset.cycle)})
     if (action === 'clear' || action === 'upgrade') return run({type:action,plot:selected})
   })

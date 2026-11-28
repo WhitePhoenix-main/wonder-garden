@@ -138,7 +138,7 @@ it('keeps concurrent results and trait sets isolated',()=>{
 it('restores an authentic Alpha 04 save without awarding currency or inventing inventory-only discoveries',()=>{
   const state=parseSave(JSON.stringify(alpha04))
   if (!state || state==='future') throw Error('Expected the production Alpha 04 fixture to migrate')
-  expect(state).toMatchObject({schemaVersion:10,coins:alpha04.coins,playTime:alpha04.playTime,nextId:alpha04.nextId,
+  expect(state).toMatchObject({schemaVersion:11,coins:alpha04.coins,playTime:alpha04.playTime,nextId:alpha04.nextId,
     activeIsland:'green',rng:alpha04.rng,lang:alpha04.lang,planted:alpha04.planted,revealed:alpha04.revealed,
     failures:alpha04.failures,helperLevel:alpha04.helperLevel,autoSell:alpha04.autoSell,
     harvestRemaining:alpha04.harvestRemaining,sellRemaining:alpha04.sellRemaining,stallLevel:2})

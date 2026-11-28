@@ -3,7 +3,7 @@ import type { Experiment, Plant, PollinationSnapshot, Profile, GameState, Recipe
 import { adjacent, auras, balance, basketLevels, bedLevels, evolution, island, isHybrid, isSpecies, plotIndices, plotIsland, recipes, speciesInfo, valley } from './config'
 import { harvestSaleValue } from './pricing'
 import { harmonyGrowth } from './decor'
-import { protectedProfile } from './stock-policy'
+import { hasOtherSource, isValuablePlant, protectedProfile } from './stock-policy'
 
 export function basketCapacity(state:Pick<GameState,'basketLevel'>):number {
   return basketLevels[state.basketLevel].capacity
@@ -136,6 +136,8 @@ export function removalIssue(state:GameState, plot:number, expectedId:number, ac
   if (!plant || plant.id !== expectedId) return 'stalePlant'
   const species = plant.species
   if (action==='compost' && (state.protectedPlants.includes(plant.id) || protectedProfile(state,species,plant))) return 'protectedItem'
+  if (action==='compost' && isValuablePlant(state,plant) && !stockCount(state,species,plant) &&
+    !hasOtherSource(state,species,plant,expectedId)) return 'lastProfile'
   if (action === 'compost' && isHybrid(species) && !state.seeds[species] && !state.variants.some(v=>v.species===species) &&
       !state.nursery.some(p => p.species === species) &&
       !state.plots.some(p => p.plant?.species === species && p.plant.id !== expectedId)) return 'lastHybrid'

@@ -7,9 +7,10 @@ export type Lang = 'ru' | 'en'
 export type HelperLevel = 0 | BedLevel
 export const decorIds = ['bench','lantern','flower_arch','sakura','fountain','apiary','magic_lantern','statue'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 10
+export const saveVersion = 11
 export type MarketKind = 'fruit' | 'seed'
 export interface MarketSupply {
+  previousPrice?: number
   saturated: number
   delivered: number
 }
@@ -102,6 +103,14 @@ export interface GreenhouseCross {
   readyAt:number
   collected:boolean
 }
+export interface GreenhouseClone {
+  id:number
+  parent:number
+  species:Species
+  profile:Profile
+  startsAt:number
+  readyAt:number
+}
 export const buyers = ['baker','merchant','florist','alchemist','botanist','collector'] as const
 export interface OrderRequirement {
   kind:'fruit'|'seed'
@@ -133,7 +142,16 @@ export interface Decoration {
   slot: string | null
 }
 
+export type SaleStrategy = 'quick' | 'balanced' | 'profit' | 'custom'
+export interface TradingPolicy {
+  strategy:SaleStrategy
+  minimum:number
+  overflow:boolean
+  reserveOrders:boolean
+}
+
 export interface GameState {
+  trading:TradingPolicy
   schemaVersion: typeof saveVersion
   market: MarketState
   balanceVersion: number
@@ -171,6 +189,8 @@ export interface GameState {
   greenhouseLevel: number
   stallLevel: number
   crosses: GreenhouseCross[]
+  clones: GreenhouseClone[]
+  rarityProgress: Record<string,number>
   orders: Order[]
   orderRefreshAt: number
   ordersCompleted: number
@@ -194,6 +214,7 @@ export type BulkItem =
 export type EvolutionCommand =
   | {type:'upgradeGreenhouse'|'upgradeStall';target:number}
   | {type:'startCross';parents:[number,number]}
+  | {type:'startClone'|'collectClone';id:number}
   | {type:'collectCross'|'fulfillOrder'|'declineOrder';id:number}
   | {type:'restoreBridge'}
   | {type:'travel';island:IslandId}
@@ -201,6 +222,8 @@ export type EvolutionCommand =
   | {type:'protectProfile'|'favoriteProfile';species:Species;profile:Profile;enabled:boolean}
   | {type:'setReserve';species:Species;profile?:Profile;count:number}
   | {type:'plotPolicy';plot:number;policy:PlotPolicy}
+  | {type:'plotTemplate';plots:number[];mode:PlotMode}
+  | {type:'setTrading';settings:TradingPolicy}
   | {type:'setAutomation';settings:GameState['automation']}
   | {type:'bulk';commands:BulkItem[]}
 export type Command =

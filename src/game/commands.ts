@@ -1,9 +1,11 @@
+import { measure, observeDraft, commitObservation } from './analytics'
 import type { BedLevel, Command, GameState, Result } from './model'
 import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, plotCount, speciesIds, speciesInfo } from './config'
 import { canRecoverGarden, plantingIssue, removalIssue, expansionCost } from './queries'
 import { decorate } from './decor'
 import { newPlant } from './state'
 import { sellBasket, trade } from './trade'
+import { availableStock, protectedHarvest } from './stock-policy'
 import { harvest } from './harvest'
 import { common, changeStock, nextRandom } from './genetics'
 import { milestones, recordPlanting } from './collection'
@@ -18,8 +20,22 @@ function failure(reason: string): Result {
 }
 
 export function execute(state: GameState, command: Command): Result {
-  const result=apply(state,command)
+  const result=applyMeasured(state,command)
   if (result.ok && result.events.length) milestones(state)
+  return result
+}
+
+function applyMeasured(state:GameState,command:Command):Result {
+  const before=state.coins
+  const result=apply(state,command)
+  if (!result.ok || command.type==='bulk') return result
+  const spent=before-state.coins
+  if (command.type==='plant') measure(state,command.species,{planted:1,seedCost:spent})
+  else if (command.type==='emergencyRadish') measure(state,'radish',{planted:1})
+  else if (command.type==='fulfillOrder') measure(state,'garden',{orders:-spent})
+  else if (command.type==='startCross' || command.type==='startClone') measure(state,'garden',{breedingCost:spent})
+  else if (spent>0) measure(state,'garden',{construction:spent})
+  for (const pack of result.obtained??[]) measure(state,pack.species,{seeds:pack.count})
   return result
 }
 
@@ -32,23 +48,30 @@ function apply(state:GameState,command:Command):Result {
     case 'bulk': {
       if (!command.commands.length || command.commands.length>256) return failure('invalidQuantity')
       const scratch=structuredClone(state)
+      observeDraft(state,scratch)
       const events:string[]=[]
       const obtained:NonNullable<Extract<Result,{ok:true}>['obtained']>=[]
       for (const item of command.commands) {
         if (!['plant','extractSeeds','sellHarvest','sellSeeds'].includes(item.type)) return failure('invalidQuantity')
         if (item.type==='plant' && scratch.plots[item.plot]?.plant) return failure('occupied')
-        const result=apply(scratch,item)
+        if (item.type==='plant' && item.stock && !availableStock(scratch,item.species,item.stock)) return failure('seedReserved')
+        if (item.type==='extractSeeds' || item.type==='sellHarvest') {
+          const batch=scratch.basket.find(b=>b.id===item.id)
+          if (batch && (protectedHarvest(scratch,batch) || item.type==='sellHarvest' && batch.lots.some(l=>l.crossPending))) return failure('protectedItem')
+        }
+        const result=applyMeasured(scratch,item)
         if (!result.ok) return result
         events.push(...result.events)
         if (result.obtained) obtained.push(...result.obtained)
       }
       Object.assign(state,scratch)
+      commitObservation(state,scratch)
       return {ok:true,events,obtained}
     }
     case 'upgradeGreenhouse': case 'upgradeStall':
-    case 'startCross': case 'collectCross': case 'fulfillOrder': case 'declineOrder':
+    case 'startCross': case 'collectCross': case 'startClone': case 'collectClone': case 'fulfillOrder': case 'declineOrder':
     case 'restoreBridge': case 'travel': case 'protectPlant': case 'protectProfile': case 'favoriteProfile':
-    case 'setReserve': case 'plotPolicy': case 'setAutomation': return evolve(state,command)
+    case 'setReserve': case 'plotPolicy': case 'plotTemplate': case 'setTrading': case 'setAutomation': return evolve(state,command)
     case 'dismissHybrid': state.pendingHybrid=null;return success('HintDismissed')
     case 'tutorialBranch': state.tutorialBranch=command.branch;return success('BranchChosen')
     case 'sell': return success(...sellBasket(state))

@@ -2,8 +2,9 @@ import type { GameState, Species } from '../../game/model'
 import { evolution, plotCount, speciesInfo } from '../../game/config'
 import { harmony, harmonyGrowth } from '../../game/decor'
 import { bridgeIssue, isBusy, orderQuote } from '../../game/evolution'
-import { availableTraits, plantStats, rarityOdds } from '../../game/genetics'
-import { rarities } from '../../game/model'
+import { availableTraits, plantStats, traits } from '../../game/genetics'
+import { canClone, crossingQuote, freeGreenhouseSlots } from '../../game/greenhouse'
+import { negatives, rarities } from '../../game/model'
 import { describe, field } from '../specimens'
 import { plantName } from '../strings'
 import { marketWords } from './market'
@@ -20,13 +21,26 @@ export const evolutionErrors:Record<GameState['lang'],Record<string,string>>={
     sameParent:'Выберите два разных экземпляра.',crossSlotsFull:'Все селекционные слоты заняты.',crossNotReady:'Эксперимент ещё идёт.',
     orderResources:'Не хватает доступных предметов.',protectedItem:'Предмет защищён.',seedReserved:'Семена входят в резерв.',
     lastProfile:'Сохраните последнее семя этого профиля.',stallLocked:'Сначала улучшите торговую лавку.',invalidPolicy:'Проверьте настройки грядки.',
-    invalidProfile:'Этот генетический профиль недоступен.'},
+    invalidProfile:'Этот генетический профиль недоступен.',cloneParent:'Нужен живой экземпляр редкости Rare или выше в питомнике.'},
   en:{greenhouseLocked:'Upgrade the greenhouse first.',bridgeProgress:'The bridge requirements are still incomplete.',
     bridgeRestored:'The bridge is already restored.',parentsBusy:'A parent is busy in an experiment.',invalidParents:'Choose two living plants of the same species.',
     sameParent:'Choose two different plants.',crossSlotsFull:'All breeding slots are in use.',crossNotReady:'The experiment is still running.',
     orderResources:'The available items fall short.',protectedItem:'This item is protected.',seedReserved:'These seeds are reserved.',
     lastProfile:'Keep the last seed of this profile.',stallLocked:'Upgrade the market stall first.',invalidPolicy:'Check the bed settings.',
-    invalidProfile:'This genetic profile is unavailable.'}
+    invalidProfile:'This genetic profile is unavailable.',cloneParent:'Choose a living nursery plant of Rare rarity or higher.'}
+}
+
+function crossResult(state:GameState, cross:GameState['crosses'][number]) {
+  const ru=state.lang==='ru'
+  const label=field[state.lang]
+  const inherited=new Set(cross.parentProfiles.flatMap(p=>[...traits(p),p.minus]))
+  const features=[...traits(cross.profile),cross.profile.minus].filter(p=>p!==null)
+  const fromParents=features.filter(t=>inherited.has(t)).map(t=>label[t])
+  const mutations=features.filter(t=>!inherited.has(t)).map(t=>label[t])
+  return `<strong>${describe(state.lang,cross.profile)}</strong>
+    <p>${ru?'Родители':'Parents'} · ${cross.parentProfiles.map((profile,i)=>'#'+cross.parents[i]+' '+describe(state.lang,profile)).join(' + ')}</p>
+    <p>${ru?'Унаследовано':'Inherited'} · ${fromParents.join(', ')||'—'}</p>
+    <p>${ru?'Мутации':'Mutations'} · ${mutations.join(', ')||'—'}</p>`
 }
 
 export function evolutionPanel(state:GameState, parents:number[]) {
@@ -48,35 +62,73 @@ export function evolutionPanel(state:GameState, parents:number[]) {
   if(state.greenhouseLevel<5) html+=button('greenhouse-upgrade',w.improve+' · '+evolution.greenhouseCosts[state.greenhouseLevel]+' ◈',
     `data-level="${state.greenhouseLevel+1}"`,!state.revealed.length || state.coins<evolution.greenhouseCosts[state.greenhouseLevel])
   if(state.greenhouseLevel>=2){
+    const ru=state.lang==='ru'
+    const slots=freeGreenhouseSlots(state)
+    const cloneLabel=ru?'Клонирование генома':'Genome cloning'
+    html+=`<p>${ru?'Свободные слоты':'Free slots'} · ${slots}/${evolution.crossSlots[state.greenhouseLevel-1]}</p>`
     html+=`<p>${w.parents}</p>`
     for(const plant of state.nursery) html+=button('cross-parent',name(plant.species)+' #'+plant.id+' · '+describe(state.lang,plant),`data-id="${plant.id}" aria-pressed="${parents.includes(plant.id)}"`,isBusy(state,plant.id))
-    const selected=parents.map(id=>state.nursery.find(p=>p.id===id)).filter(p=>p!==undefined)
-    if(selected.length===2 && selected[0].species===selected[1].species) {
-      const experiment=evolution.experiments[speciesInfo[selected[0].species].generation]
-      const odds=rarityOdds(selected[0].rarity,selected[1].rarity)
+    const selected=parents.map(id=>state.nursery.find(p=>p.id===id && !isBusy(state,id))).filter(p=>p!==undefined)
+    const [first,second]=selected
+    const experiment=first && second && first.species===second.species ? crossingQuote(state,first,second) : null
+    if(experiment) {
+      const pending=state.crosses.some(c=>c.species===first.species && c.readyAt>state.playTime)
+      const odds=pending ? experiment.base : experiment.weights
+      const total=odds.reduce((sum,weight)=>sum+weight,0)
       html+=`<p>${experiment.cost} ◈ · ${experiment.seconds} ${w.seconds}</p>
-        <p>${rarities.map((rarity,i)=>field[state.lang][rarity]+' '+odds[i]+'%').join(' · ')}</p>
-        <p>${availableTraits(selected[0].species).map(t=>field[state.lang][t]).join(' · ')}</p>`
+        <p>${rarities.map((rarity,i)=>field[state.lang][rarity]+' '+Number((odds[i]*100/total).toFixed(1))+'%').join(' · ')}</p>
+        <p>${ru?'Возможные положительные признаки':'Possible positive traits'} · ${availableTraits(first.species).map(t=>field[state.lang][t]).join(' · ')}</p>
+        <p>${ru?'Возможные недостатки':'Possible flaws'} · ${negatives.filter(t=>t!=='fragile' || speciesInfo[first.species].lifecycle==='multi').map(t=>field[state.lang][t]).join(' · ')}</p>`
+      if (experiment.key) {
+        const remaining=evolution.rarityGuarantee-experiment.failures
+        html+=`<p>${pending
+          ? (ru?'Показаны базовые шансы. Точный прогноз появится после завершения текущих опытов этого вида.':'Base odds shown. Exact odds are available when pending experiments on this species finish.')
+          : (ru?'Гарантия повышения редкости не позднее чем через':'Rarity increase guaranteed within')+' '+remaining+' '+(ru?'подход. оп.':'eligible trials')}</p>`
+      } else html+=`<p>${ru?'Эта пара уже достигла верхней редкости.':'This pair has reached the highest rarity.'}</p>`
       for(const parent of selected) {
         const stats=plantStats(parent.species,parent)
         html+=`<p>#${parent.id} · ${describe(state.lang,parent)} · ${stats.growthSec.toFixed(1)} ${w.seconds} · ♥ ${parent.lives}/${stats.maxLives}</p>`
       }
     }
-    if(state.greenhouseLevel>=3 && state.crosses.some(c=>c.collected)) {
-      html+=`<h4>${state.lang==='ru'?'История опытов':'Experiment history'}</h4>`
-      html+=state.crosses.filter(c=>c.collected).slice(-20).reverse().map(c=>
-        `<p>#${c.id} · ${name(c.species)} · ${c.parents.map((id,i)=>'#'+id+' ('+describe(state.lang,c.parentProfiles[i])+')').join(' + ')} → ${describe(state.lang,c.profile)}</p>`).join('')
+    html+=button('cross-start',w.cross,'class="primary"',!experiment || slots<=0 || state.coins<experiment.cost)
+    if (selected.length===1 && canClone(first)) {
+      const clone=evolution.cloning[speciesInfo[first.species].generation]
+      html+=state.greenhouseLevel>=3
+        ? button('clone-start',cloneLabel+' · '+clone.cost+' ◈ · '+clone.seconds+' '+w.seconds,
+          `data-id="${first.id}"`,slots<=0 || state.coins<clone.cost)
+        : `<p>${cloneLabel} · ${w.level} III</p>`
     }
-    html+=button('cross-start',w.cross,'class="primary"',selected.length!==2 || selected[0].species!==selected[1].species)
     for(const cross of state.crosses.filter(c=>!c.collected)){
-      html+=`<p>${name(cross.species)} · #${cross.id} · ${cross.readyAt>state.playTime ? w.waiting+' '+Math.ceil(cross.readyAt-state.playTime)+' '+w.seconds : describe(state.lang,cross.profile)}</p>`
-      if(cross.readyAt<=state.playTime) html+=button('cross-collect',w.collect,`data-id="${cross.id}"`)
+      html+=`<article class="inventory-card"><p>${name(cross.species)} · #${cross.id}</p>`
+      html+=cross.readyAt>state.playTime
+        ? `<p>${w.waiting} ${Math.ceil(cross.readyAt-state.playTime)} ${w.seconds}</p>`
+        : `<div class="breeding-result breeding-${cross.profile.rarity}">${crossResult(state,cross)}${button('cross-collect',w.collect,`data-id="${cross.id}"`)}</div>`
+      html+='</article>'
+    }
+    for (const clone of state.clones) {
+      html+=`<article class="inventory-card"><p>${cloneLabel} · ${name(clone.species)} · ${describe(state.lang,clone.profile)}</p>`
+      html+=clone.readyAt>state.playTime
+        ? `<p>${w.waiting} ${Math.ceil(clone.readyAt-state.playTime)} ${w.seconds}</p>`
+        : button('clone-collect',w.collect,`data-id="${clone.id}"`)
+      html+='</article>'
+    }
+    const history=state.crosses.filter(c=>c.collected).slice(-20).reverse()
+    if (history.length) {
+      html+=`<details><summary>${ru?'История опытов':'Experiment history'}</summary>`
+      html+=history.map(c=>`<article class="inventory-card"><p>#${c.id} · ${name(c.species)}</p>${crossResult(state,c)}</article>`).join('')
+      html+='</details>'
     }
   }
   html+=`<h3>${state.lang==='ru'?'Торговая лавка':'Market stall'} · ${w.level} ${state.stallLevel}</h3>`
   if (state.sold) html+=button('helper',state.lang==='ru'?'Листик и автоматизация':'Leafy and automation')
   if(state.stallLevel<5) html+=button('stall-upgrade',w.improve+' · '+evolution.stallCosts[state.stallLevel]+' ◈',`data-level="${state.stallLevel+1}"`)
   html+=`<h3>${w.orders}</h3>`
+  if (state.autoSell && state.orders.length && !state.trading.reserveOrders) {
+    const hint=state.lang==='ru'
+      ? (state.stallLevel>=4 ? 'В настройках лавки можно сохранять товары для заказов.' : 'Чтобы собрать запас для заказа, приостановите продажу в настройках Листика.')
+      : (state.stallLevel>=4 ? 'Reserve order goods in the stall settings.' : 'Pause sales in Leafy’s settings to save goods for an order.')
+    html+=`<p class="hint">${hint}</p>`
+  }
   if(!state.tutorialSkipped && state.orders.length && !state.ordersCompleted) html+=`<p class="hint">${state.lang==='ru'?'Заказ расходует перечисленные предметы и приносит награду. Защищённые семена сохраняются.':'An order consumes the listed items and pays its reward. Protected seeds stay in your inventory.'}</p>`
   if(!state.orders.length) html+=`<p>${w.empty}</p>`
   const buyers = state.lang==='ru'
@@ -94,7 +146,16 @@ export function evolutionPanel(state:GameState, parents:number[]) {
       html+=`<p>${[type,req.species?name(req.species):'',tier,rarity,trait,clean].filter(Boolean).join(' · ')} · ${quote.lines[index].available}/${req.count}</p>`
       html+=quote.lines[index].items.map(item=>`<p>↳ ${name(item.species)} ${item.profile?describe(state.lang,item.profile):''} ×${item.count}</p>`).join('')
     }
-    html+=`<p>${w.reward} · ${order.reward} ◈</p>${button('order-complete',w.complete,`data-id="${order.id}"`,!quote.complete)}${button('order-decline',w.decline,`data-id="${order.id}"`)}</article>`
+    const comparison=state.lang==='ru'
+      ? {market:'Обычная продажа',bonus:'Разница',partial:'Стоимость доступной части заказа'}
+      : {market:'Ordinary sale',bonus:'Difference',partial:'Value of available order items'}
+    const signed=(value:number)=>(value>0?'+':'')+value
+    html+=`<p>${w.reward} · ${order.reward} ◈</p>`
+    if (quote.complete) {
+      const rate=quote.marketValue ? ' ('+signed(Math.round(100*quote.bonus/quote.marketValue))+'%)' : ''
+      html+=`<p>${comparison.market} · ${quote.marketValue} ◈<br>${comparison.bonus} · ${signed(quote.bonus)} ◈${rate}</p>`
+    } else html+=`<p>${comparison.partial} · ${quote.marketValue} ◈</p>`
+    html+=`${button('order-complete',w.complete,`data-id="${order.id}"`,!quote.complete)}${button('order-decline',w.decline,`data-id="${order.id}"`)}</article>`
   }
   return html
 }

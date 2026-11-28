@@ -554,9 +554,9 @@ svg {
 @media(max-width:800px) {
 
   .topbar {
-    top: 8px;
-    left: 8px;
-    right: 8px;
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
     height: auto;
     min-height: 64px;
     padding: 7px 9px;
@@ -743,6 +743,28 @@ svg {
   .top-actions .quiet { padding-inline: 6px; }
 }
 
+@media (min-width:801px) and (max-height:500px) and (orientation:landscape) {
+  .topbar {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    height: 64px;
+    padding: 7px 8px;
+    gap: 10px;
+  }
+  .brand { min-width: 126px; gap: 5px; }
+  .brand-mark { width: 32px; height: 32px; }
+  .brand-mark svg { width: 23px; height: 23px; }
+  .brand strong { font-size: 16px; }
+  .brand small { font-size: 8px; }
+  .stats { gap: 6px; }
+  .stat { gap: 4px; }
+  .stat-icon { width: 26px; height: 26px; }
+  .stat.collection, .stats .sell { padding-inline: 6px; }
+  .stats .sell, .top-actions button { font-size: 11px; padding-inline: 6px; }
+  .modes { bottom: max(8px, env(safe-area-inset-bottom)); }
+}
+
 @media (max-width:800px) and (max-height:500px) and (orientation:landscape) {
   .context { max-height: calc(100% - 205px); width: min(250px,40vw); }
   .camera { flex-direction: row; }
@@ -761,6 +783,9 @@ svg {
 .inventory-card header { display: flex; align-items: center; gap: 8px; }
 .inventory-card header img { width: 34px; height: 34px; object-fit: contain; }
 .inventory-card p { margin: 6px 0; }
+.breeding-epic, .breeding-legendary { padding: 10px; border-radius: 8px; }
+.breeding-epic { color: #552d62; background: #f3e1f4; }
+.breeding-legendary { color: #633c10; background: #ffe7a7; }
 .inventory-quantity { display:grid; grid-template-columns:44px 1fr 44px auto; align-items:center; gap:6px; text-align:center; }
 .context .inventory-quantity button:not(.close) { min-width:44px; min-height:44px; margin:0; text-align:center; }
 .inventory-actions { display:flex; gap:6px; flex-wrap:wrap; }
@@ -776,6 +801,9 @@ svg {
   .garden-ui:has(.inventory-context) .notice:not(.reward) { bottom:calc(57dvh + 90px); }
 }
 @media (max-width:460px) {
+  .stats { gap: 5px; }
+  .stat.collection { padding-inline: 4px; }
+  .stats .sell { padding-inline: 6px; }
   .brand { gap:5px; }
   .brand-mark { flex:none; }
   .brand > span:last-child { min-width:0; }
@@ -795,3 +823,7 @@ svg {
 .market-table td { font-variant-numeric:tabular-nums; }
 .market-up { color:#2d6945; font-weight:700; }
 .market-down { color:#8b4936; font-weight:700; }
+
+.stat-list { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px }
+.stat-list dd { margin:0;font-variant-numeric:tabular-nums;text-align:right }
+.notice [data-action="plant-again"] { pointer-events:auto;display:block;min-height:44px;margin:5px auto 0 }

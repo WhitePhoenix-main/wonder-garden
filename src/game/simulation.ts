@@ -1,8 +1,7 @@
 import type { GameState } from './model'
 import { autoSellOffer, helperLevels } from './config'
-import { sellSurplusSeeds, workGarden } from './automation'
+import { autoSellGarden, workGarden } from './automation'
 import { cycleSeconds, pollinationFor } from './queries'
-import { sellBasket } from './trade'
 import { refreshOrders } from './orders'
 import { settleMarket } from './market'
 
@@ -52,12 +51,12 @@ export function advance(state: GameState, seconds: number): string[] {
       }
     }
     if (state.autoSell && state.sellRemaining <= 1e-9) {
-      if (state.automation.sellFruit) events.push(...sellBasket(state, true))
-      events.push(...sellSurplusSeeds(state))
+      events.push(...autoSellGarden(state))
       state.sellRemaining = autoSellOffer.intervalSec
     }
     if (refreshOrders(state)) events.push('OrdersUpdated')
     if (state.crosses.some(c=>!c.collected && c.readyAt>before && c.readyAt<=state.playTime)) events.push('CrossReady')
+    if (state.clones.some(c=>c.readyAt>before && c.readyAt<=state.playTime)) events.push('CloneReady')
   }
   return events
 }

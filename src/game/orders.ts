@@ -1,11 +1,12 @@
 import { evolution, speciesInfo } from './config'
-import { common, sameProfile, stockCount, traits, changeStock } from './genetics'
+import { common, sameProfile, stockCount, traits, changeStock, profileKey } from './genetics'
 import { buyers, rarities, type GameState, type Order, type OrderRequirement, type Profile, type Result, type Species } from './model'
 import { allSeedPacks, availableStock, hasOtherSource, protectedHarvest } from './stock-policy'
-import { consumeHarvest, seedSaleValue } from './trade'
+import { consumeHarvest } from './trade'
+import { harvestSaleValue, seedSaleValue } from './pricing'
 import { marketQuote, recordDelivery } from './market'
 
-type OrderItem = {id?:number; species:Species; profile?:Profile; count:number}
+type OrderItem = {id?:number; species:Species; profile?:Profile; count:number; value:number}
 
 function matches(species:Species, profile:Profile, rule:OrderRequirement):boolean {
   return (!rule.species || rule.species===species) && (!rule.tier || rule.tier===speciesInfo[species].generation+1) &&
@@ -38,13 +39,19 @@ function plan(state:GameState, order:Order) {
     for (const item of candidates) {
       const count=Math.min(item.id===undefined ? seedOffer(availableState,item.species,item.profile) : item.count,rule.count-supplied)
       if (!count) continue
-      if (item.id===undefined) changeStock(availableState,item.species,item.profile,-count)
+      let value:number
+      if (item.id===undefined) {
+        value=count*seedSaleValue(item.species,item.profile,availableState)
+        changeStock(availableState,item.species,item.profile,-count)
+      }
       else {
         if (speciesInfo[item.species].seedPrice===null && !allSeedPacks(availableState).some(p=>p.species===item.species) &&
           !hasOtherSource(availableState,item.species,undefined,undefined,item.id)) continue
-        consumeHarvest(availableState,availableState.basket.find(b=>b.id===item.id)!,count)
+        const batch=availableState.basket.find(b=>b.id===item.id)!
+        value=harvestSaleValue(batch,count,availableState)
+        consumeHarvest(availableState,batch,count)
       }
-      items.push({...item,count})
+      items.push({...item,count,value})
       supplied+=count
       if (supplied===rule.count) break
     }
@@ -55,7 +62,27 @@ function plan(state:GameState, order:Order) {
 
 export function orderQuote(state:GameState,order:Order) {
   const {complete,lines}=plan(state,order)
-  return {complete,lines}
+  const marketValue=lines.reduce((sum,line)=>line.items.reduce((total,item)=>total+item.value,sum),0)
+  return {complete,lines,marketValue,bonus:order.reward-marketValue}
+}
+
+export function orderReservations(state:GameState) {
+  const fruit=new Map<number,number>()
+  const seed=new Map<string,number>()
+  if (!state.trading.reserveOrders) return {fruit,seed}
+  let available=state
+  for (const order of state.orders) {
+    const {lines,availableState}=plan(available,order)
+    for (const line of lines) for (const item of line.items) {
+      if (item.id!==undefined) fruit.set(item.id,(fruit.get(item.id)??0)+item.count)
+      else if (item.profile) {
+        const key=profileKey(item.species,item.profile)
+        seed.set(key,(seed.get(key)??0)+item.count)
+      }
+    }
+    available=availableState
+  }
+  return {fruit,seed}
 }
 
 export function fulfillOrder(state:GameState,id:number):Result {
@@ -110,6 +137,8 @@ export function refreshOrders(state:GameState):boolean {
       requirements=state.stallLevel===5 ? [...requirements,seed] : [seed]
       basis=(state.stallLevel===5 ? basis : 0)+count*seedSaleValue(pack.species,pack,state)
     }
+    const quote=orderQuote(state,{id,buyer,requirements,reward:0})
+    if (quote.complete) basis=quote.marketValue
     state.orders.push({id,buyer,requirements,reward:Math.max(evolution.orderMinReward,Math.ceil(basis*evolution.orderBonus))})
   }
   return true

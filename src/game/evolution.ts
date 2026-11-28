@@ -1,9 +1,11 @@
 import { autoSellOffer, evolution, isSpecies, plotCount, valley } from './config'
 import { harmony } from './decor'
 import { canonical, profileKey, validGenome } from './genetics'
-import { collectCross, startCross } from './greenhouse'
+import { collectClone, collectCross, startClone, startCross } from './greenhouse'
 import { plotModes, rarities, type EvolutionCommand, type GameState, type PlotPolicy, type Result } from './model'
 import { fulfillOrder } from './orders'
+import { plotTemplate } from './automation'
+import { validTrading } from './market'
 
 export { isBusy } from './greenhouse'
 export { profileKey, rarityOdds } from './genetics'
@@ -63,6 +65,8 @@ export function evolve(state:GameState,command:Exclude<EvolutionCommand,{type:'b
     }
     case 'startCross': return startCross(state,command.parents)
     case 'collectCross': return collectCross(state,command.id)
+    case 'startClone': return startClone(state,command.id)
+    case 'collectClone': return collectClone(state,command.id)
     case 'fulfillOrder': return fulfillOrder(state,command.id)
     case 'declineOrder':
       if (!state.orders.some(o=>o.id===command.id)) return fail('itemChanged')
@@ -114,6 +118,19 @@ export function evolve(state:GameState,command:Exclude<EvolutionCommand,{type:'b
       plot.policy={...command.policy,replant:replant ? {species:replant.species,profile:canonical(replant.profile)} : null}
       return ok('PlotPolicyChanged')
     }
+    case 'plotTemplate':
+      if (!plotModes.includes(command.mode) || !Array.isArray(command.plots) || !command.plots.length ||
+        !command.plots.every(index=>Number.isInteger(index) && state.plots[index]?.open)) return fail('invalidPolicy')
+      for (const index of new Set(command.plots)) {
+        const plot=state.plots[index]
+        plot.policy=plotTemplate(plot,command.mode)
+      }
+      return ok('PlotPolicyChanged')
+    case 'setTrading':
+      if (state.stallLevel<4) return fail('stallLocked')
+      if (!validTrading(command.settings)) return fail('invalidPolicy')
+      state.trading={...command.settings}
+      return ok('AutomationChanged')
     case 'setAutomation':
       if (!validAutomation(command.settings) || !state.helperLevel) return fail('invalidPolicy')
       if (state.stallLevel<3 && (command.settings.extractPollinated || command.settings.sellSeeds)) return fail('stallLocked')

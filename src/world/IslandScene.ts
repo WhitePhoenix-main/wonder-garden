@@ -1,3 +1,4 @@
+import { protectedProfile } from '../game/stock-policy'
 import Phaser from 'phaser'
 import { adjacent, plotCount, recipes } from '../game/config'
 import { isRecipeActive, secondsLeft, isRecipeRevealed } from '../game/queries'
@@ -236,8 +237,8 @@ export class IslandScene extends Phaser.Scene {
     const plots = state.plots.slice(offset, offset + this.cells.length)
     const bridgeRepaired = state.plots.length > plotCount
     const key = JSON.stringify([state.lang,sunflower,shovel,state.tutorialSkipped,mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,
-      state.helperLevel,state.greenhouseLevel,state.stallLevel,isRecipeRevealed(state),bridgeRepaired,state.decorations,
-      plots.map((p,i) => [secondsLeft(state,offset+i),p.open,p.level,p.policy?.mode,p.plant?.species,p.plant?.rarity,
+      state.protectedPlants,state.protectedProfiles,state.helperLevel,state.greenhouseLevel,state.stallLevel,isRecipeRevealed(state),bridgeRepaired,state.decorations,
+      plots.map((p,i) => [secondsLeft(state,offset+i),p.open,p.level,p.policy?.mode,p.plant?.species,p.plant?.rarity,p.plant?.lives,p.plant?.pollination?.result,!!p.policy?.replant,
         p.plant && plantTexture(p.plant)])])
     if (key === this.lastPaint) return
     this.lastPaint = key
@@ -268,7 +269,10 @@ export class IslandScene extends Phaser.Scene {
       const i = offset + local
       const cell = this.cells[local]
       const pos = plotPosition(i)
-      cell.level.setVisible(plot.open).setText(grades[plot.level])
+      const plant=plot.plant
+      const isProtected=plant && (state.protectedPlants.includes(plant.id) || protectedProfile(state,plant.species,plant))
+      const status=isProtected ? '◆' : plant?.lives===1 ? '♥1' : plant?.pollination ? '✧' : !plant && plot.policy?.replant ? '↻' : ''
+      cell.level.setVisible(plot.open).setText([grades[plot.level],status].filter(Boolean).join(' · '))
       const policy = policyBadges[plot.policy?.mode ?? 'manual']
       cell.policy.setVisible(plot.open && !!policy[state.lang]).setText(policy[state.lang]).setBackgroundColor(policy.color)
       cell.countdown=secondsLeft(state,i)+(state.lang==='ru'?' с':' s')

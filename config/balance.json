@@ -856,6 +856,13 @@
       }
     ],
     "levelFiveInheritance": 0.9,
+    "rarityGuarantee": 10,
+    "cloning": [
+      { "cost": 150, "seconds": 30 },
+      { "cost": 360, "seconds": 50 },
+      { "cost": 720, "seconds": 80 },
+      { "cost": 1200, "seconds": 120 }
+    ],
     "bridge": {
       "species": 10,
       "plots": 12,

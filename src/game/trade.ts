@@ -1,3 +1,4 @@
+import { measure } from './analytics'
 import { autoSellOffer, isHybrid, isSpecies } from './config'
 import { changeStock, common, inherit, nextRandom, sameProfile, stockCount, validGenome } from './genetics'
 import { rarities, type Command, type GameState, type HarvestBatch, type HarvestLot, type Profile,
@@ -5,7 +6,7 @@ import { rarities, type Command, type GameState, type HarvestBatch, type Harvest
 import { chance } from './queries'
 import { availableStock, hasOtherSource, lotSeedYield, productionTarget, protectedHarvest, protectedProfile } from './stock-policy'
 import { harvestSaleValue, seedSaleValue } from './pricing'
-import { recordDelivery } from './market'
+import { marketQuote, recordDelivery, saleMinimum } from './market'
 
 type Trade = Extract<Command, {type:'sellHarvest'|'extractSeeds'|'sellSeeds'}>
 
@@ -81,14 +82,25 @@ export function quickSaleValue(state:GameState):number {
   return state.basket.reduce((sum,batch)=>sum+(quickSaleEligible(state,batch) ? harvestSaleValue(batch,batch.count,state) : 0),0)
 }
 
-export function sellBasket(state: GameState, automated=false): string[] {
-  const selling = state.basket.filter(batch => quickSaleEligible(state, batch, automated))
+export function basketSalePlan(state:GameState,automated=false,force=false,reserved=new Map<number,number>()) {
+  return state.basket.flatMap(batch=>{
+    const count=batch.count-(reserved.get(batch.id)??0)
+    if (count<=0 || !quickSaleEligible(state,batch,automated)) return []
+    if (automated && !force && marketQuote(state,batch.species,'fruit').pricePercent<saleMinimum(state.trading)) return []
+    return [{batch,count}]
+  })
+}
+
+export function sellBasket(state: GameState, automated=false, force=false, reserved?:Map<number,number>): string[] {
+  const selling=basketSalePlan(state,automated,force,reserved)
   if (!selling.length) return []
-  const value = selling.reduce((sum,batch)=>sum+harvestSaleValue(batch,batch.count,state),0)
+  const value = selling.reduce((sum,{batch,count})=>sum+harvestSaleValue(batch,count,state),0)
   if (!Number.isSafeInteger(state.coins + value)) return []
-  const sold = new Set(selling)
-  state.basket = state.basket.filter(batch => !sold.has(batch))
-  for (const batch of selling) recordDelivery(state,batch.species,'fruit',batch.count)
+  for (const {batch,count} of selling) {
+    measure(state,batch.species,{fruitRevenue:harvestSaleValue(batch,count,state),soldUnits:count,quoteUnits:count*marketQuote(state,batch.species,'fruit').pricePercent})
+    consumeHarvest(state,batch,count)
+    recordDelivery(state,batch.species,'fruit',count)
+  }
   return recordSale(state, value)
 }
 
@@ -185,6 +197,7 @@ export function trade(state:GameState, command:Trade):Result {
     if (issue) return {ok:false,reason:issue}
     const value = count * seedSaleValue(species,profile,state)
     if (!Number.isSafeInteger(state.coins + value)) return {ok:false, reason:'coinLimit'}
+    measure(state,species,{seedRevenue:value,soldUnits:count,quoteUnits:count*marketQuote(state,species,'seed').pricePercent})
     changeStock(state, species, profile, -count)
     recordDelivery(state,species,'seed',count)
     return {ok:true, events:recordSale(state, value)}
@@ -198,6 +211,7 @@ export function trade(state:GameState, command:Trade):Result {
 
   const value = harvestSaleValue(batch,command.count,state)
   if (!Number.isSafeInteger(state.coins + value)) return {ok:false, reason:'coinLimit'}
+  measure(state,batch.species,{fruitRevenue:value,soldUnits:command.count,quoteUnits:command.count*marketQuote(state,batch.species,'fruit').pricePercent})
   consumeHarvest(state, batch, command.count)
   recordDelivery(state,batch.species,'fruit',command.count)
   return {ok:true, events:recordSale(state, value)}

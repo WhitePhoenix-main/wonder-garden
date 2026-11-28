@@ -107,8 +107,9 @@ it('settles the market before auto-sale at a shared deadline',()=>{
 it('migrates the Alpha 05 fixture intact with neutral prices, then saves an active market exactly',()=>{
   const state=parseSave(JSON.stringify(alpha05))
   if (!state || state==='future') throw Error('Alpha 05 fixture did not load')
-  const {market:initial,...garden}=state
-  expect(garden).toEqual({...alpha05,schemaVersion:10,balanceVersion:4})
+  const {market:initial,trading,clones,rarityProgress,...garden}=state
+  expect({trading,clones,rarityProgress}).toEqual({trading:initialState(1).trading,clones:[],rarityProgress:{}})
+  expect(garden).toEqual({...alpha05,schemaVersion:11,balanceVersion:4})
   expect(initial).toEqual(initialMarket())
   expect(state.activeIsland).toBe('valley')
   expect(state.crosses[0].readyAt).toBeGreaterThan(state.playTime)
@@ -117,7 +118,7 @@ it('migrates the Alpha 05 fixture intact with neutral prices, then saves an acti
   advance(state,market.tickSeconds+3)
   expect(state.orders.find(item=>item.id===order.id)?.reward).toBe(order.reward)
   expect(parseSave(JSON.stringify(state))).toEqual(state)
-  state.market.goods.radish.seed.delivered=market.capacity.radish.seed+1
+  state.market.goods.radish.seed.delivered=-1
   expect(parseSave(JSON.stringify(state))).toBeNull()
 })
 

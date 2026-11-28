@@ -32,7 +32,7 @@ it('guides the first sale, parent placement, recipe progress and planting in a f
   commit(state,{type:'extractSeeds',id:pollinated.id,count:pollinated.count})
   expect(gardenHint(state)).toMatch(/Солнечная клубника.*замените/)
   commit(state,{type:'plant',species:'solar_strawberry',plot:12,replaceId:state.plots[12].plant!.id})
-  expect(gardenHint(state)).toMatch(/уголок сада/)
+  expect(gardenHint(state)).toMatch(/Наймите Листика/)
 })
 
 it('points to the shovel when all open plots are full and replacement is still locked', () => {

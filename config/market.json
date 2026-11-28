@@ -6,6 +6,12 @@
   "maximumPricePercent": 120,
   "saturationPenalty": 40,
   "recoveryPercentPerTick": 22,
+  "backlogRecoveryPercentPerTick": 5,
+  "strategy": {
+    "balancedMinimum": 95,
+    "profitMinimum": 105,
+    "overflowPercent": 90
+  },
   "capacity": {
     "radish": { "fruit": 120, "seed": 48 },
     "strawberry": { "fruit": 55, "seed": 24 },
