@@ -1,10 +1,10 @@
 import { measure, observeDraft, commitObservation } from './analytics'
-import type { BedLevel, Command, GameState, Result } from './model'
+import type { BedLevel, Command, GameState, IslandId, Result } from './model'
 import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, plotCount, speciesIds, speciesInfo } from './config'
-import { canRecoverGarden, chooseResearchDirection, plantingIssue, removalIssue, expansionCost } from './queries'
+import { canRecoverGarden, chooseResearchDirection, chooseResearchDonor, gardenBatchTargets, plantingIssue, removalIssue, expansionCost } from './queries'
 import { decorate } from './decor'
 import { newPlant } from './state'
-import { sellBasket, trade } from './trade'
+import { groupedSaleIssue, sellBasket, sellReadyFruit, trade } from './trade'
 import { availableStock, protectedHarvest } from './stock-policy'
 import { harvest } from './harvest'
 import { common, changeStock, nextRandom } from './genetics'
@@ -30,7 +30,7 @@ function applyMeasured(state:GameState,command:Command):Result {
   const result=apply(state,command)
   if (!result.ok || command.type==='bulk') return result
   const spent=before-state.coins
-  if (command.type==='plant') measure(state,command.species,{planted:1,seedCost:spent})
+  if (command.type==='plant' || command.type==='repeatPlant') measure(state,command.species,{planted:1,seedCost:spent})
   else if (command.type==='emergencyRadish') measure(state,'radish',{planted:1})
   else if (command.type==='fulfillOrder') measure(state,'garden',{orders:-spent})
   else if (command.type==='startCross' || command.type==='startClone') measure(state,'garden',{breedingCost:spent})
@@ -41,6 +41,21 @@ function applyMeasured(state:GameState,command:Command):Result {
 
 function completed(state:GameState) {
   return state.planted.length===speciesIds.length && state.plots.slice(0,plotCount).every(p=>p.open)
+}
+
+function gardenBatch(state:GameState,island:IslandId,kind:'harvest'|'cleanup'):Result {
+  if (island!=='green' && island!=='valley') return failure('invalidPlot')
+  const targets=gardenBatchTargets(state,island,kind)
+  if (!targets.length) return failure(kind==='harvest' ? 'notReady' : 'notDead')
+  const events:string[]=[]
+  for (const plot of targets) {
+    const plant=state.plots[plot].plant!
+    const command=kind==='harvest' ? {type:kind,plot,expectedId:plant.id,cycle:plant.lives} as const :
+      {type:kind,plot,expectedId:plant.id} as const
+    const result=applyMeasured(state,command)
+    if (result.ok) events.push(...result.events)
+  }
+  return events.length ? success(...events) : failure('basketFull')
 }
 
 function apply(state:GameState,command:Command):Result {
@@ -59,6 +74,10 @@ function apply(state:GameState,command:Command):Result {
           const batch=scratch.basket.find(b=>b.id===item.id)
           if (batch && (protectedHarvest(scratch,batch) || item.type==='sellHarvest' && batch.lots.some(l=>l.crossPending))) return failure('protectedItem')
         }
+        if (item.type==='sellHarvest' || item.type==='sellSeeds') {
+          const issue=groupedSaleIssue(scratch,item)
+          if (issue) return failure(issue)
+        }
         const result=applyMeasured(scratch,item)
         if (!result.ok) return result
         events.push(...result.events)
@@ -73,10 +92,14 @@ function apply(state:GameState,command:Command):Result {
     case 'restoreBridge': case 'travel': case 'protectPlant': case 'protectProfile': case 'favoriteProfile':
     case 'setReserve': case 'plotPolicy': case 'plotTemplate': case 'setTrading': case 'setAutomation': return evolve(state,command)
     case 'assignProduction': case 'moveProduction': case 'collectProduction': return evolve(state,command)
+    case 'gatherReady': return gardenBatch(state,command.island,'harvest')
+    case 'clearWithered': return gardenBatch(state,command.island,'cleanup')
     case 'researchDirection': return chooseResearchDirection(state,command.plot,command.expectedId,command.recipeId)
+    case 'researchDonor': return chooseResearchDonor(state,command.plot,command.expectedId,command.recipeId,command.donor,command.donorId)
     case 'dismissHybrid': state.pendingHybrid=null;return success('HintDismissed')
     case 'tutorialBranch': state.tutorialBranch=command.branch;return success('BranchChosen')
     case 'sell': return success(...sellBasket(state))
+    case 'sellReadyFruit': return success(...sellReadyFruit(state))
     case 'sellHarvest':
     case 'sellSeeds':
     case 'extractSeeds': return trade(state,command)
@@ -180,6 +203,7 @@ function apply(state:GameState,command:Command):Result {
     case 'cleanup':
       if (!plot.plant || plot.plant.id!==command.expectedId) return failure('stalePlant')
       if (plot.plant.lives!==0) return failure('notDead')
+      state.protectedPlants=state.protectedPlants.filter(id=>id!==command.expectedId)
       plot.plant = null
       return success('PlantCleaned','PlantCleaned:'+command.plot)
     case 'upgrade': {
@@ -192,10 +216,13 @@ function apply(state:GameState,command:Command):Result {
       plot.level = level
       return success('BedUpgraded')
     }
+    case 'repeatPlant':
     case 'plant': {
       const displaced = plot.plant
-      const issue = plantingIssue(state,command.plot,command.species,command.replaceId,command.stock)
+      const issue = plantingIssue(state,command.plot,command.species,command.type==='plant' ? command.replaceId : undefined,command.stock)
       if (issue) return failure(issue)
+      if (command.type==='repeatPlant' && (!command.stock || !availableStock(state,command.species,command.stock)))
+        return failure('seedReserved')
       const price = speciesInfo[command.species].seedPrice
 
       if (command.stock || isHybrid(command.species)) {

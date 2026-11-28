@@ -1,12 +1,13 @@
 import { measure } from './analytics'
 import { autoSellOffer, isHybrid, isSpecies } from './config'
-import { changeStock, common, hybridRarityOdds, inherit, nextRandom, sameProfile, stockCount, validGenome } from './genetics'
+import { changeStock, common, hybridRarityOdds, inherit, nextRandom, profileKey, sameProfile, stockCount, validGenome } from './genetics'
 import { rarities, type Command, type GameState, type HarvestBatch, type HarvestLot, type Profile,
   type Result, type SeedPack, type Species } from './model'
 import { chance, snapshotRecipeId } from './queries'
 import { availableStock, hasOtherSource, lotSeedYield, productionTarget, protectedHarvest, protectedProfile } from './stock-policy'
 import { harvestSaleValue, seedSaleValue } from './pricing'
 import { marketQuote, recordDelivery, saleMinimum } from './market'
+import { orderReservations } from './orders'
 
 type Trade = Extract<Command, {type:'sellHarvest'|'extractSeeds'|'sellSeeds'}>
 
@@ -92,7 +93,44 @@ export function basketSalePlan(state:GameState,automated=false,force=false,reser
 }
 
 export function sellBasket(state: GameState, automated=false, force=false, reserved?:Map<number,number>): string[] {
-  const selling=basketSalePlan(state,automated,force,reserved)
+  return applyBasketSale(state,basketSalePlan(state,automated,force,reserved))
+}
+
+export function readyFruitSalePlan(state:GameState) {
+  return marketFruitSalePlan(state).filter(({batch})=>
+    !batch.pollination && (!batch.profile || sameProfile(batch.profile,common)) &&
+    batch.lots.every(lot=>lot.origin?.mode!=='seed' && lot.origin?.mode!=='support'))
+}
+
+export function marketFruitSalePlan(state:GameState) {
+  return basketSalePlan(state,false,false,orderReservations(state).fruit)
+}
+
+export function marketSeedStock(state:GameState,species:Species,profile:Profile,reserved=orderReservations(state).seed):number {
+  return Math.max(0,availableStock(state,species,profile)-(reserved.get(profileKey(species,profile))??0))
+}
+
+export function groupedSaleIssue(state:GameState,command:Exclude<Trade,{type:'extractSeeds'}>):string|null {
+  if (!state.trading.reserveOrders) return null
+  if (command.type==='sellSeeds') {
+    if (!isSpecies(command.species) || !validGenome(command.species,command.profile,true)) return null
+    const reserved=orderReservations(state).seed.get(profileKey(command.species,command.profile))??0
+    return reserved>0 && command.count>availableStock(state,command.species,command.profile)-reserved ? 'orderReserved' : null
+  }
+  const batch=state.basket.find(item=>item.id===command.id)
+  const reserved=orderReservations(state).fruit.get(command.id)??0
+  return batch && reserved>0 && command.count>batch.count-reserved ? 'orderReserved' : null
+}
+
+export function readyFruitSaleValue(state:GameState):number {
+  return readyFruitSalePlan(state).reduce((sum,{batch,count})=>sum+harvestSaleValue(batch,count,state),0)
+}
+
+export function sellReadyFruit(state:GameState):string[] {
+  return applyBasketSale(state,readyFruitSalePlan(state))
+}
+
+function applyBasketSale(state:GameState,selling:ReturnType<typeof basketSalePlan>):string[] {
   if (!selling.length) return []
   const value = selling.reduce((sum,{batch,count})=>sum+harvestSaleValue(batch,count,state),0)
   if (!Number.isSafeInteger(state.coins + value)) return []

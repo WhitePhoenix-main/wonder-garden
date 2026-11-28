@@ -29,7 +29,7 @@ it('migrates a snapshot written by the original Alpha 07 code without replaying 
   if (!s || s==='future') throw Error('Alpha 07 snapshot was rejected')
   const {schemaVersion,balanceVersion,automation,passive,tutorialSeen,research,...existing}=s
   const {schemaVersion:oldSchema,balanceVersion:oldBalance,automation:oldAutomation,...previous}=alpha07
-  expect([oldSchema,oldBalance,schemaVersion,balanceVersion]).toEqual([11,4,13,5])
+  expect([oldSchema,oldBalance,schemaVersion,balanceVersion]).toEqual([11,4,14,5])
   expect(Object.keys(research.recipes)).toEqual(alpha07.revealed.map(id=>id+':main'))
   expect(existing).toEqual(previous)
   expect(automation).toEqual({...oldAutomation,cleanup:true})

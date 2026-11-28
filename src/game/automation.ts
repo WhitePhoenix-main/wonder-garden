@@ -2,9 +2,9 @@ import { measure } from './analytics'
 import { evolution, market } from './config'
 import { execute } from './commands'
 import { canonical, fruitCount, plantStats, profileKey, sameProfile, stockCount } from './genetics'
-import type { GameState, Plot, PlotMode, PlotPolicy } from './model'
+import type { GameState, Plant, Plot, PlotMode, PlotPolicy } from './model'
 import { basketCapacity, basketCount } from './queries'
-import { allSeedPacks, availableStock, defaultPolicy, isValuablePlant, productionTarget, protectedHarvest, protectedProfile } from './stock-policy'
+import { allSeedPacks, availableStock, defaultPolicy, isProtectedPlant, isValuablePlant, productionTarget, protectedHarvest, protectedProfile } from './stock-policy'
 import { basketSalePlan, extractionYield, quickSaleEligible, sellBasket } from './trade'
 import { allowsOverflow, marketQuote, saleMinimum } from './market'
 import { orderReservations } from './orders'
@@ -49,6 +49,10 @@ export function plotTemplate(plot:Plot,mode:PlotMode):PlotPolicy {
   return {mode,priority:current.priority,harvest:mode!=='manual' && mode!=='support',target:current.target,replant}
 }
 
+function keepUnharvested(state:GameState,plant:Plant):boolean {
+  return plant.lives===1 ? isValuablePlant(state,plant) : isProtectedPlant(state,plant)
+}
+
 export function productionStatus(state:GameState,index:number) {
   const plot=state.plots[index]
   const policy=plot?.policy??defaultPolicy
@@ -58,7 +62,7 @@ export function productionStatus(state:GameState,index:number) {
     if (isValuablePlant(state,plant)) return 'protected'
     return state.automation.cleanup && state.helperLevel>=2 ? 'cleanup' : 'manual'
   }
-  if (policy.mode==='support' || plant?.lives===1 && isValuablePlant(state,plant)) return 'protected'
+  if (policy.mode==='support' || plant && keepUnharvested(state,plant)) return 'protected'
   if (plant) {
     if (!policy.harvest) return 'manual'
     if (plant.readySince===null) return 'growing'
@@ -104,7 +108,7 @@ export function workGarden(state:GameState):string[] {
       }
     } else if (plant) {
       if (harvests>=capacity || plant.readySince===null || !policy.harvest || policy.mode==='support' ||
-        plant.lives===1 && isValuablePlant(state,plant)) continue
+        keepUnharvested(state,plant)) continue
       const fruits=fruitCount(plantStats(plant.species,plant),plant.fruitRoll)
       if (basketCount(state)+fruits>basketCapacity(state)) events.push(...autoSellGarden(state,true,fruits))
       if (finish(execute(state,{type:'harvest',plot:index,expectedId:plant.id,cycle:plant.lives}))) {

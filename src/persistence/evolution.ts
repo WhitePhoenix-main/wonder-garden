@@ -45,7 +45,8 @@ export function validateEvolution(state:GameState,seen:Set<number>,plants:Plant[
     !Array.isArray(state.achievements) || !unique(state.achievements) ||
     !state.achievements.every(key=>typeof key==='string' && /^[A-Za-z_][A-Za-z_0-9]{0,40}$/.test(key))) return false
   if (!Array.isArray(state.protectedPlants) || !unique(state.protectedPlants) ||
-    !state.protectedPlants.every(id=>plants.some(p=>p.id===id))) return false
+    !state.protectedPlants.every(id=>plants.some(p=>p.id===id) ||
+      Number(state.schemaVersion)>=14 && state.plots.some(p=>p.plant?.id===id && p.plant.lives===0))) return false
   if (![state.protectedProfiles,state.favorites].every(list=>Array.isArray(list) && unique(list) && list.every(validKey))) return false
   if (!record(state.reserves) || Object.entries(state.reserves).some(([key,count])=>
     !integer(count) || count===0 || !isSpecies(key) && !validKey(key))) return false

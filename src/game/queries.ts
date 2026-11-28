@@ -1,5 +1,5 @@
 import { canonical, common, plantStats, stockCount, validGenome } from './genetics'
-import type { CompatibilityReaction, Experiment, Hybrid, Plant, PollinationSnapshot, Profile, GameState, Recipe, ResearchState, Result, Species } from './model'
+import type { CompatibilityReaction, Experiment, Hybrid, IslandId, Plant, PollinationSnapshot, Profile, GameState, Recipe, ResearchState, Result, Species } from './model'
 import { adjacent, auras, balance, basketLevels, bedLevels, breedingRecipe, breedingRecipes, breedingTier, evolution, island, isHybrid, isSpecies, plotCount, plotIndices, plotIsland, speciesInfo, valley } from './config'
 import { harvestSaleValue } from './pricing'
 import { harmonyGrowth } from './decor'
@@ -11,6 +11,16 @@ export function basketCapacity(state:Pick<GameState,'basketLevel'>):number {
 
 export function basketCount(state:Pick<GameState, 'basket'>):number {
   return state.basket.reduce((sum, batch) => sum + batch.count, 0)
+}
+
+export function gardenBatchTargets(state:GameState,island:IslandId,kind:'harvest'|'cleanup'):number[] {
+  return plotIndices(island).flatMap(index=>{
+    const plot=state.plots[index]
+    const plant=plot?.plant
+    if (!plot?.open || !plant || isValuablePlant(state,plant)) return []
+    if (kind==='cleanup') return plant.lives===0 ? [index] : []
+    return plant.lives && plant.readySince!==null && plot.policy?.mode!=='support' ? [index] : []
+  }).sort((a,b)=>(state.plots[a].plant!.readySince??0)-(state.plots[b].plant!.readySince??0) || a-b)
 }
 
 export function canRecoverGarden(state:GameState):boolean {
@@ -172,6 +182,34 @@ export function chooseResearchDirection(state:GameState,index:number,id:number,r
   return {ok:true,events:['ResearchDirectionChanged']}
 }
 
+export function donorCandidates(state:GameState,index:number,recipeId:string) {
+  const recipe=researchDirections(state,index).find(item=>item.id===recipeId)
+  return recipe ? adjacentDonors(state,index,recipe) : []
+}
+
+function adjacentDonors(state:GameState,index:number,recipe:Recipe) {
+  const neighbors=adjacent(index).flatMap(plot=>{
+    const plant=state.plots[plot]?.plant
+    return plant?.lives ? [{plot,plant}] : []
+  })
+  return recipe.neighbors.map(species=>({species,candidates:neighbors.filter(entry=>entry.plant.species===species)}))
+}
+
+export function chooseResearchDonor(state:GameState,index:number,id:number,recipeId:string,species:Species,donorId:number|null):Result {
+  const plant=state.plots[index]?.plant
+  if (!plant?.lives || plant.id!==id) return {ok:false,reason:'stalePlant'}
+  const group=donorCandidates(state,index,recipeId).find(group=>group.species===species)
+  if (!group || donorId!==null && !group.candidates.some(entry=>entry.plant.id===donorId))
+    return {ok:false,reason:'researchUnavailable'}
+  if ((plant.researchDonors?.[species]??null)===donorId) return {ok:true,events:[]}
+  const donors={...plant.researchDonors}
+  if (donorId===null) delete donors[species]
+  else donors[species]=donorId
+  if (Object.keys(donors).length) plant.researchDonors=donors
+  else delete plant.researchDonors
+  return {ok:true,events:['ResearchDonorChanged']}
+}
+
 export function experiments(state:GameState,index:number):Experiment[] {
   const near=adjacent(index)
   const layout=[state.plots[index].level,...near.map(i=>state.plots[i].plant?.id??0)].join('.')
@@ -192,13 +230,10 @@ export function pollinationFor(state:GameState,index:number):PollinationSnapshot
   const active=researchDirections(state,index)
   const recipe=active.length===1 ? active[0] : active.find(item=>item.id===plant.researchDirection)
   if (!recipe) return null
-  const neighbors = adjacent(index).flatMap(neighbor => {
-    const donor = state.plots[neighbor]?.plant
-    return donor?.lives ? [donor] : []
-  })
-  const [donor, ...supporting] = recipe.neighbors.map(species =>
-    parentProfile(neighbors.find(neighbor => neighbor.species === species)!))
-  return {recipeId:recipe.id, result:recipe.result, donor, supporting}
+  const parents=adjacentDonors(state,index,recipe).map(({species,candidates})=>
+    (candidates.find(({plant:donor})=>donor.id===plant.researchDonors?.[species])??candidates[0]).plant)
+  const [donor,...supporting]=parents.map(parentProfile)
+  return {recipeId:recipe.id, result:recipe.result, donor, supporting, donorIds:parents.map(parent=>parent.id)}
 }
 export function snapshotRecipeId(snapshot:PollinationSnapshot):string {
   return snapshot.recipeId??`${snapshot.result}:main`

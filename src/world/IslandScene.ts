@@ -1,7 +1,7 @@
 import { protectedProfile } from '../game/stock-policy'
 import Phaser from 'phaser'
-import { adjacent, breedingRecipes, plotCount, recipes } from '../game/config'
-import { auraBonus, isRecipeActive, secondsLeft, isRecipeRevealed } from '../game/queries'
+import { adjacent, plotCount, recipes } from '../game/config'
+import { auraBonus, isRecipeActive, researchDirections, secondsLeft, isRecipeRevealed } from '../game/queries'
 import { decorationAt } from '../game/decor'
 import { rarities, type IslandId, type Plant } from '../game/model'
 import type { WorldView } from '../runtime/presentation'
@@ -23,11 +23,11 @@ interface CellArt {
 const grades = ['', 'I', 'II', 'III', 'IV', 'V']
 const rarityColor = ['#625a4b', '#3e6b47', '#3f608d', '#684982', '#8a622b']
 const policyBadges = {
-  manual: {ru:'',en:'',color:'#625a4b'},
-  commercial: {ru:'Т',en:'$',color:'#855e39'},
-  seed: {ru:'С',en:'S',color:'#426d53'},
-  breeding: {ru:'Г',en:'B',color:'#684982'},
-  support: {ru:'А',en:'A',color:'#3f608d'},
+  manual: {symbol:'·',color:'#625a4b'},
+  commercial: {symbol:'▤',color:'#855e39'},
+  seed: {symbol:'●',color:'#426d53'},
+  breeding: {symbol:'⇄',color:'#684982'},
+  support: {symbol:'+',color:'#3f608d'},
 }
 
 function plantTexture(plant: Plant): string {
@@ -62,6 +62,10 @@ export class IslandScene extends Phaser.Scene {
   private cells: CellArt[] = []
   private decorations = new Map<string,Phaser.GameObjects.Image>()
   private sparks!: Phaser.GameObjects.Graphics
+  private pollen!: Phaser.GameObjects.Graphics
+  private pollenLinks:{from:Point;to:Point}[]=[]
+  private pollenWasVisible=false
+  private readonly reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)')
   private harvestEffects = new Map<number,{age:number; text:Phaser.GameObjects.Text; stationary:boolean}>()
   private lastPaint = ''
   private highlights!: Phaser.GameObjects.Graphics
@@ -156,6 +160,7 @@ export class IslandScene extends Phaser.Scene {
       this.decorations.set(slot.id,place('decor_bench',pos,pos.y + 3).setVisible(false))
     }
     this.sparks = this.add.graphics().setDepth(901)
+    this.pollen = this.add.graphics().setDepth(903)
     this.highlights = this.add.graphics().setDepth(-4)
     this.markers = this.add.graphics().setDepth(900)
   }
@@ -167,6 +172,8 @@ export class IslandScene extends Phaser.Scene {
     this.cells = []
     this.decorations.clear()
     this.harvestEffects.clear()
+    this.pollenLinks=[]
+    this.pollenWasVisible=false
     this.stall = this.greenhouse = null
     this.stallLevel = this.greenhouseLevel = null
     this.lastPaint = ''
@@ -179,7 +186,7 @@ export class IslandScene extends Phaser.Scene {
   }
 
   celebrate() {
-    if (this.greenhouse && !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    if (this.greenhouse && !this.reducedMotion.matches)
       this.tweens.add({targets:this.greenhouse,alpha:.35,yoyo:true,repeat:2,duration:400})
   }
 
@@ -188,7 +195,7 @@ export class IslandScene extends Phaser.Scene {
     const pos = plotPosition(index)
     const x = pos.x + 24, y = pos.y - 16
     this.tweens.killTweensOf(this.helper)
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) this.helper.setPosition(x,y)
+    if (this.reducedMotion.matches) this.helper.setPosition(x,y)
     else this.tweens.add({ targets:this.helper, x, y, duration:360, ease:'Sine.easeOut' })
   }
 
@@ -198,10 +205,10 @@ export class IslandScene extends Phaser.Scene {
     this.harvestEffects.get(index)?.text.destroy()
     const text = this.label(point.x,point.y-84,'#fff4c8','#385748').setDepth(920)
     text.setText(message).setScale(1/this.cameras.main.zoom)
-    this.harvestEffects.set(index,{age:0,text,stationary:window.matchMedia('(prefers-reduced-motion: reduce)').matches})
+    this.harvestEffects.set(index,{age:0,text,stationary:this.reducedMotion.matches})
   }
 
-  update(_time:number, dt:number) {
+  update(time:number, dt:number) {
     const scale=1/this.cameras.main.zoom
     const offset = firstPlot(this.islandId)
     this.greenhouseLevel?.setScale(scale*.81)
@@ -214,6 +221,20 @@ export class IslandScene extends Phaser.Scene {
       const text=scale>2.7 && offset+i!==this.selectedPlot ? '•' : cell.countdown
       if (cell.timer.text!==text) cell.timer.setText(text)
     })
+    if (this.pollenLinks.length || this.pollenWasVisible) {
+      this.pollen.clear()
+      this.pollenWasVisible=this.pollenLinks.length>0 && !this.reducedMotion.matches
+      if (this.pollenWasVisible) {
+        this.pollen.fillStyle(0xfff0b7,.92)
+        for (const {from,to} of this.pollenLinks) {
+          for (let i=0;i<3;i++) {
+            const phase=(time/1450+i/3)%1
+            this.pollen.fillCircle(Phaser.Math.Linear(from.x,to.x,phase),
+              Phaser.Math.Linear(from.y,to.y,phase)-Math.sin(phase*Math.PI)*12,2.4)
+          }
+        }
+      }
+    }
     if (!this.harvestEffects.size) return
     this.sparks.clear()
     for (const [index, effect] of this.harvestEffects) {
@@ -239,16 +260,16 @@ export class IslandScene extends Phaser.Scene {
     }
   }
 
-  paint({ state, sunflower, shovel, selected, moveFrom, mode, decorEditing, decorPreview }: WorldView): void {
+  paint({ state, sunflower, shovel, selected, moveFrom, mode, decorEditing, decorPreview, showIndicators=true }: WorldView): void {
     const activeIsland = islandFromView({state})
     if (activeIsland !== this.islandId) this.switchIsland(activeIsland)
     const map = mapFor(activeIsland)
     const offset = firstPlot(activeIsland)
     const plots = state.plots.slice(offset, offset + this.cells.length)
     const bridgeRepaired = state.plots.length > plotCount
-    const key = JSON.stringify([state.lang,sunflower,shovel,state.tutorialSkipped,mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,
+    const key = JSON.stringify([state.lang,sunflower,shovel,state.tutorialSkipped,mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,showIndicators,state.planted.length,
       state.protectedPlants,state.protectedProfiles,state.helperLevel,state.greenhouseLevel,state.stallLevel,isRecipeRevealed(state),bridgeRepaired,state.decorations,
-      plots.map((p,i) => [secondsLeft(state,offset+i),p.open,p.level,p.policy?.mode,p.plant?.species,p.plant?.rarity,p.plant?.lives,p.plant?.pollination?.recipeId,p.plant?.pollination?.result,!!p.policy?.replant,
+      plots.map((p,i) => [secondsLeft(state,offset+i),p.open,p.level,p.policy?.mode,p.plant?.id,p.plant?.species,p.plant?.rarity,p.plant?.lives,p.plant?.pollination?.recipeId,p.plant?.pollination?.result,p.plant?.pollination?.donorIds,!!p.policy?.replant,
         p.plant && plantTexture(p.plant)])])
     if (key === this.lastPaint) return
     this.lastPaint = key
@@ -264,6 +285,7 @@ export class IslandScene extends Phaser.Scene {
     this.helper.setVisible(state.helperLevel > 0)
     this.highlights.clear()
     this.markers.clear()
+    this.pollenLinks=[]
     for (const slot of map.decorSlots) {
       const preview = decorPreview?.slot === slot.id ? decorPreview.type : null
       const item = decorationAt(state,slot.id)
@@ -285,11 +307,14 @@ export class IslandScene extends Phaser.Scene {
       const isProtected=plant && (state.protectedPlants.includes(plant.id) || protectedProfile(state,plant.species,plant))
       const remaining=plant?.lives ? `${plant.lives}/${plant.maxLives}` : ''
       const supported=selected===i && (auraBonus(state,i,'growth') || auraBonus(state,i,'price') || auraBonus(state,i,'propagation'))
-      const status=plant?.lives===0 ? '×' : plant?.pollination ? '✧' : supported ? '+' : !plant && plot.policy?.replant ? '↻' : ''
+      const conflict=showIndicators && plant?.lives && !plant.pollination && researchDirections(state,i).length>1
+      const status=plant?.lives===0 ? '×' : plant?.pollination ? '✧' : conflict ? '↯' :
+        supported ? '+' : !plant && plot.policy?.replant ? '↻' : ''
       cell.level.setVisible(plot.open).setText([grades[plot.level],isProtected ? '◆' : '',status,remaining].filter(Boolean).join(' · '))
         .setBackgroundColor(plant?.lives===1 ? '#825a23' : '#594937')
       const policy = policyBadges[plot.policy?.mode ?? 'manual']
-      cell.policy.setVisible(plot.open && !!policy[state.lang]).setText(policy[state.lang]).setBackgroundColor(policy.color)
+      cell.policy.setVisible(showIndicators && plot.open && (policy!==policyBadges.manual || selected===i))
+        .setText(policy.symbol).setBackgroundColor(policy.color)
       cell.countdown=secondsLeft(state,i)+(state.lang==='ru'?' с':' s')
       cell.timer.setVisible(!!plot.plant?.lives && plot.plant.readySince===null)
       if (shovel && plot.plant || !state.tutorialSkipped && !shovel && mode==='garden' && plot.plant?.readySince!=null &&
@@ -307,7 +332,7 @@ export class IslandScene extends Phaser.Scene {
       } else {
         cell.rarity.setVisible(false)
       }
-      if (plant?.pollination && plant.lives>0) {
+      if (showIndicators && plant?.pollination && plant.lives>0) {
         this.markers.lineStyle(1.6,0xffe7ad,.85)
         for (const [x,y,r] of [[-18,-43,2],[8,-57,3],[19,-35,2]]) {
           this.markers.strokeCircle(pos.x+x,pos.y+y,r)
@@ -320,13 +345,6 @@ export class IslandScene extends Phaser.Scene {
       if (mode === 'build' && moveFrom !== null && plot.open && i !== moveFrom) {
         outline(this.highlights,pos,0xcde2ae,0.81,0.19)
       }
-      const neighbor = plot.plant?.species
-      if (selected !== null && plot.plant?.lives && neighbor && adjacent(selected).includes(i) &&
-          breedingRecipes.some(r => r.neighbors.includes(neighbor) && isRecipeActive(state,selected,r))) {
-        const origin = plotPosition(selected)
-        outline(this.highlights,pos,0xdac2e9,0.79,0.22)
-        this.highlights.lineStyle(3.2,0xe8d0fa,0.85).lineBetween(origin.x,origin.y,pos.x,pos.y)
-      }
       if (i === selected || i === moveFrom) {
         outline(this.highlights,pos,mode === 'breed' ? 0xead4fc : 0xffedac,1,0.25,0.985)
       }
@@ -336,6 +354,24 @@ export class IslandScene extends Phaser.Scene {
         this.markers.fillRoundedRect(pos.x+25.5,pos.y-48,3,8,1.5)
       }
     })
+    if (showIndicators && selected!==null && islandForPlot(selected)===activeIsland) {
+      const mother=state.plots[selected]?.plant
+      const neighbors=adjacent(selected)
+      const motherPos=plotPosition(selected)
+      const to={x:motherPos.x,y:motherPos.y-38}
+      const donorIds=mother?.pollination?.donorIds??[]
+      for (const index of neighbors) {
+        const donor=state.plots[index]?.plant
+        if (!donor?.lives || !donorIds.includes(donor.id)) continue
+        const pos=plotPosition(index)
+        const from={x:pos.x,y:pos.y-38}
+        this.pollenLinks.push({from,to})
+        this.markers.lineStyle(2.6,0xf1dc9e,.85).lineBetween(from.x,from.y,to.x,to.y)
+        const angle=Math.atan2(to.y-from.y,to.x-from.x)
+        for (const wing of [-.6,.6]) this.markers.lineBetween(to.x,to.y,
+          to.x-12*Math.cos(angle+wing),to.y-12*Math.sin(angle+wing))
+      }
+    }
     const plotsObstructed = mode === 'build' || mode === 'breed'
     this.greenhouse?.setAlpha(plotsObstructed ? 0.68 : 1)
   }

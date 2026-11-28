@@ -7,7 +7,7 @@ export type Lang = 'ru' | 'en'
 export type HelperLevel = 0 | BedLevel
 export const decorIds = ['bench','lantern','flower_arch','sakura','fountain','apiary','magic_lantern','statue'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 13
+export const saveVersion = 14
 export type MarketKind = 'fruit' | 'seed'
 export interface MarketSupply {
   previousPrice?: number
@@ -54,6 +54,7 @@ export interface SeedPack extends Profile {species:Species; count:number}
 export interface Experiment {result:Hybrid; donorId:number; layout:string}
 export interface PollinationSnapshot {
   recipeId?: string
+  donorIds?: number[]
   result: Hybrid
   donor: Profile & {species:Species}
   supporting: (Profile & {species:Species})[]
@@ -78,6 +79,7 @@ export interface HarvestBatch {
 }
 export interface Plant extends Profile {
   researchDirection?: string
+  researchDonors?: Partial<Record<Species, number>>
   pollination: PollinationSnapshot|null
   lives:number
   maxLives:number
@@ -268,7 +270,10 @@ export type Command =
   | BulkItem
   | {type:'clear'|'upgrade';plot:number}
   | {type:'harvest';plot:number;expectedId:number;cycle:number}
+  | {type:'gatherReady'|'clearWithered';island:IslandId}
+  | {type:'repeatPlant';plot:number;species:Species;stock:Profile}
   | {type:'researchDirection';plot:number;expectedId:number;recipeId:string}
+  | {type:'researchDonor';plot:number;expectedId:number;recipeId:string;donor:Species;donorId:number|null}
   | {type:'cleanup';plot:number;expectedId:number}
   | {type:'store'|'compost';plot:number;expectedId:number}
   | {type:'dismissHybrid'} | {type:'tutorialBranch';branch:'experiment'|'corner'}
@@ -283,5 +288,5 @@ export type Command =
   | {type:'upgradeBasket'; target:number}
   | {type:'emergencyRadish'; plot:number}
   | {type:'sound'; muted:boolean}
-  | {type:'sell'} | {type:'language';lang:Lang}
+  | {type:'sell'|'sellReadyFruit'} | {type:'language';lang:Lang}
 export type Result = {ok:true; events:string[]; obtained?:SeedPack[]} | {ok:false;reason:string}

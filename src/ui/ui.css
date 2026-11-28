@@ -864,6 +864,13 @@ svg {
 
 .tutorial-world-ring { position:fixed; z-index:5; display:none; pointer-events:none; border:3px solid #e9cf78; border-radius:50%; box-shadow:0 0 0 9999px #172a194d, 0 0 16px 5px #f8de89; animation:tutorial-glow 1.8s ease-in-out infinite alternate; }
 .tutorial-world-ring::before { content:""; position:absolute; left:50%; top:-12px; width:0; height:0; transform:translateX(-50%); border-inline:6px solid transparent; border-top:8px solid #f8de89; }
+.quick-garden-actions { margin-top:4px; }
+.quick-garden-actions summary, .guide-chapters summary { min-height:44px; display:flex; align-items:center; cursor:pointer; }
+.quick-garden-actions summary::before, .guide-chapters summary::before { content:"▸"; margin-right:8px; }
+.quick-garden-actions[open] summary::before, .guide-chapters details[open] summary::before, .guide-chapters[open]>summary::before { content:"▾"; }
+.quick-garden-actions div { display:grid; gap:4px; }
+.quick-garden-actions button { width:100%; min-height:44px; }
+.guide-chapters details { border-top:1px solid #ddd8be; }
 @keyframes tutorial-glow { from { border-color:#e9cf78; } to { border-color:#fff6cb; } }
 @media (prefers-reduced-motion:reduce) { .tutorial-world-ring { animation:none; } }
 

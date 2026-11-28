@@ -39,7 +39,7 @@ it('preserves the Alpha 06 market, paid experiments, RNG and every inventory lot
   if (!loaded || loaded==='future') throw Error('Migration failed')
   const {schemaVersion,balanceVersion,trading,rarityProgress,clones,passive,automation,tutorialSeen,research,...existing}=loaded
   const {schemaVersion:old,balanceVersion:oldBalance,automation:oldAutomation,...previous}=alpha06
-  expect([old,schemaVersion,oldBalance,balanceVersion]).toEqual([10,13,4,5])
+  expect([old,schemaVersion,oldBalance,balanceVersion]).toEqual([10,14,4,5])
   expect(Object.keys(research.recipes)).toEqual(alpha06.revealed.map(id=>id+':main'))
   expect(automation).toEqual({...oldAutomation,cleanup:true})
   expect(passive.checkpoint).toBeNull()

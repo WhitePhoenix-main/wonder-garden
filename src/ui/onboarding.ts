@@ -9,6 +9,27 @@ import { reactionHasSymbiosis, researchStatus, saleValue, tierProgress } from '.
 import { extractionYield } from '../game/trade'
 import { alpha } from './alpha'
 
+export const guideChapters = {
+  ru: [
+    ['Основы садоводства', 'Выберите пустую грядку и семя. Дождитесь созревания и соберите урожай. Последний сбор расходует запас, после него уберите засохшее растение.'],
+    ['Экономика', 'На рынке видно цену плодов. Из части урожая в инвентаре можно извлечь семена для посадки или продажи. Открывайте соседние участки по мере заработка.'],
+    ['Первый гибрид', 'Для тира II изучите четыре природных вида и откройте шесть грядок. Посадите клубнику и подсолнечник по общей стороне. Соберите клубнику, извлеките семя и посадите новый вид.'],
+    ['Листик', 'После первой продажи наймите Листика. Он собирает урожай, со II уровня убирает остатки, с III пересаживает разрешённые семена. В карточке грядки выберите режим, а в инвентаре задайте резерв и защиту.'],
+    ['Генетика', 'Редкость относится к экземпляру, тир — к виду. Признаки меняют свойства растения и могут наследоваться. Поместите два живых растения одного вида в теплицу для платного опыта.'],
+    ['Питомник', 'Назначьте изученное семя производственной грядке. Питомник расходует семена и останавливается при исчерпании запаса или заполнении склада. Отчёт покажет результаты после возвращения.'],
+    ['Продвинутая селекция', 'Альманах хранит реакции и подсказки. При нескольких направлениях выберите резонанс у матери. В карточке можно выбрать доноров. Неудачи повышают шанс до гарантии для выбранного вида.']
+  ],
+  en: [
+    ['Garden basics', 'Choose an empty bed and a seed. Wait for ripening and harvest. The final harvest uses the remaining capacity, then clear the withered plant.'],
+    ['Economy', 'See fruit prices at the market. Extract seeds from part of a harvest in inventory for planting or sale. Open neighboring beds as you earn.'],
+    ['First hybrid', 'For Tier II, study four natural species and open six beds. Place strawberry and sunflower across a shared edge. Harvest the strawberry, extract its seed and plant the new species.'],
+    ['Leafy', 'Hire Leafy after your first sale. Leafy harvests, clears withered plants from level II, and replants available seeds from level III. Set a bed mode on its card and seed protection and reserves in inventory.'],
+    ['Genetics', 'Rarity belongs to a specimen and tier to a species. Traits change plant properties and can be inherited. Store two living plants of one species in the greenhouse for a paid experiment.'],
+    ['Nursery', 'Assign a studied seed to a production bed. The nursery consumes seeds and stops when stock or storage runs out. The return report shows the results.'],
+    ['Advanced breeding', 'The almanac records reactions and clues. When directions conflict, choose a resonance on the mother plant. Choose donors on its card. Failures raise the chance to a guarantee for the target species.']
+  ]
+} as const
+
 export function recoveryHint(state:GameState) {
   const a=alpha[state.lang], cost=speciesInfo.radish.seedPrice!
   if (state.passive.basket.length || state.passive.seeds.length) return state.lang==='ru'
@@ -136,6 +157,9 @@ export function tutorialStep(state:GameState):TutorialStep|null {
     say('storage',state.revealed.length>0,'evolution','В питомнике можно сохранить живое растение. Оно сохраняет геном, запас сборов и стадию роста.','Store a living plant in the greenhouse nursery to preserve its genome, remaining harvests, and growth.',false),
     say('helper',state.helperLevel>0,'helper','Листик собирает урожай. Со II уровня он также убирает засохшие растения.','Leafy harvests crops. At level II he also clears withered plants.',false),
     say('replant',state.helperLevel>=evolution.helperReplantLevel,'helper','Листик может пересаживать выбранный профиль. Семена защищённых профилей и резервы сохраняются.','Leafy can replant a chosen profile while respecting protected seeds and reserves.',false),
+    say('advanced-research',Object.values(state.research.combinations).some(reaction=>reaction==='resonance'),'collection','Резонанс подсказывает совместимость. Если направлений несколько, выберите цель в карточке матери.','Resonance reveals compatibility. When several directions are available, choose one on the mother plant.',false),
+    say('donor-choice',state.plots.some(plot=>Object.keys(plot.plant?.researchDonors??{}).length>0),'none','Выбранный донор передаёт признаки при следующем опылении. Уже опылённый урожай хранит прежних родителей.','The selected donor contributes traits at the next pollination. An existing pollinated harvest keeps its original parents.',false),
+    say('nursery-storage',state.passive.beds.some(bed=>bed.assignment!==null),'evolution','Питомник расходует семена и хранит урожай в пределах вместимости.','The nursery consumes seeds and stores harvests up to its capacity.',false),
     say('plot-cleared',state.plots.slice(0,plotCount).filter(p=>p.open).length>4,'none','Расчищенная грядка расширяет сад. Выбирайте, что выращивать на новом месте.','A cleared bed expands your garden. Choose what to grow there.',false),
     say('bed-upgraded',state.plots.some(p=>p.open && p.level>1),'none','Улучшенная грядка ускоряет рост и позволяет выращивать более сложные гибриды.','An upgraded bed speeds growth and supports more advanced hybrids.',false),
     say('symbiosis',Object.keys(state.research.combinations).some(reactionHasSymbiosis),'collection','Соседние растения могут помогать друг другу своими аурами. Посмотрите сочетания в журнале совместимости.','Neighboring plants can help each other with auras. Check combinations in the compatibility journal.',false),

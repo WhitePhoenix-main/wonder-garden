@@ -8,6 +8,7 @@ import { recordHarvest } from './collection'
 function samePollination(a:PollinationSnapshot|null, b:PollinationSnapshot|null):boolean {
   if (!a || !b) return a === b
   return a.result === b.result && snapshotRecipeId(a) === snapshotRecipeId(b) &&
+    a.donorIds?.length === b.donorIds?.length && (a.donorIds?.every((id,index)=>id===b.donorIds?.[index]) ?? true) &&
     a.donor.species === b.donor.species && sameProfile(a.donor, b.donor) &&
     a.supporting.length === b.supporting.length &&
     a.supporting.every((parent,index) =>
@@ -38,7 +39,6 @@ export function harvest(state:GameState, command:Extract<Command,{type:'harvest'
   plant.readySince = null
   plant.pollination = null
   if (plant.lives === 0) {
-    state.protectedPlants=state.protectedPlants.filter(id=>id!==plant.id)
     events.push('Withered')
   } else {
     plant.fruitRoll = nextRandom(state)

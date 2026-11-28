@@ -18,13 +18,20 @@ let speed = 1
 const view: WorldView = { state:storage.load(), started:storage.hasGarden, menu:true, shovel:false, mode:'garden', selected:null, moveFrom:null, decorEditing:false, decorPreview:null }
 beginObservation(view.state)
 const prefKey = debug ? 'wonder-garden.dev.preferences' : 'wonder-garden.preferences'
-if (!view.started) {
-  try {
-    const prefs = JSON.parse(localStorage.getItem(prefKey) ?? '{}')
+try {
+  const prefs = JSON.parse(localStorage.getItem(prefKey) ?? '{}')
+  if (typeof prefs.showIndicators === 'boolean') view.showIndicators=prefs.showIndicators
+  if (!view.started) {
     if (prefs.lang === 'ru' || prefs.lang === 'en') view.state.lang = prefs.lang
     if (typeof prefs.muted === 'boolean') view.state.muted = prefs.muted
     if (typeof prefs.musicMuted === 'boolean') view.state.musicMuted = prefs.musicMuted
-  } catch { /* Use defaults if preferences cannot be read. */ }
+  }
+} catch { /* Use defaults if preferences cannot be read. */ }
+function savePreferences() {
+  const {lang,muted,musicMuted}=view.state
+  try {
+    localStorage.setItem(prefKey,JSON.stringify({lang,muted,musicMuted,showIndicators:view.showIndicators}))
+  } catch { /* In-memory preferences remain active. */ }
 }
 let ui: UI
 const world = createWorld(document.querySelector<HTMLElement>('#world')!,{
@@ -45,9 +52,8 @@ function command(cmd: Command) {
     const cue = rarity==='legendary' ? 'LegendarySeed' : rarity==='epic' ? 'EpicSeed' : rarity==='rare' ? 'RareSeed' : null
     audio.play(cue ? [cue,...result.events] : result.events,view.state.muted)
     if (cmd.type === 'sound' || cmd.type === 'music' || cmd.type === 'language') {
-      const {lang,muted,musicMuted}=view.state
-      try { localStorage.setItem(prefKey,JSON.stringify({lang,muted,musicMuted})) } catch { /* In-memory preferences remain active. */ }
-      audio.sync(!document.hidden && !view.menu,musicMuted)
+      savePreferences()
+      audio.sync(!document.hidden && !view.menu,view.state.musicMuted)
     }
     if (view.started) storage.save(view.state)
     render()
@@ -74,7 +80,11 @@ ui = createUI(document.querySelector<HTMLElement>('#ui')!, {
   worldTutorialBounds: index => world.plotBounds(index),
   worldStructureBounds: id => world.structureBounds(id),
   focusTutorialPlot: index => world.focusPlot(index),
-  changeView(patch) { Object.assign(view,patch); render() },
+  changeView(patch) {
+    Object.assign(view,patch)
+    if (typeof patch.showIndicators==='boolean') savePreferences()
+    render()
+  },
   decorPreview(editing, preview) {
     view.decorEditing = editing
     view.decorPreview = preview

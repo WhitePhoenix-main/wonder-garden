@@ -3,10 +3,11 @@ import { evolutionPanel } from './panels/evolution'
 import { marketPanel, type MarketSort } from './panels/market'
 import { availableStock, defaultPolicy, isBusy } from '../game/evolution'
 import { inventoryPanel, inventoryWords, type InventoryTab, type InventorySort } from './inventory'
-import { describe, field, plantDescriptions, portrait } from './specimens'
+import { describe, field, plantDescriptions, portrait, specializations } from './specimens'
 import { availableTraits, canonical, common, sameProfile } from '../game/genetics'
 import { allSeedPacks } from '../game/stock-policy'
-import { auraBonus, chance, cycleSeconds, pollinationFor, researchDirections, reactionHasSymbiosis, researchStatus } from '../game/queries'
+import { auraBonus, chance, cycleSeconds, donorCandidates, gardenBatchTargets, pollinationFor, researchDirections, reactionHasSymbiosis, researchStatus } from '../game/queries'
+import { readyFruitSaleValue } from '../game/trade'
 import { plantStats } from '../game/genetics'
 import { rarities, type BedLevel, type MarketKind, type Profile, type Species, type Rarity } from '../game/model'
 import type { Mode, WorldView } from '../runtime/presentation'
@@ -16,8 +17,8 @@ import { productionPanel } from './panels/production'
 import { decorUnlocked, harmony } from '../game/decor'
 import { alpha } from './alpha'
 import { plantingIssue, removalIssue, secondsLeft } from '../game/queries'
-import { gardenHint, recoveryHint, tutorialStep } from './onboarding'
-import { recipeCard, recipeKnown } from './panels/recipes'
+import { gardenHint, guideChapters, recoveryHint, tutorialStep } from './onboarding'
+import { recipeCard, recipeKnown, resonanceNames } from './panels/recipes'
 import { decorPanel, gardenWords, journalPanel, type DecorChoice } from './panels/garden'
 import { automationPanel, automationWords, modeLabels, productionLabels } from './panels/automation'
 import { productionStatus } from '../game/automation'
@@ -45,6 +46,7 @@ interface PanelState {
   inventoryMinimum:number
   inventoryDetail:string|null
   stock?:Profile
+  repeatPlanting:boolean
   cornerPlanted:boolean
   firstSeeds:Species[]
   discoveryRarity:Rarity|null
@@ -73,7 +75,7 @@ const button = (action:string, label:string, extra='', disabled=false) => `<butt
 
 export function uiMarkup(view: WorldView, {
   inventoryFilter, inventoryTab, inventorySort, inventoryAmounts, inventoryMinimum, inventoryDetail,
-  statsWindow, statsByVolume, repeat, stock, cornerPlanted, firstSeeds, discoveryRarity, branch, confirmId, overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice, crossParents, inventorySelected, favoriteOnly, inventorySearch, inventoryPage, marketKind, marketSort
+  statsWindow, statsByVolume, repeat, stock, repeatPlanting, cornerPlanted, firstSeeds, discoveryRarity, branch, confirmId, overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice, crossParents, inventorySelected, favoriteOnly, inventorySearch, inventoryPage, marketKind, marketSort
 }:PanelState):string {
   const settingsOpen = overlay === 'settings'
   const collectionOpen = overlay === 'collection'
@@ -96,7 +98,7 @@ export function uiMarkup(view: WorldView, {
     <h1>${w.title}</h1><p>${a.promise}</p>${view.started ? '<p>'+progress+'</p>' : ''}
     ${button('enter',view.started ? a.resume : a.start,'class="menu-primary"')}${view.started || warning==='future' || warning==='damaged' ? button('new-game',a.fresh) : ''}
     <div class="switches">${switches}</div>${warning ? '<p role="status">'+(w as Record<string,string>)[warning]+'</p>'+button('export-save',garden.export) : ''}
-    <small>Wonder Garden · Alpha 09</small></section></main>`
+    <small>Wonder Garden · Alpha 10</small></section></main>`
   if (overlay==='statistics') panel=statisticsPanel(s,statsWindow,statsByVolume)
   else if (overlay==='evolution') {
     panel=button('storage',w.nursery)+button('statistics',s.lang==='ru'?'Статистика сада':'Garden statistics')+productionPanel(s)+evolutionPanel(s,crossParents)
@@ -122,7 +124,9 @@ export function uiMarkup(view: WorldView, {
     }
   } else if (settingsOpen) {
     panel = `<h2>${w.settings}</h2>${switches}${button('menu',a.menu)}
+      ${button('toggle-indicators',(s.lang==='ru'?'Обозначения грядок':'Bed indicators')+' · '+(view.showIndicators===false?'—':'✓'),`aria-pressed="${view.showIndicators!==false}"`)}
       ${button('center',w.center)}${button('restart-tutorial',s.lang==='ru'?'Повторить обучение':'Restart tutorial')}${button('export-save',garden.export)}${button('reset',w.reset)}`
+    panel+=`<details class="guide-chapters"><summary>${s.lang==='ru'?'Справка по саду':'Garden guide'}</summary>${guideChapters[s.lang].map(([title,text])=>`<details><summary>${title}</summary><p>${text}</p></details>`).join('')}</details>`
   } else if (journalOpen) panel = journalPanel(s,chapter)
   else if (decorOpen) panel = decorPanel(s,slot,decorChoice)
   else if (helperOpen) panel = automationPanel(s)
@@ -130,7 +134,7 @@ export function uiMarkup(view: WorldView, {
     panel = '<h2>' + w.collection + ' · ' + s.collection.length + '/'+(speciesIds.length*rarities.length)+'</h2>'
     panel += `<details open><summary>${s.lang==='ru'?'Ботанические исследования':'Botanical research'}</summary>
       <p>${s.lang==='ru'?'Материнское растение и доноры должны касаться сторонами грядок. Диагональное соседство не опыляет. Соберите плоды матери и извлеките семена из опылённой партии.':'The mother and each donor must share a bed edge. Diagonal neighbors do not pollinate. Harvest the mother, then extract seeds from the pollinated batch.'}</p>
-      ${breedingRecipes.filter(recipe=>!recipe.alternate || (s.research.recipes[recipe.id]?.successes ?? 0)>0).map(recipe=>recipeCard(s,recipe,null)).join('')}</details>`
+      ${breedingRecipes.filter(recipe=>!recipe.alternate || researchStatus(s,recipe.result,recipe.id).observed).map(recipe=>recipeCard(s,recipe,null)).join('')}</details>`
     const reactions = s.lang==='ru'
       ? {unknown:'Не изучено',none:'Нет реакции',symbiosis:'Симбиоз',resonance:'Генетический резонанс',strong:'Сильный резонанс'}
       : {unknown:'Unstudied',none:'No reaction',symbiosis:'Symbiosis',resonance:'Genetic resonance',strong:'Strong resonance'}
@@ -209,7 +213,7 @@ export function uiMarkup(view: WorldView, {
           panel+='<label class="rating">'+label+' <meter value="'+get(info)+'" max="'+Math.max(...Object.values(speciesInfo).map(get))+'"></meter></label>'
         }
         if (!isHybrid(id)) panel+=`<p>${collectionWords.source}</p>`
-        for(const r of breedingRecipes.filter(r=>(!r.alternate || recipeKnown(s,r)) && (r.result===id || recipeKnown(s,r) && (r.primary===id || r.neighbors.includes(id)))))panel+=recipeCard(s,r,null)
+        for(const r of breedingRecipes.filter(r=>(!r.alternate || researchStatus(s,r.result,r.id).observed) && (r.result===id || recipeKnown(s,r) && (r.primary===id || r.neighbors.includes(id)))))panel+=recipeCard(s,r,null)
         for (const aura of auras.filter(a => a.source === id)) {
           const targets = Array.isArray(aura.targets) ? aura.targets.map(s => name(s as Species)).join(', ') : aura.targets === 'all' ? w.allPlants : w.hybrids
           const amount = Math.round(100*aura.bonus) + '%'
@@ -217,7 +221,13 @@ export function uiMarkup(view: WorldView, {
         }
       }
     }
+  } else if (view.mode === 'plant' && repeatPlanting && chosen && stock) {
+    const ru=s.lang==='ru'
+    panel=`<h2>${ru?'Последовательная посадка':'Repeat planting'}</h2>
+      <p>${name(chosen)} · ${describe(s.lang,stock)} · ${ru?'Доступно':'Available'} ${availableStock(s,chosen,stock)}</p>`+
+      button('repeat-plant-done',ru?'Завершить посадку':'Finish planting')
   } else if (view.mode === 'plant') {
+    panel+=button('repeat-plant-toggle',s.lang==='ru' ? `Последовательная посадка · ${repeatPlanting?'вкл.':'выкл.'}` : `Repeat planting · ${repeatPlanting?'on':'off'}`,`aria-pressed="${repeatPlanting}"`)
     panel += `<h2>${w.plant}</h2><p>${returnId!==null ? w.chooseReturn :
       plot?.open && !plot.plant ? (s.lang==='ru'?'Выберите семя для этой грядки.':'Choose a seed for this bed.') : w.selectPlot}</p>`
     if (full && !isRecipeRevealed(s)) panel += `<p class="hint">${w.full}</p>`
@@ -293,12 +303,13 @@ export function uiMarkup(view: WorldView, {
   else if (plot) {
     panel += `<h2>${plot.plant ? name(plot.plant.species) : plot.open ? w.empty : w.closed}</h2><p>${w.plot} ${selected! + 1} · ${w.level} ${plot.level}</p>`
     if (plot.open && s.helperLevel) {
-      panel+=`<details><summary>${s.lang==='ru'?'Производство и автоматизация':'Production and automation'}</summary>`
+      panel+=`<details data-plot-details="automation-${selected}"><summary>${s.lang==='ru'?'Производство и автоматизация':'Production and automation'}</summary>`
       const policy=plot.policy ?? defaultPolicy
       const labels=modeLabels[s.lang]
       if (s.helperLevel) panel+=`<p class="hint">${productionLabels[s.lang][productionStatus(s,selected!)]}</p>`
       panel+='<p>'+(s.lang==='ru'?'Назначение':'Bed mode')+'</p><div class="book-filters">'+
         (['manual','commercial','seed','breeding','support'] as const).map((mode,i)=>button('plot-mode',labels[i],`data-mode="${mode}" aria-pressed="${policy.mode===mode}"`)).join('')+'</div>'
+      panel+=`<p class="hint">${s.lang==='ru'?'▤ — плоды · ● — семена · ⇄ — селекция · + — поддержка':'▤ fruit · ● seeds · ⇄ breeding · + support'}</p>`
       panel+=button('plot-harvest',(s.lang==='ru'?'Автосбор':'Auto harvest')+' · '+(policy.harvest?'✓':'—'))
       if(plot.plant) panel+=button('plot-replant',(s.lang==='ru'?'Пересадка этого профиля':'Replant this profile')+' · '+(policy.replant?'✓':'—'))
       const profiles=allSeedPacks(s).map(pack=>({species:pack.species,profile:canonical(pack)}))
@@ -332,14 +343,43 @@ export function uiMarkup(view: WorldView, {
       if (directions.length>1) {
         panel+=`<h3>${s.lang==='ru'?'Направление исследования':'Research direction'}</h3>`
         if (plot.plant.pollination) panel+=`<p>${s.lang==='ru'?'Направление зафиксировано до сбора.':'Direction fixed until harvest.'}</p>`
-        directions.forEach((direction,index)=>{
+        directions.forEach(direction=>{
           const known=(s.research.recipes[direction.id]?.successes ?? 0)>0
-          const label=known ? name(direction.result) : (s.lang==='ru'?'Неизвестное направление':'Unknown direction')+' '+(index+1)
+          const info=researchStatus(s,direction.result,direction.id)
+          const label=(known ? name(direction.result) : resonanceNames[direction.result][s.lang==='ru'?0:1])+
+            ` · T${info.progress.tier} · ${Math.round(info.chance*100)}% · ${info.failures}/${info.pity}`
           panel+=button('research-direction',label+(plot.plant!.researchDirection===direction.id?' ✓':''),`data-recipe-id="${direction.id}"`,!!plot.plant!.pollination)
+          panel+=`<small>${name(direction.primary)} ← ${direction.neighbors.map(name).join(' + ')} · ${s.lang==='ru'?'До гарантии':'Until guarantee'} ${Math.max(1,info.pity-info.failures)}</small>`
         })
       }
+      const currentRecipe=plot.plant.pollination?.recipeId ?? plot.plant.researchDirection
+      const donorRecipes=currentRecipe ? directions.filter(direction=>direction.id===currentRecipe) : directions
+      const donorGroups=donorRecipes.flatMap(recipe=>donorCandidates(s,selected!,recipe.id).map(group=>({...group,recipeId:recipe.id})))
+        .filter((group,index,groups)=>groups.findIndex(other=>other.species===group.species)===index)
+      if (donorGroups.some(group=>group.candidates.length>1)) {
+          panel+=`<details class="donor-options" data-plot-details="donors-${selected}"><summary>${s.lang==='ru'?'Выбор доноров':'Choose donors'}</summary><p>${plot.plant.pollination
+            ? (s.lang==='ru'?'Выбор действует при следующем опылении.':'Selection applies to the next pollination.')
+            : (s.lang==='ru'?'Выберите родителей до начала опыления.':'Choose parents before pollination begins.')}</p>`
+          for (const group of donorGroups) {
+            panel+=`<p>${name(group.species)}</p>`
+            panel+=button('research-donor',s.lang==='ru'?'Автоматический выбор':'Automatic selection',`data-recipe-id="${group.recipeId}" data-donor="${group.species}" data-id="" aria-pressed="${!plot.plant.researchDonors?.[group.species]}"`)
+            for (const candidate of group.candidates) {
+              const chosen=plot.plant.researchDonors?.[group.species]===candidate.plant.id
+              panel+=button('research-donor',`${name(group.species)} · #${candidate.plant.id} · ${describe(s.lang,candidate.plant)} · ${candidate.plant.lives}/${candidate.plant.maxLives} · ${w.plot} ${candidate.plot+1}`,`data-recipe-id="${group.recipeId}" data-donor="${group.species}" data-id="${candidate.plant.id}" aria-pressed="${chosen}"`)
+            }
+          }
+          panel+='</details>'
+      }
       const stats=plantStats(plot.plant.species,plot.plant)
+      const standard=plantStats(plot.plant.species,common)
       panel+=`<p>${f.fruits} ${stats.fruits.join('–')} · ${w.seeds} ${stats.ownSeeds.join('–')} · ${inventory.regrow} ${stats.regrowSec.toFixed(1)} ${w.sec}</p>`
+      panel+=`<details data-plot-details="comparison-${selected}"><summary>${s.lang==='ru'?'Сравнение с обычным':'Compare with common'}</summary>
+        <p>${s.lang==='ru'?'Запас сборов':'Harvest capacity'} ${stats.maxLives} / ${standard.maxLives} ·
+        ${w.growth} ${stats.growthSec.toFixed(1)} / ${standard.growthSec.toFixed(1)} ${w.sec} ·
+        ${f.fruits} ${stats.fruits.join('–')} / ${standard.fruits.join('–')} ·
+        ${w.seeds} ${stats.ownSeeds.join('–')} / ${standard.ownSeeds.join('–')}</p></details>`
+      const lines=specializations(s.lang,plot.plant.species,plot.plant)
+      if (lines.length) panel+=`<p>${s.lang==='ru'?'Подходит для':'Useful for'} · ${lines.join(' · ')}</p>`
       const activeAuras=(['growth','price','propagation'] as const).map(kind=>({kind,bonus:auraBonus(s,selected!,kind)})).filter(a=>a.bonus>0)
       if(activeAuras.length) panel+=`<p>${w.aura} · ${activeAuras.map(a=>w[a.kind]+' +'+Math.round(a.bonus*100)+'%').join(' · ')}</p>`
       panel += '<p>'+(speciesInfo[plot.plant.species].lifecycle==='single' ? inventory.single : inventory.multi)
@@ -403,7 +443,8 @@ export function uiMarkup(view: WorldView, {
   const tutorialInPanel = !!tutorial && (tutorial.id==='first-plant' && view.mode==='plant' || tutorial.id==='second-plant' && view.mode==='plant' || tutorial.id==='first-sale' && overlay==='market' || tutorial.id==='extract' && overlay==='inventory')
   const tutorialText = tutorialInPanel && tutorial?.id==='first-plant' ? (s.lang==='ru'?'Выберите семя редиса из запаса.':'Choose the radish seed from your stock.') : tutorialInPanel && tutorial?.id==='first-sale' ? (s.lang==='ru'?'Посмотрите цену и продайте часть урожая.':'Review the price and sell some of your harvest.') : tutorialInPanel && tutorial?.id==='extract' ? (s.lang==='ru'?'Выберите партию и извлеките семена. Их можно посадить или продать.':'Choose a batch and extract seeds. You can plant or sell them.') : tutorial?.text
   return `<div class="garden-ui" data-guide="${guide ? guideAction : ''}" data-guide-seed="${guide && targetSeed ? targetSeed : ''}"><header class="topbar"><div class="brand"><span class="brand-mark">${svg(icons.garden)}</span><span><small>${s.activeIsland==='valley' ? (s.lang==='ru'?'Цветочная долина':'Flower Valley') : w.subtitle}</small><strong>${w.title} · ${s.lang==='ru'?'Ранг':'Rank'} ${s.rank}</strong></span></div><div class="stats"><div class="stat"><span class="stat-icon">${svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v10m-3-7h6m-6 4h6"/>')}</span><span><small>${w.coins}</small><strong>${s.coins}</strong></span></div><button type="button" class="stat basket" data-action="inventory" aria-expanded="${overlay==='inventory'}"><span class="stat-icon">${svg('<path d="M4 10h16l-2 10H6L4 10ZM8 10c0-7 8-7 8 0M8 13l1 4m3-4v4m4-4-1 4"/>')}</span><span><small>${inventory.title}</small><strong>${basketCount(s)}/${basketCapacity(s)}</strong></span></button><button type="button" data-action="collection" aria-expanded="${collectionOpen}" class="stat collection"><span class="stat-icon">${svg(icons.breed)}</span><span><small>${w.collection}</small><strong>${s.planted.length}/${speciesIds.length}</strong></span></button></div><div class="top-actions">${s.sold ? button('helper',automationWords[s.lang].name+(s.helperLevel?' · '+(s.automation.enabled?'●':'Ⅱ'):''),`aria-expanded="${helperOpen}"`) : ''}${button('settings',w.settings,'class="quiet" aria-expanded="'+settingsOpen+'"')}</div></header>
-    <div class="goal-card"><span class="eyebrow">${w.goal}</span><p>${!s.plots.some(p=>p.plant?.lives) ? recoveryHint(s) : goal}</p>${button('journal',garden.journal,'class="quiet"')}</div>
+    <div class="goal-card"><span class="eyebrow">${w.goal}</span><p>${!s.plots.some(p=>p.plant?.lives) ? recoveryHint(s) : goal}</p>${button('journal',garden.journal,'class="quiet"')}
+    ${s.tutorialSkipped || s.sold ? `<details class="quick-garden-actions"><summary>${s.lang==='ru'?'Быстрые действия':'Quick actions'}</summary><div>${button('gather-ready',(s.lang==='ru'?'Собрать готовое':'Harvest ready')+' · '+gardenBatchTargets(s,s.activeIsland,'harvest').length,'',!gardenBatchTargets(s,s.activeIsland,'harvest').length)+button('clear-withered',(s.lang==='ru'?'Убрать засохшее':'Clear withered')+' · '+gardenBatchTargets(s,s.activeIsland,'cleanup').length,'',!gardenBatchTargets(s,s.activeIsland,'cleanup').length)+(readyFruitSaleValue(s)>0?button('sell-ready-fruit',(s.lang==='ru'?'Продать обычный урожай':'Sell ordinary harvest')+' · '+readyFruitSaleValue(s)+' ◈'):'')}</div></details>` : ''}</div>
     ${panel ? `<aside class="context${overlay==='statistics' || overlay==='inventory' || overlay==='evolution' || overlay==='helper' || overlay==='market'?' inventory-context':''}">${overlay || journalOpen || decorOpen || helperOpen || collectionOpen || selected !== null ? button('close','×',`class="close" aria-label="${w.close}"`) : ''}<div class="context-inner">${panel}</div></aside>` : ''}
     ${tutorial && (!panel || tutorialInPanel) ? `<section class="tutorial-card" data-tutorial-id="${tutorial.id}" data-tutorial-target="${tutorial.target}" aria-live="polite">
       <strong>${s.lang==='ru'?'Листик':'Leafy'}</strong><p>${tutorialText}</p>

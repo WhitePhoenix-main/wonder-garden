@@ -13,9 +13,12 @@ export function protectedProfile(state:GameState,species:Species,profile:Profile
   return state.protectedProfiles.includes(profileKey(species,profile))
 }
 
+export function isProtectedPlant(state:GameState,plant:Plant):boolean {
+  return state.protectedPlants.includes(plant.id) || protectedProfile(state,plant.species,plant)
+}
+
 export function isValuablePlant(state:GameState,plant:Plant):boolean {
-  return rarities.indexOf(plant.rarity)>=rarities.indexOf('rare') ||
-    state.protectedPlants.includes(plant.id) || protectedProfile(state,plant.species,plant)
+  return rarities.indexOf(plant.rarity)>=rarities.indexOf('rare') || isProtectedPlant(state,plant)
 }
 
 export function availableStock(state:GameState,species:Species,profile:Profile):number {

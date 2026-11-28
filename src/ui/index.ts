@@ -13,7 +13,7 @@ import { alpha } from './alpha'
 import { plantingIssue } from '../game/queries'
 import { bedLevels, speciesInfo } from '../game/config'
 import { canRecoverGarden, canReplace, expansionCost } from '../game/queries'
-import { basketSalePlan, extractionYield, harvestSaleIssue, quickSaleEligible, quickSaleValue, seedSaleIssue, trade } from '../game/trade'
+import { extractionYield, groupedSaleIssue, marketFruitSalePlan, marketSeedStock, quickSaleEligible, readyFruitSalePlan, readyFruitSaleValue, seedSaleIssue, trade } from '../game/trade'
 import type { DecorChoice } from './panels/garden'
 import { uiMarkup, type RepeatChoice, type CollectionFilter, type Overlay } from './render'
 import { plantName, words } from './strings'
@@ -31,6 +31,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   let warning: string | null = null
   let chosen: Species|null = null
   let stock:Profile|undefined
+  let repeatPlanting=false
   let firstSeeds:Species[]=[]
   let discoveryRarity:Rarity|null=null
   let discoverySpecies:Species|null=null
@@ -149,7 +150,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
     const html = uiMarkup(view,{repeat,statsWindow,statsByVolume,
       inventoryFilter,inventoryTab,inventorySort,inventoryAmounts,inventoryMinimum,inventoryDetail,crossParents,inventorySelected,favoriteOnly,inventorySearch,inventoryPage,marketKind,marketSort,
-      stock,cornerPlanted,firstSeeds,discoveryRarity:discoverySpecies===firstSeeds[0] ? discoveryRarity : null,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
+      stock,repeatPlanting,cornerPlanted,firstSeeds,discoveryRarity:discoverySpecies===firstSeeds[0] ? discoveryRarity : null,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
     })
     if (html === last) return
     const active = document.activeElement as HTMLElement | null
@@ -157,6 +158,11 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     const focusData=active ? JSON.stringify({...active.dataset}) : ''
     const context = overlay ?? view.mode
     const scroll = panelKey === context ? host.querySelector('.context-inner')?.scrollTop ?? 0 : 0
+    const quickActionsOpen=host.querySelector<HTMLDetailsElement>('.quick-garden-actions')?.open ?? false
+    const guideOpen=host.querySelector<HTMLDetailsElement>('.guide-chapters')?.open ?? false
+    const guideSections=[...host.querySelectorAll<HTMLDetailsElement>('.guide-chapters > details')].map(detail=>detail.open)
+    const openPlotDetails=new Set([...host.querySelectorAll<HTMLDetailsElement>('details[data-plot-details][open]')]
+      .map(detail=>detail.dataset.plotDetails))
     const productionSelections = [...host.querySelectorAll<HTMLSelectElement>('[data-production-slot] select')].map(select=>({
       slot:select.closest<HTMLElement>('[data-production-slot]')?.dataset.productionSlot,
       key:select.hasAttribute('data-production-seed')?'seed':select.hasAttribute('data-production-mode')?'mode':'plant',
@@ -165,6 +171,14 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     panelKey = context
     host.innerHTML = html
     tutorialOverlay.render(view)
+    const quickActions=host.querySelector<HTMLDetailsElement>('.quick-garden-actions')
+    if (quickActions) quickActions.open=quickActionsOpen
+    const guide=host.querySelector<HTMLDetailsElement>('.guide-chapters')
+    if (guide) guide.open=guideOpen
+    host.querySelectorAll<HTMLDetailsElement>('.guide-chapters > details').forEach((detail,index)=>{detail.open=guideSections[index]??false})
+    host.querySelectorAll<HTMLDetailsElement>('details[data-plot-details]').forEach(detail=>{
+      detail.open=openPlotDetails.has(detail.dataset.plotDetails)
+    })
     for (const selection of productionSelections) {
       const select=host.querySelector<HTMLSelectElement>(`[data-production-slot="${selection.slot}"] [data-production-${selection.key}]`)
       if (select && [...select.options].some(option=>option.value===selection.value)) select.value=selection.value
@@ -241,10 +255,16 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
     const action = target.dataset.action, selected = view.selected, plot = selected === null ? null : view.state.plots[selected]
     const mode=(next:Mode, shovel=false, index:number|null=null)=>{
-      closePanels(); stock=undefined; chosen=null; returnId=null; confirmId=null; notice=''
+      closePanels(); stock=undefined; chosen=null; repeatPlanting=false; returnId=null; confirmId=null; notice=''
       updateDecor()
       actions.changeView({mode:next,sunflower:false,selected:index,moveFrom:null,shovel})
     }
+    if (action==='gather-ready') return run({type:'gatherReady',island:view.state.activeIsland})
+    if (action==='clear-withered') return run({type:'clearWithered',island:view.state.activeIsland})
+    if (action==='sell-ready-fruit') return run({type:'sellReadyFruit'})
+    if (action==='repeat-plant-toggle') { repeatPlanting=!repeatPlanting; draw(); return }
+    if (action==='repeat-plant-done') { mode('garden'); return }
+    if (action==='toggle-indicators') { actions.changeView({showIndicators:view.showIndicators===false}); return }
     if (action==='plant-again' && lastHarvest && !view.state.plots[lastHarvest.plot].plant) {
       const {plot,species,profile}=lastHarvest
       const stock=profile && availableStock(view.state,species,profile)>0 ? profile :
@@ -265,7 +285,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       const draft=structuredClone(view.state)
       const commands:BulkItem[]=[]
       if (target.dataset.kind==='fruit') {
-        for (const item of basketSalePlan(draft).filter(item=>!selectedSpecies || item.batch.species===selectedSpecies)) {
+        for (const item of marketFruitSalePlan(draft).filter(item=>!selectedSpecies || item.batch.species===selectedSpecies)) {
           const command={type:'sellHarvest',id:item.batch.id,count:item.count} as const
           if (trade(draft,command).ok) commands.push(command)
         }
@@ -273,7 +293,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
         for (const species of speciesList) {
         const packs=[{species,...common,count:draft.seeds[species]},...draft.variants.filter(pack=>pack.species===species)]
         for (const pack of packs) {
-          let count=availableStock(draft,species,pack)
+          let count=marketSeedStock(draft,species,pack)
           if (count && seedSaleIssue(draft,species,pack,count)==='lastProfile') count--
           if (!count) continue
           const command={type:'sellSeeds',species,profile:canonical(pack),count} as const
@@ -350,21 +370,22 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if(action==='bulk-sell'||action==='bulk-extract') {
       const commands:BulkItem[]=[]
       const excluded:string[]=[]
-      let total=0
+      let total=0, attempts=0
       const selling=action==='bulk-sell'
       const draft=selling ? structuredClone(view.state) : view.state
       if(inventoryTab==='harvest') {
         for(const batch of view.state.basket.filter(b=>inventorySelected.includes('h'+b.id))) {
           const count=Math.min(batch.count,inventoryAmounts['h'+batch.id]??1)
           const yieldInfo=extractionYield(batch,count)
-          const command={type:selling?'sellHarvest':'extractSeeds',id:batch.id,count} as const
-          if (selling ? batch.lots.some(lot=>lot.crossPending) || harvestSaleIssue(draft,batch,count) || !trade(draft,command).ok
+          const command=selling ? {type:'sellHarvest',id:batch.id,count} as const : {type:'extractSeeds',id:batch.id,count} as const
+          if (command.type==='sellHarvest' ? batch.lots.some(lot=>lot.crossPending) || groupedSaleIssue(draft,command) || !trade(draft,command).ok
             : protectedHarvest(draft,batch) || !batch.profile || !yieldInfo.seeds && !yieldInfo.attempts) {
             excluded.push(name(batch.species)+' #'+batch.id)
             continue
           }
           commands.push(command)
           total+=selling?harvestSaleValue(batch,count,view.state):yieldInfo.seeds
+          if (!selling) attempts+=yieldInfo.attempts
         }
       } else {
         for(const species of speciesIds) {
@@ -374,7 +395,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
             if(!inventorySelected.includes(key) || !pack.count) continue
             const count=Math.min(pack.count,inventoryAmounts[key]??1)
             const command={type:'sellSeeds',species,profile:pack,count} as const
-            if(seedSaleIssue(draft,species,pack,count) || !trade(draft,command).ok) {
+            if(groupedSaleIssue(draft,command) || !trade(draft,command).ok) {
               excluded.push(name(species)+' · '+describe(view.state.lang,pack));continue
             }
             commands.push(command)
@@ -383,9 +404,10 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
         }
       }
       const exclusions=excluded.slice(0,8).join(', ')+(excluded.length>8 ? ' …' : '')
-      const message=view.state.lang==='ru'
+      const message=(view.state.lang==='ru'
         ? `Количество ${commands.reduce((n,c)=>n+('count' in c?c.count:0),0)}. Операций ${commands.length}. Исключено ${excluded.length}. ${exclusions} Итог ${total} ${selling?'монет':'собственных семян'}.`
-        : `${commands.reduce((n,c)=>n+('count' in c?c.count:0),0)} items. ${commands.length} operations. ${excluded.length} excluded. ${exclusions} Total ${total} ${selling?'coins':'own seeds'}.`
+        : `${commands.reduce((n,c)=>n+('count' in c?c.count:0),0)} items. ${commands.length} operations. ${excluded.length} excluded. ${exclusions} Total ${total} ${selling?'coins':'own seeds'}.`) +
+        (attempts ? (view.state.lang==='ru' ? ` Попыток скрещивания ${attempts}.` : ` Hybridization attempts ${attempts}.`) : '')
       if(!commands.length) { notice=message;draw();return }
       if(!window.confirm(message)) return
       inventorySelected=[]
@@ -393,12 +415,12 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
     if(action==='bulk-sell-all') {
       const batches=view.state.basket
-      const eligible=batches.filter(batch=>quickSaleEligible(view.state,batch)).length
+      const eligible=readyFruitSalePlan(view.state).length
       const excluded=batches.length-eligible
-      const value=quickSaleValue(view.state)
+      const value=readyFruitSaleValue(view.state)
       const prompt=view.state.lang==='ru' ? `Продать ${eligible} партий за ${value} ◈? Сохранится ${excluded} партий.` :
         `Sell ${eligible} batches for ${value} ◈? ${excluded} batches will be retained.`
-      if (eligible && window.confirm(prompt)) return run({type:'sell'})
+      if (eligible && window.confirm(prompt)) return run({type:'sellReadyFruit'})
       return
     }
     if (action==='inventory-tab') {
@@ -457,6 +479,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       return
     }
     if(action==='research-direction' && selected!==null && plot?.plant) return run({type:'researchDirection',plot:selected,expectedId:plot.plant.id,recipeId:target.dataset.recipeId!})
+    if(action==='research-donor' && selected!==null && plot?.plant) return run({type:'researchDonor',plot:selected,expectedId:plot.plant.id,recipeId:target.dataset.recipeId!,donor:target.dataset.donor as Species,donorId:target.dataset.id ? Number(target.dataset.id) : null})
     if(action==='nursery'){controller.nursery();return}
     if(action==='nursery-protect') {
       const id=Number(target.dataset.id)
@@ -545,10 +568,11 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       stock=target.dataset.profile?JSON.parse(target.dataset.profile):undefined
       chosen=target.dataset.seed as Species; returnId=null
       if (selected!==null && plot?.open && !plot.plant) {
-        const result=actions.command({type:'plant',plot:selected,species:chosen,stock})
+        const result=actions.command(repeatPlanting && stock ? {type:'repeatPlant',plot:selected,species:chosen,stock} : {type:'plant',plot:selected,species:chosen,stock})
         if (result.ok) {
-          showRewards(result.events); chosen=null; stock=undefined
-          actions.changeView({mode:'garden',selected:null,sunflower:false})
+          showRewards(result.events)
+          if (repeatPlanting && stock && availableStock(view.state,chosen,stock)>0) actions.changeView({mode:'plant',selected:null,sunflower:false})
+          else { chosen=null; stock=undefined; repeatPlanting=false; actions.changeView({mode:'garden',selected:null,sunflower:false}) }
         } else notice=(t() as Record<string,string>)[result.reason] ?? t().error
         draw();return
       }
@@ -561,7 +585,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action === 'center') return actions.center()
     if (action === 'zoomIn') return actions.zoom(1)
     if (action === 'zoomOut') return actions.zoom(-1)
-    if (action === 'close' || action === 'cancel') { chosen=null; stock=undefined; actions.changeView({mode:'garden',selected:null,moveFrom:null,shovel:false}); return }
+    if (action === 'close' || action === 'cancel') { chosen=null; stock=undefined; repeatPlanting=false; actions.changeView({mode:'garden',selected:null,moveFrom:null,shovel:false}); return }
     if (action === 'move' && selected !== null) { actions.changeView({mode:'build',selected,moveFrom:selected}); return }
     if (action === 'bed-settings' && selected !== null) { actions.changeView({mode:'build',selected}); return }
     if (action === 'dig' && selected !== null) { actions.changeView({mode:'garden',selected,shovel:true}); return }
@@ -630,9 +654,9 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
           draw()
           return
         } else {
-          run({type:'plant',plot:index,species:chosen,stock})
+          run(repeatPlanting && stock ? {type:'repeatPlant',plot:index,species:chosen,stock} : {type:'plant',plot:index,species:chosen,stock})
           if (stock && availableStock(view.state,chosen,stock)===0) {
-            chosen=null; stock=undefined
+            chosen=null; stock=undefined; repeatPlanting=false
             actions.changeView({mode:'garden',selected:null,sunflower:false})
             return
           }

@@ -2,8 +2,9 @@ import { market, speciesIds } from '../../game/config'
 import { marketQuote } from '../../game/market'
 import type { GameState, MarketKind } from '../../game/model'
 import { plantName } from '../strings'
-import { basketSalePlan, seedSaleIssue, trade } from '../../game/trade'
-import { allSeedPacks, availableStock } from '../../game/stock-policy'
+import { marketFruitSalePlan, marketSeedStock, seedSaleIssue, trade } from '../../game/trade'
+import { allSeedPacks } from '../../game/stock-policy'
+import { orderReservations } from '../../game/orders'
 import { changeStock } from '../../game/genetics'
 
 export type MarketSort = 'price' | 'value'
@@ -22,7 +23,8 @@ export function marketPanel(state:GameState,kind:MarketKind,sort:MarketSort='pri
   const ru=state.lang==='ru'
   const packs=kind==='seed' ? allSeedPacks(state) : []
   const inventory={...state,seeds:{...state.seeds},variants:state.variants.map(pack=>({...pack}))}
-  const items=kind==='fruit' ? basketSalePlan(state) : []
+  const items=kind==='fruit' ? marketFruitSalePlan(state) : []
+  const seedReserve=kind==='seed' ? orderReservations(state).seed : new Map<string,number>()
   const rows=speciesIds.filter(id=>state.planted.includes(id) || state.revealed.includes(id as GameState['revealed'][number])).map(id=>{
     const quote=marketQuote(state,id,kind)
     let count=0,value=0
@@ -35,7 +37,7 @@ export function marketPanel(state:GameState,kind:MarketKind,sort:MarketSort='pri
       }
     }
     if (kind==='seed') for (const pack of packs.filter(p=>p.species===id)) {
-      let quantity=availableStock(inventory,id,pack)
+      let quantity=marketSeedStock(inventory,id,pack,seedReserve)
       if (quantity && seedSaleIssue(inventory,id,pack,quantity)==='lastProfile') quantity--
       const before=draft.coins
       if (quantity && trade(draft,{type:'sellSeeds',species:id,profile:pack,count:quantity}).ok) {

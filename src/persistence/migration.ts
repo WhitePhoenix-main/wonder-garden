@@ -7,7 +7,7 @@ import { canonical, maxLives, nextRandom, rarityGuarantee, rules } from '../game
 import { milestones, recordPlanting } from '../game/collection'
 import { initialMarket, initialTrading } from '../game/market'
 import { rarities, type PollinationSnapshot } from '../game/model'
-import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaEight, validAlphaSeven, validAlphaSix, validAlphaFive, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
+import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaNine, validAlphaEight, validAlphaSeven, validAlphaSix, validAlphaFive, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
 import { unlockProduction } from '../game/nursery'
 import { combinationKey, compatibilityReaction, initialResearch } from '../game/queries'
 
@@ -161,6 +161,7 @@ export function parseSave(raw: string | null):GameState|'future'|null {
     if (validLegacy(value)) return upgrade(value)
     if (validAlphaThree(value)) return upgradeAlphaThree(value)
     if (validAlphaFour(value)) return upgradeAlphaFour(value)
+    if (validAlphaNine(value)) return {...value,schemaVersion:saveVersion,balanceVersion:balance.version}
     if (validAlphaEight(value)) return migrateResearch({
       ...value,schemaVersion:saveVersion,balanceVersion:balance.version,research:initialResearch()
     })

@@ -5,6 +5,7 @@ export type Mode = 'garden' | 'plant' | 'build' | 'breed'
 export interface WorldView {
   decorPreview: { slot:string; type:DecorType } | null
   sunflower?:boolean
+  showIndicators?:boolean
   menu:boolean; started:boolean; shovel:boolean
   decorEditing:boolean
   state:GameState; selected:number|null; mode:Mode; moveFrom:number|null
@@ -16,7 +17,7 @@ export interface World {
 export interface UIActions {
   enter():void; menu():void
   command(cmd:Command):Result; select(index:number|null):void; center():void; zoom(delta:number):void; reset():void; exportSave():void; decorPreview(editing:boolean, preview:WorldView['decorPreview']):void;
-  changeView(view:Partial<Pick<WorldView,'sunflower'|'mode'|'moveFrom'|'selected'|'shovel'>>):void
+  changeView(view:Partial<Pick<WorldView,'sunflower'|'mode'|'moveFrom'|'selected'|'shovel'|'showIndicators'>>):void
   worldTutorialBounds(index:number):DOMRect|null
   worldStructureBounds(id:string):DOMRect|null
   focusTutorialPlot(index:number):void

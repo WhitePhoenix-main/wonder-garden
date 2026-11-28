@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
-const origin=process.argv[2]??'http://127.0.0.1:4285'
+const alpha10=process.env.WONDER_TEST_TARGET==='alpha10'
+const origin=process.argv[2]??(alpha10?'http://127.0.0.1:4290':'http://127.0.0.1:4285')
 const sizes=(process.argv[3]??'1920x1080,1366x768,844x390,390x844,360x800').split(',').filter(Boolean)
-const port=Number(process.env.WONDER_TEST_CHROME_PORT??9429)
-const resultDir=new URL('../test-results/alpha09/browser/',import.meta.url)
+const port=Number(process.env.WONDER_TEST_CHROME_PORT??(alpha10?9441:9429))
+const resultDir=new URL(`../test-results/${alpha10?'alpha10':'alpha09'}/browser/`,import.meta.url)
 const key='wonder-garden.save.v1'
 const tabs=await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
 const tab=tabs.find(page=>page.type==='page' && page.url.startsWith(origin))??tabs.find(page=>page.type==='page')
@@ -62,7 +63,10 @@ async function click(x,y) {
   await wait(160)
 }
 async function button(action,extra='') {
-  const selector=JSON.stringify(`[data-action="${action}"]${extra}`)
+  await control(`[data-action="${action}"]${extra}`)
+}
+async function control(css) {
+  const selector=JSON.stringify(css)
   const box=await read(`(()=>{
     const candidates=[...document.querySelectorAll(${selector})].filter(e=>!e.disabled)
     for(const element of candidates) {
@@ -72,8 +76,8 @@ async function button(action,extra='') {
     }
     return null
   })()`)
-  assert.ok(box,`Unavailable ${action}${extra}: `+await read('document.body.innerText.slice(-1300)'))
-  if (touch) assert.ok(box.w>=44 && box.h>=44,`Touch target ${action} is ${box.w}×${box.h}`)
+  assert.ok(box,`Unavailable ${css}: `+await read('document.body.innerText.slice(-1300)'))
+  if (touch) assert.ok(box.w>=44 && box.h>=44,`Touch target ${css} is ${box.w}×${box.h}`)
   await click(box.x,box.y)
 }
 async function highlightedBed(plant=false) {
@@ -93,7 +97,7 @@ async function screenshot(size,label) {
 }
 async function menu() {
   await send('Page.navigate',{url:origin+'/?debug=1'})
-  await until(()=>read('document.querySelector(".menu-card small")?.textContent?.includes("Alpha 09")'),'production menu')
+  await until(()=>read(`document.querySelector(".menu-card small")?.textContent?.includes("Alpha ${alpha10?'10':'09'}")`),'production menu')
   assert.equal(await read('!!document.querySelector(".dev-panel")'),false)
 }
 async function enter() {
@@ -115,18 +119,102 @@ async function loadFixture(fixture) {
   await menu()
   await enter()
 }
-async function bed(index) {
+async function gardenPoint(gx,gy) {
   const [left,top,width,height]=await read(`(()=>{
     const b=document.querySelector('canvas').getBoundingClientRect()
     return [b.left,b.top,b.width,b.height]
   })()`)
-  const zoom=Math.min(width/1190,height/843)
-  const gx=3+index%4, gy=2+Math.floor(index/4)
-  await click(left+width/2+((gx-gy)*64-64)*zoom,top+height/2+((gx+gy)*32-302)*zoom)
+  const zoom=Math.min(width/1190,height/843)*(width<=600?1.45:1)
+  return {x:left+width/2+((gx-gy)*64-64)*zoom,y:top+height/2+((gx+gy)*32-302)*zoom}
+}
+async function bed(index) {
+  const {x,y}=await gardenPoint(3+index%4,2+Math.floor(index/4))
+  await click(x,y)
+}
+async function inspectWorld(index) {
+  const target=await gardenPoint(3+index%4,2+Math.floor(index/4))
+  for (const type of ['mousePressed','mouseReleased'])
+    await send('Input.dispatchMouseEvent',{type,...target,button:'right',clickCount:1})
+  await wait(160)
+}
+async function flow(model,size='1366x768') {
+  const garden=model.initialState(42)
+  garden.tutorialSkipped=true
+  garden.passive.checkpoint=Date.now()
+  await loadFixture(garden)
+  await bed(8)
+  await button('repeat-plant-toggle')
+  await button('seed','[data-seed="radish"][data-profile]')
+  assert.equal((await snap()).seeds.radish,1)
+  await until(()=>read('!!document.querySelector("[data-action=repeat-plant-done]") && !document.querySelector(".seed-list")'),'compact repeat-planting panel')
+  await screenshot(size,'repeat-planting')
+  await bed(9)
+  const planted=await snap()
+  assert.equal(planted.seeds.radish,0)
+  assert.ok(planted.plots[8].plant && planted.plots[9].plant)
+  await until(async()=>(await snap()).plots.slice(8,10).every(plot=>plot.plant?.readySince!=null),'two ripe beds')
+  await control('.quick-garden-actions > summary')
+  await screenshot(size,'batch-actions')
+  assert.equal(await read('window.alpha10Audio.themes'),1)
+  const tones=await read('window.alpha10Audio.tones')
+  await button('gather-ready')
+  assert.equal(await read('window.alpha10Audio.tones'),tones+2)
+  assert.deepEqual((await snap()).plots.slice(8,10).map(plot=>plot.plant?.lives),[0,0])
+  await button('clear-withered')
+  assert.deepEqual((await snap()).plots.slice(8,10).map(plot=>plot.plant),[null,null])
+  await button('sell-ready-fruit')
+  assert.ok((await snap()).coins>20)
+  assert.equal((await snap()).basket.length,0)
+  await button('settings')
+  await button('toggle-indicators')
+  assert.equal(await read('JSON.parse(localStorage.getItem("wonder-garden.preferences")).showIndicators'),false)
+  await button('toggle-indicators')
+}
+async function crowdedIsland(model) {
+  const garden=model.initialState(42)
+  garden.tutorialSkipped=true
+  garden.sold=true
+  garden.coins=20_000
+  for (const plot of [4,5,0,1,2,3,6,7,10,11,14,15])
+    assert.equal(model.execute(garden,{type:'clear',plot}).ok,true)
+  for (let plot=0;plot<16;plot++)
+    assert.equal(model.execute(garden,{type:'plant',plot,species:plot%2 ? 'sunflower' : 'strawberry'}).ok,true)
+  garden.passive.checkpoint=Date.now()
+  touch=true
+  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true})
+  await send('Emulation.setTouchEmulationEnabled',{enabled:true})
+  await loadFixture(garden)
+  await screenshot('390x844','crowded-island')
+  const sample=await send('Runtime.evaluate',{returnByValue:true,awaitPromise:true,expression:`new Promise(resolve=>{
+    const frames=[];
+    function record(time) {
+      frames.push(time);
+      if (frames.length<61) requestAnimationFrame(record);
+      else resolve(Math.round(60_000/(frames.at(-1)-frames[0])));
+    }
+    requestAnimationFrame(record);
+  })`})
+  assert.ok(sample.result.value>0)
+  assert.equal(await read('document.elementFromPoint(90,550)?.tagName'),'CANVAS')
+  await send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:90,y:550}]})
+  for (const point of [{x:120,y:570},{x:155,y:595},{x:195,y:625}])
+    await send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point]})
+  await send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+  await wait(160)
+  const after=await snap()
+  assert.deepEqual(after.plots.slice(0,16).map(plot=>plot.plant.id),garden.plots.slice(0,16).map(plot=>plot.plant.id))
+  assert.equal(after.basket.length,0)
+  assert.equal(await read('!!document.querySelector(".context-inner")'),false)
+  await screenshot('390x844','crowded-island-pan')
+  console.log(`Crowded island · 16 plants, touch pan, ${sample.result.value} rAF/s in headless Chrome`)
+  touch=false
+  await send('Emulation.setDeviceMetricsOverride',{width:1366,height:768,deviceScaleFactor:1,mobile:false})
+  await send('Emulation.setTouchEmulationEnabled',{enabled:false})
 }
 async function advanced() {
   const {createServer}=await import('vite')
-  const loader=await createServer({server:{middlewareMode:true,watch:null,hmr:false,ws:false},appType:'custom'})
+  const loader=await createServer({server:{middlewareMode:true,watch:null,hmr:false,ws:false},
+    optimizeDeps:{noDiscovery:true,include:[]},appType:'custom'})
   let fixture
   let model
   try {
@@ -147,12 +235,26 @@ async function advanced() {
     for (const plot of [4,5]) run({type:'clear',plot})
     for (const [plot,species] of [[8,'strawberry'],[9,'sunflower'],[5,'blueberry'],[4,'moonflower']])
       run({type:'plant',plot,species})
+    if (alpha10) {
+      run({type:'clear',plot:1})
+      run({type:'plant',plot:1,species:'moonflower'})
+    }
     run({type:'researchDirection',plot:8,expectedId:fixture.plots[8].plant.id,recipeId:'solar_strawberry:main'})
     advance(fixture,25)
     fixture.passive.checkpoint=Date.now()
     fixture.failures.moonberry=5
   } finally {
     await loader.close()
+  }
+  if (alpha10) {
+    touch=true
+    await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true})
+    await send('Emulation.setTouchEmulationEnabled',{enabled:true})
+    await flow(model,'390x844')
+    touch=false
+    await send('Emulation.setDeviceMetricsOverride',{width:1366,height:768,deviceScaleFactor:1,mobile:false})
+    await send('Emulation.setTouchEmulationEnabled',{enabled:false})
+    await flow(model)
   }
   await loadFixture(fixture)
   await bed(8)
@@ -175,8 +277,16 @@ async function advanced() {
   await button('inspect-bed','[data-id="5"]')
   assert.equal(await read('document.querySelectorAll("[data-action=research-direction]").length'),2)
   await screenshot('1366x768','conflicting-directions')
+  if (alpha10) {
+    const donor=(await snap()).plots[4].plant.id
+    await control('.donor-options > summary')
+    await button('research-donor',`[data-id="${donor}"]`)
+    assert.equal((await snap()).plots[5].plant.researchDonors.moonflower,donor)
+    await screenshot('1366x768','specific-donor')
+  }
   await button('research-direction','[data-recipe-id="moonberry:alternate"]')
   assert.equal((await snap()).plots[5].plant.pollination.recipeId,'moonberry:alternate')
+  if (alpha10) assert.deepEqual((await snap()).plots[5].plant.pollination.donorIds,[(await snap()).plots[4].plant.id])
   await button('harvest')
   if (await read('!!document.querySelector("[data-action=close]")')) await button('close')
   await button('inventory')
@@ -194,6 +304,15 @@ async function advanced() {
   await button('upgrade-helper','[data-level="1"]')
   assert.equal((await snap()).helperLevel,1)
   await until(async()=>Boolean((await snap()).basket.find(batch=>batch.species==='sunflower')),'Leafy harvest')
+  if (alpha10) {
+    await button('close')
+    await inspectWorld(12)
+    await control('.context-inner details:has([data-action="plot-mode"]) > summary')
+    await wait(1300)
+    await button('plot-mode','[data-mode="commercial"]')
+    assert.equal((await snap()).plots[12].policy.mode,'commercial')
+    await screenshot('1366x768','bed-specialization')
+  }
   const lab=await snap()
   const run=command=>{
     const result=model.execute(lab,command)
@@ -216,12 +335,61 @@ async function advanced() {
   assert.ok((await snap()).variants.find(seed=>seed.species==='radish' && seed.rarity==='uncommon'))
   assert.ok((await snap()).tutorialSeen.includes('notice-rarity-uncommon'))
   await screenshot('1366x768','first-rarity')
+  if (alpha10) {
+    assert.ok(await read(`(()=>{
+      const element=document.querySelector('[data-production-slot="0"] [data-production-seed]')
+      const seed=[...element.options].find(option=>option.value.startsWith('radish/'))
+      if(!seed) return false
+      element.value=seed.value
+      element.dispatchEvent(new Event('change',{bubbles:true}))
+      return true
+    })()`))
+    await control('[data-production-slot="0"] [data-production="assign"]')
+    const producing=await snap()
+    assert.equal(producing.passive.beds[0].assignment.species,'radish')
+    producing.passive.checkpoint=Date.now()-15*60_000
+    await loadFixture(producing)
+    await until(()=>read('!!document.querySelector(".return-report[open]")'),'nursery return report')
+    assert.ok((await snap()).passive.basket.length)
+    await screenshot('1366x768','nursery-return')
+
+    const late=model.initialState(17)
+    late.tutorialSkipped=true
+    late.sold=true
+    late.coins=15_000
+    late.planted=model.speciesIds.filter(species=>species!=='star_orchid')
+    late.revealed=model.recipes.map(recipe=>recipe.result).filter(species=>species!=='star_orchid')
+    for (const plot of [4,5,0,1,2,3,6,7,10,11,14,15]) assert.equal(model.execute(late,{type:'clear',plot}).ok,true)
+    assert.equal(model.execute(late,{type:'upgradeGreenhouse',target:2}).ok,true)
+    late.passive.checkpoint=Date.now()
+    await loadFixture(late)
+    await button('evolution')
+    await button('greenhouse-upgrade','[data-level="3"]')
+    assert.equal((await snap()).greenhouseLevel,3)
+    await button('close')
+    const {x,y}=await gardenPoint(2,7)
+    await click(x,y)
+    assert.equal(await read('document.querySelector("[data-action=restore-bridge]")?.disabled'),true)
+    await screenshot('1366x768','bridge-requirements')
+    await crowdedIsland(model)
+  }
   console.log('Advanced production · first hybrid, conflict, alternative, greenhouse II, Leafy, first rarity')
 }
 
 try {
   await mkdir(resultDir,{recursive:true})
   for (const domain of ['Page','Runtime','Network']) await send(domain+'.enable')
+  if (alpha10) await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+    if (!window.alpha10Audio) {
+      window.alpha10Audio={themes:0,tones:0};
+      for (const [method,key] of [['createBufferSource','themes'],['createOscillator','tones']]) {
+        const original=AudioContext.prototype[method];
+        AudioContext.prototype[method]=function(...args) {
+          window.alpha10Audio[key]++;
+          return original.apply(this,args);
+        };
+      }
+    }`})
   for (const size of sizes) {
     const [width,height]=size.split('x').map(Number)
     touch=width<900
@@ -239,6 +407,12 @@ try {
     await button('tutorial-next')
     await waitForStage('first-plant')
     await wait(250)
+    if (alpha10 && size==='844x390') {
+      await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true})
+      await until(()=>read('innerWidth===390 && document.querySelector(".tutorial-world-ring")?.style.display==="block"'),'portrait spotlight after rotation')
+      await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:true})
+      await until(()=>read('innerWidth===844 && document.querySelector(".tutorial-world-ring")?.style.display==="block"'),'landscape spotlight after rotation')
+    }
     if (size==='360x800') {
       await read(`(()=>{
         const cover=document.createElement('div')
@@ -298,9 +472,9 @@ try {
     await menu()
     await advanced()
   }
-  const fixture=JSON.parse(await readFile(new URL('../tests/fixtures/alpha08.json',import.meta.url),'utf8'))
+  const fixture=JSON.parse(await readFile(new URL(`../tests/fixtures/${alpha10?'alpha09':'alpha08'}.json`,import.meta.url),'utf8'))
   await loadFixture(fixture)
-  await until(async()=>((await snap())?.schemaVersion===13),'Alpha 08 migration')
+  await until(async()=>((await snap())?.schemaVersion===(alpha10?14:13)),alpha10?'Alpha 09 migration':'Alpha 08 migration')
   const migrated=await snap()
   assert.deepEqual(migrated.revealed,fixture.revealed)
   assert.deepEqual(migrated.protectedPlants,fixture.protectedPlants)
@@ -309,7 +483,7 @@ try {
   await until(()=>read('!!document.querySelector(".return-report[open]")'),'offline return report')
   await screenshot(process.env.WONDER_ADVANCED ? '1366x768' : sizes.at(-1)??'1366x768','migration-return')
   assert.equal(errors.length,0,JSON.stringify(errors))
-  console.log('Alpha 08 fixture migrated with the active paid experiment and current offline checkpoint')
+  console.log(`Alpha ${alpha10?'09':'08'} fixture migrated with the active paid experiment and current offline checkpoint`)
 } catch (error) {
   if (process.env.WONDER_TRACE_INPUT) {
     try { console.error(await read('window.playtestInput?.slice(-12)')) } catch { /* Keep the original error. */ }

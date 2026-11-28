@@ -1,14 +1,25 @@
-import type { GameState, Hybrid, Lang, Recipe } from '../../game/model'
+import type { GameState, Lang, Recipe } from '../../game/model'
 import { researchStatus } from '../../game/queries'
 import { adjacent, speciesInfo } from '../../game'
 
-const hints: Record<Hybrid, [string, string]> = {
-  solar_strawberry: ['Красные ягоды тянутся к цветку, похожему на солнце.', 'Red berries reach for a flower shaped like the sun.'],
-  moonberry: ['Красные ягоды впитывают свет лунного цветка.', 'Red berries drink the light of a moonflower.'],
-  honey_clover: ['Солнечное тепло наполняет листья клевера мёдом.', 'Sunlight fills clover leaves with honey.'],
-  golden_flower: ['В синих ягодах под лунным светом зреет золото.', 'Gold ripens inside blue berries under moonlight.'],
-  crystal_flower: ['Лунные ягоды и золото встречаются на плодородной земле.', 'Moonberries and gold meet in rich soil.'],
-  star_orchid: ['Ищите звезду там, где кристалл растёт между медовыми листьями и солнечными плодами.', 'Crystal, honey leaves and sunlit fruit meet on enchanted ground.']
+export const recipeHints: Record<string, [string, string]> = {
+  'solar_strawberry:main': ['Красная ягода принимает пыльцу солнечного цветка.', 'A red berry receives pollen from a sun-like flower.'],
+  'solar_strawberry:alternate': ['Солнечный цветок принимает пыльцу красной ягоды.', 'A sun-like flower receives pollen from a red berry.'],
+  'moonberry:main': ['Красная ягода принимает пыльцу ночного цветка.', 'A red berry receives pollen from a night flower.'],
+  'moonberry:alternate': ['Синяя ягода принимает пыльцу ночного цветка.', 'A blue berry receives pollen from a night flower.'],
+  'honey_clover:main': ['Три листочка встречают пыльцу солнечного цветка.', 'Three leaves meet pollen from a sun-like flower.'],
+  'honey_clover:alternate': ['Три листочка встречают пыльцу солнечных ягод.', 'Three leaves meet pollen from sunlit berries.'],
+  'golden_flower:main': ['Синяя ягода принимает пыльцу ночного цветка.', 'A blue berry receives pollen from a night flower.'],
+  'golden_flower:alternate': ['Солнечный цветок принимает пыльцу лунной ягоды.', 'A sun-like flower receives pollen from a moonlit berry.'],
+  'crystal_flower:main': ['Лунная ягода принимает пыльцу золотого цветка.', 'A moonlit berry receives pollen from a golden flower.'],
+  'crystal_flower:alternate': ['Лунная ягода принимает пыльцу медовых листьев.', 'A moonlit berry receives pollen from honeyed leaves.'],
+  'star_orchid:main': ['Кристалл соседствует с солнечной ягодой и медовыми листьями.', 'A crystal shares edges with a sunlit berry and honeyed leaves.'],
+  'star_orchid:alternate': ['Кристалл соседствует с золотым цветком и лунной ягодой.', 'A crystal shares edges with a golden flower and a moonlit berry.']
+}
+export const resonanceNames:Record<string,[string,string]>={
+  solar_strawberry:['Солнечный резонанс','Solar resonance'],moonberry:['Лунный резонанс','Lunar resonance'],
+  honey_clover:['Медовый резонанс','Honey resonance'],golden_flower:['Золотистый резонанс','Golden resonance'],
+  crystal_flower:['Кристаллический резонанс','Crystal resonance'],star_orchid:['Астральный резонанс','Astral resonance']
 }
 
 export function recipeKnown(s: GameState, r: Recipe) {
@@ -36,9 +47,12 @@ export function recipeCard(s: GameState, r: Recipe, selected: number|null) {
   const status=researchStatus(s,r.result,'id' in r ? String(r.id) : undefined)
   if (!status.labelKnown) {
     const someKnown = [r.primary,...r.neighbors].some(id => s.planted.includes(id))
-    const clue = someKnown ? hints[r.result][s.lang === 'ru' ? 0 : 1] : w.explore
+    const key='id' in r ? String(r.id) : `${r.result}:main`
+    const clue = someKnown ? recipeHints[key][s.lang === 'ru' ? 0 : 1] : w.explore
     const stage = status.stage==='active' ? (s.lang==='ru'?'Опыление активно':'Pollination active') : status.stage==='fruit' ? (s.lang==='ru'?'Опылённый урожай в инвентаре':'Pollinated harvest in inventory') : ''
-    return `<section class="recipe-card"><h3>◇ · ${w.mystery}</h3><p>${clue}</p>${stage ? '<p>'+stage+'</p>' : ''}
+    const resonance=resonanceNames[r.result][s.lang==='ru'?0:1]
+    const odds=status.observed ? `<p>${s.lang==='ru'?'Следующая попытка':'Next attempt'} · ${Math.round(status.chance*100)}% · ${s.lang==='ru'?'Неудач':'Failures'} ${status.failures} · ${s.lang==='ru'?'До гарантии':'Until guarantee'} ${Math.max(1,status.pity-status.failures)}</p>` : ''
+    return `<section class="recipe-card"><h3>◇ · ${status.observed ? resonance : w.mystery}</h3><p>${clue}</p>${stage ? '<p>'+stage+'</p>' : ''}${odds}
       ${status.batchId!==undefined ? `<button type="button" data-action="research-batch" data-id="${status.batchId}">${s.lang==='ru'?'Открыть партию':'Open harvest batch'}</button>` : ''}</section>`
   }
   const plot = selected === null ? null : s.plots[selected]

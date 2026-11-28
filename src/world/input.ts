@@ -1,4 +1,4 @@
-import { isValuablePlant } from '../game/stock-policy'
+import { isValuablePlant, protectedProfile } from '../game/stock-policy'
 import Phaser from 'phaser'
 import type { IslandId } from '../game/model'
 import type { WorldView } from '../runtime/presentation'
@@ -62,7 +62,8 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
       if (index === null || visited.has(index) || input.view()?.state.plots[index]?.plant?.readySince == null) continue
       const state=input.view()!.state
       const plant=state.plots[index].plant!
-      if (plant.lives===1 && isValuablePlant(state,plant)) continue
+      if (state.protectedPlants.includes(plant.id) || protectedProfile(state,plant.species,plant) ||
+          plant.lives===1 && isValuablePlant(state,plant)) continue
       visited.add(index)
       input.pick(index)
     }

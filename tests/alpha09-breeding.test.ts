@@ -155,10 +155,10 @@ it('keeps paid rarity escalation separate from hybrid rarity across a large samp
 it('migrates an Alpha 08 production save with partial harvest, learned recipe, guarantee and paid experiment',()=>{
   const parsed=parseSave(JSON.stringify(alpha08))
   if (!parsed || parsed==='future') throw Error('Alpha 08 save did not migrate')
-  expect(parsed.schemaVersion).toBe(13)
+  expect(parsed.schemaVersion).toBe(14)
   const {schemaVersion,balanceVersion,research,failures,rarityProgress,...preserved}=parsed
   const {schemaVersion:oldSchema,balanceVersion:oldBalance,failures:oldFailures,rarityProgress:oldRarity,...old}=alpha08
-  expect([schemaVersion,oldSchema,oldBalance]).toEqual([13,12,5])
+  expect([schemaVersion,oldSchema,oldBalance]).toEqual([14,12,5])
   expect(balanceVersion).toBeGreaterThanOrEqual(5)
   expect(preserved).toEqual(old)
   expect(research.recipes).toEqual({'solar_strawberry:main':{attempts:1,successes:1}})

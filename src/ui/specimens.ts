@@ -1,5 +1,6 @@
 import type { Lang, Profile, Species } from '../game/model'
 import { plant } from '../world/art/plants'
+import { common, plantStats, traits } from '../game/genetics'
 const portraits=new Map<Species,string>()
 export const plantDescriptions:Record<Species,[string,string]>={
   radish:['Быстро созревает, даёт раннюю выручку и запас семян.','Ripens quickly and provides early coins and seed stock.'],
@@ -35,4 +36,20 @@ export function describe(lang:Lang,p:Profile){
   const plus = Array.isArray(p.plus) ? p.plus : p.plus ? [p.plus] : []
   const labels = w as Record<string,string>
   return [labels[p.rarity],...plus.map(trait => labels[trait]),p.minus && labels[p.minus]].filter(Boolean).join(' · ')
+}
+
+export function specializations(lang:Lang,species:Species,profile:Profile):string[] {
+  const actual=plantStats(species,profile)
+  const baseline=plantStats(species,common)
+  const features=traits(profile)
+  const labels=lang==='ru'
+    ? ['Урожайная линия','Семенная линия','Долговечная линия','Быстрорастущая линия','Селекционная линия']
+    : ['Fruit line','Seed line','Long-lived line','Fast-growing line','Breeding line']
+  return [
+    actual.fruits[1]>baseline.fruits[1] || features.includes('quality') ? labels[0] : '',
+    actual.ownSeeds[1]>baseline.ownSeeds[1] ? labels[1] : '',
+    actual.maxLives>baseline.maxLives ? labels[2] : '',
+    actual.growthSec<baseline.growthSec ? labels[3] : '',
+    features.length ? labels[4] : ''
+  ].filter(Boolean)
 }

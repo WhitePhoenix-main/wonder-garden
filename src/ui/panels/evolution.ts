@@ -19,13 +19,13 @@ export const evolutionErrors:Record<GameState['lang'],Record<string,string>>={
   ru:{greenhouseLocked:'Сначала улучшите теплицу.',bridgeProgress:'Условия восстановления моста ещё не выполнены.',
     bridgeRestored:'Мост уже восстановлен.',parentsBusy:'Родитель занят в эксперименте.',invalidParents:'Выберите два живых экземпляра одного вида.',
     sameParent:'Выберите два разных экземпляра.',crossSlotsFull:'Все селекционные слоты заняты.',crossNotReady:'Эксперимент ещё идёт.',
-    orderResources:'Не хватает доступных предметов.',protectedItem:'Предмет защищён.',seedReserved:'Семена входят в резерв.',
+    orderResources:'Не хватает доступных предметов.',protectedItem:'Предмет защищён.',seedReserved:'Семена входят в резерв.',orderReserved:'Часть партии зарезервирована для заказов.',
     lastProfile:'Сохраните последнее семя этого профиля.',stallLocked:'Сначала улучшите торговую лавку.',invalidPolicy:'Проверьте настройки грядки.',
     invalidProfile:'Этот генетический профиль недоступен.',cloneParent:'Нужен живой экземпляр редкости Rare или выше в питомнике.'},
   en:{greenhouseLocked:'Upgrade the greenhouse first.',bridgeProgress:'The bridge requirements are still incomplete.',
     bridgeRestored:'The bridge is already restored.',parentsBusy:'A parent is busy in an experiment.',invalidParents:'Choose two living plants of the same species.',
     sameParent:'Choose two different plants.',crossSlotsFull:'All breeding slots are in use.',crossNotReady:'The experiment is still running.',
-    orderResources:'The available items fall short.',protectedItem:'This item is protected.',seedReserved:'These seeds are reserved.',
+    orderResources:'The available items fall short.',protectedItem:'This item is protected.',seedReserved:'These seeds are reserved.',orderReserved:'Part of this lot is reserved for orders.',
     lastProfile:'Keep the last seed of this profile.',stallLocked:'Upgrade the market stall first.',invalidPolicy:'Check the bed settings.',
     invalidProfile:'This genetic profile is unavailable.',cloneParent:'Choose a living nursery plant of Rare rarity or higher.'}
 }

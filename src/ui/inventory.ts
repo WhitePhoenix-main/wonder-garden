@@ -4,7 +4,7 @@ import { speciesIds, speciesInfo } from '../game/config'
 import { marketQuote } from '../game/market'
 import { harvestUnitValue } from '../game/pricing'
 import { marketWords } from './panels/market'
-import { extractionYield, harvestSaleValue, quickSaleValue, seedSaleValue } from '../game/trade'
+import { extractionYield, harvestSaleValue, readyFruitSaleValue, seedSaleValue } from '../game/trade'
 import type { GameState, Profile, Species } from '../game/model'
 import { describe, field, portrait } from './specimens'
 import { plantName } from './strings'
@@ -199,7 +199,7 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
     ${!s.tutorialSkipped && tab==='seeds' && s.variants.length ? `<p class="hint">${s.lang==='ru'?'Выберите два профиля одного вида для сравнения. Защита и резерв помогают сохранить ценные семена.':'Select two profiles of the same species to compare them. Protection and reserves keep valuable seeds safe.'}</p>`:''}
     ${tab==='seeds'?button('favorite-filter',bulkLabels.favorite,`aria-pressed="${favoriteOnly}"`):''}
     ${button('bulk-sell',bulkLabels.sell+' · '+selected.length,'',!selected.length)}
-    ${tab==='harvest'?button('bulk-sell-all',(s.lang==='ru'?'Продать все доступные партии':'Sell all eligible batches')+' · '+quickSaleValue(s)+' ◈','',!quickSaleValue(s)):''}
+    ${tab==='harvest'?button('bulk-sell-all',(s.lang==='ru'?'Продать обычный урожай':'Sell ordinary harvest')+' · '+readyFruitSaleValue(s)+' ◈','',!readyFruitSaleValue(s)):''}
     ${tab==='harvest'?button('bulk-extract',bulkLabels.extract+' · '+selected.length,'',!selected.length):''}
     ${tab==='seeds'?button('bulk-plant',s.lang==='ru'?'Посадить на пустые грядки':'Plant empty beds','',selected.length!==1):''}
     ${comparison}${pageNav}${cards.join('')||`<p>${w.empty}</p>`}`
