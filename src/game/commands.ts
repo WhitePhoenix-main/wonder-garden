@@ -1,11 +1,13 @@
-import type { Command, GameState, Result } from './model'
-import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, speciesIds, speciesInfo } from './config'
+import type { BedLevel, Command, GameState, Result } from './model'
+import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, plotCount, speciesIds, speciesInfo } from './config'
 import { canRecoverGarden, plantingIssue, removalIssue, expansionCost } from './queries'
 import { decorate } from './decor'
 import { newPlant } from './state'
 import { sellBasket, trade } from './trade'
 import { harvest } from './harvest'
 import { common, changeStock, nextRandom } from './genetics'
+import { milestones, recordPlanting } from './collection'
+import { evolve, isBusy } from './evolution'
 
 function success(...events: string[]): Result {
   return {ok: true, events}
@@ -16,7 +18,37 @@ function failure(reason: string): Result {
 }
 
 export function execute(state: GameState, command: Command): Result {
+  const result=apply(state,command)
+  if (result.ok && result.events.length) milestones(state)
+  return result
+}
+
+function completed(state:GameState) {
+  return state.planted.length===speciesIds.length && state.plots.slice(0,plotCount).every(p=>p.open)
+}
+
+function apply(state:GameState,command:Command):Result {
   switch (command.type) {
+    case 'bulk': {
+      if (!command.commands.length || command.commands.length>256) return failure('invalidQuantity')
+      const scratch=structuredClone(state)
+      const events:string[]=[]
+      const obtained:NonNullable<Extract<Result,{ok:true}>['obtained']>=[]
+      for (const item of command.commands) {
+        if (!['plant','extractSeeds','sellHarvest','sellSeeds'].includes(item.type)) return failure('invalidQuantity')
+        if (item.type==='plant' && scratch.plots[item.plot]?.plant) return failure('occupied')
+        const result=apply(scratch,item)
+        if (!result.ok) return result
+        events.push(...result.events)
+        if (result.obtained) obtained.push(...result.obtained)
+      }
+      Object.assign(state,scratch)
+      return {ok:true,events,obtained}
+    }
+    case 'upgradeGreenhouse': case 'upgradeStall':
+    case 'startCross': case 'collectCross': case 'fulfillOrder': case 'declineOrder':
+    case 'restoreBridge': case 'travel': case 'protectPlant': case 'protectProfile': case 'favoriteProfile':
+    case 'setReserve': case 'plotPolicy': case 'setAutomation': return evolve(state,command)
     case 'dismissHybrid': state.pendingHybrid=null;return success('HintDismissed')
     case 'tutorialBranch': state.tutorialBranch=command.branch;return success('BranchChosen')
     case 'sell': return success(...sellBasket(state))
@@ -25,7 +57,7 @@ export function execute(state: GameState, command: Command): Result {
     case 'extractSeeds': return trade(state,command)
     case 'upgradeHelper': {
       if (!state.sold) return failure('firstSale')
-      if (state.helperLevel === 3 || command.target !== state.helperLevel + 1) return failure('helperLevel')
+      if (state.helperLevel === 5 || command.target !== state.helperLevel + 1) return failure('helperLevel')
       const offer = helperLevels[command.target]
       if (state.coins < offer.upgradeCost) return failure('noCoins')
       state.coins -= offer.upgradeCost
@@ -39,6 +71,7 @@ export function execute(state: GameState, command: Command): Result {
       if (state.coins < autoSellOffer.cost) return failure('noCoins')
       state.coins -= autoSellOffer.cost
       state.autoSell = true
+      state.stallLevel = 2
       state.sellRemaining = autoSellOffer.intervalSec
       return success('AutoSellEnabled')
     }
@@ -90,12 +123,12 @@ export function execute(state: GameState, command: Command): Result {
     if (plot.open) return failure('plotOpen')
     if (!state.sold) return failure('firstSale')
     if (!adjacent(command.plot).some(index => state.plots[index].open)) return failure('notAdjacent')
-    const cost = expansionCost(state)
+    const cost = expansionCost(state,command.plot)
     if (cost === null) return failure('plotOpen')
     if (state.coins < cost) return failure('noCoins')
     state.coins -= cost
     plot.open = true
-    return state.planted.length === speciesIds.length && state.plots.every(p => p.open)
+    return command.plot<plotCount && completed(state)
       ? success('PlotCleared','GardenCompleted') : success('PlotCleared')
   }
   if (!plot.open) return failure('plotClosed')
@@ -104,12 +137,13 @@ export function execute(state: GameState, command: Command): Result {
     case 'emergencyRadish':
       if (!canRecoverGarden(state)) return failure('recoveryUnavailable')
       plot.plant = newPlant(state.nextId++,'radish',common,nextRandom(state))
+      recordPlanting(state,plot.plant)
       return success('Planted')
     case 'harvest': return harvest(state,command)
     case 'upgrade': {
       if (!state.sold) return failure('firstSale')
-      if (plot.level === 3) return failure('maxLevel')
-      const level = plot.level === 1 ? 2 : 3
+      if (plot.level === 5) return failure('maxLevel')
+      const level = (plot.level+1) as BedLevel
       const cost = bedLevels[level].upgradeCost
       if (state.coins < cost) return failure('noCoins')
       state.coins -= cost
@@ -129,10 +163,11 @@ export function execute(state: GameState, command: Command): Result {
       else if (price !== null) state.coins -= price
       if (displaced) state.nursery.push(displaced)
       plot.plant = newPlant(state.nextId++, command.species,command.stock,nextRandom(state))
+      recordPlanting(state,plot.plant)
       const events = displaced ? ['PlantStored','Planted'] : ['Planted']
       if (!state.planted.includes(command.species)) {
         state.planted.push(command.species)
-        if (state.planted.length === speciesIds.length && state.plots.every(p => p.open)) events.push('GardenCompleted')
+        if (completed(state)) events.push('GardenCompleted')
       }
       return success(...events)
     }
@@ -148,6 +183,7 @@ export function execute(state: GameState, command: Command): Result {
       if (plot.plant) return failure('occupied')
       const index = state.nursery.findIndex(plant => plant.id === command.id)
       if (index < 0) return failure('stalePlant')
+      if (isBusy(state,command.id)) return failure('parentsBusy')
       const [plant] = state.nursery.splice(index, 1)
       if (plant.readySince !== null) plant.readySince = state.playTime
       plot.plant = plant

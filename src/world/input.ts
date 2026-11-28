@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
-import { island } from '../game/config'
+import type { IslandId } from '../game/model'
 import type { WorldView } from '../runtime/presentation'
-import { halfHeight, halfWidth, iso, plotAt, type Point } from './geometry'
+import { gridAt, halfHeight, halfWidth, islandFromView, iso, mapFor, plotAt, type Point } from './geometry'
 
 interface IslandInput {
   size(): {width:number; height:number}
@@ -24,6 +24,7 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
   let start: Point | null = null
   let startIndex: number | null = null
   let startSlot: string | null = null
+  let startIsland: IslandId | null = null
   let dragging = false
   let pinch = false
   let canSweep = false
@@ -39,7 +40,7 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
   }
   function decorSlot(point:Point):string|null {
     if (!input.view()?.decorEditing) return null
-    return island.decorSlots.find(slot => {
+    return mapFor(islandFromView(input.view())).decorSlots.find(slot => {
       const center = iso(slot.x,slot.y)
       return Math.abs(point.x-center.x)/halfWidth + Math.abs(point.y-center.y)/halfHeight <= 1
     })?.id ?? null
@@ -52,8 +53,8 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     for (let i = 0; i <= steps; i++) {
       const x = Phaser.Math.Linear(a.x,b.x,i / steps)
       const y = Phaser.Math.Linear(a.y,b.y,i / steps)
-      const index = plotAt({x,y})
-      if (index === null || visited.has(index) || input.view()?.state.plots[index].plant?.readySince == null) continue
+      const index = plotAt({x,y},islandFromView(input.view()))
+      if (index === null || visited.has(index) || input.view()?.state.plots[index]?.plant?.readySince == null) continue
       visited.add(index)
       input.pick(index)
     }
@@ -63,6 +64,7 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     points.clear()
     visited.clear()
     start = startIndex = startSlot = null
+    startIsland = null
     dragging = pinch = moved = canSweep = false
     for (const id of captured) {
       if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id)
@@ -78,14 +80,16 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
       return
     }
     start = p
+    startIsland = islandFromView(input.view())
     const world = input.toWorld(p)
     startSlot = decorSlot(world)
-    startIndex = input.view()?.decorEditing ? null : plotAt(world)
+    startIndex = input.view()?.decorEditing ? null : plotAt(world,startIsland)
     canSweep = !input.view()?.shovel && startIndex !== null && input.view()?.mode === 'garden'
   }, {signal})
   canvas.addEventListener('pointermove',event => {
     const prior = points.get(event.pointerId)
     if (!prior || !start) return
+    if (islandFromView(input.view()) !== startIsland) { clear(); return }
     const point = position(event)
     points.set(event.pointerId,point)
     if (points.size === 2) {
@@ -111,14 +115,15 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     if (!points.delete(event.pointerId)) return
     const point = position(event)
     if (points.size !== 0) return
-    if (!pinch && !moved && !dragging && start && Math.hypot(point.x-start.x,point.y-start.y) < 6) {
+    if (!pinch && !moved && !dragging && start && startIsland === islandFromView(input.view()) &&
+      Math.hypot(point.x-start.x,point.y-start.y) < 6) {
       const world = input.toWorld(point)
-      const gx=Math.round((world.x/halfWidth+world.y/halfHeight)/2)
-      const gy=Math.round((world.y/halfHeight-world.x/halfWidth)/2)
-      const g=island.structures.find(v=>v.id==='greenhouse')!
-      if(!input.view()?.decorEditing && gx>=g.x && gx<g.x+g.width && gy>=g.y && gy<g.y+g.height)input.nursery()
+      const {x,y} = gridAt(world)
+      const greenhouse = mapFor(startIsland).structures.find(v=>v.id==='greenhouse')
+      if (!input.view()?.decorEditing && greenhouse && x >= greenhouse.x && x < greenhouse.x + greenhouse.width &&
+        y >= greenhouse.y && y < greenhouse.y + greenhouse.height) input.nursery()
       if (startSlot !== null && startSlot === decorSlot(world)) input.pickDecor(startSlot)
-      if (startIndex !== null && startIndex === plotAt(world)) input.pick(startIndex)
+      if (startIndex !== null && startIndex === plotAt(world,startIsland)) input.pick(startIndex)
     }
     clear()
   }, {signal})

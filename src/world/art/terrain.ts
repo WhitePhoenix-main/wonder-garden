@@ -54,9 +54,13 @@ export function paintBase(ctx: Canvas): void {
   }
 }
 
-export function paintGrass(ctx: Canvas, variant: number): void {
+export function paintGrass(ctx: Canvas, variant: number, valley = false): void {
   const rand = random(55 + variant * 715)
-  const colors = [
+  const colors = valley ? [
+    ['#bdce8a','#9cb47c'],
+    ['#c5ce92','#a4b683'],
+    ['#b9cb8f','#98b482'],
+  ] : [
     ['#a6c777', '#8bb66b'],
     ['#a4c87d', '#91b970'],
     ['#aec981', '#94b775'],
@@ -65,7 +69,8 @@ export function paintGrass(ctx: Canvas, variant: number): void {
     gradient(ctx, -halfHeight, halfHeight, colors[variant][0], colors[variant][1]))
   for (let i = 0; i < 17; i++) {
     const point = iso((rand() - 0.5) * 0.86, (rand() - 0.5) * 0.86)
-    ellipse(ctx, point.x, point.y, 1 + rand() * 3, 0.6 + rand(), i % 2 ? '#a8c585' : '#779e62')
+    const tone = i % 2 ? '#a8c585' : '#779e62'
+    ellipse(ctx, point.x, point.y, 1 + rand() * 3, 0.6 + rand(), valley && i % 4 === 0 ? '#e7c8d1' : tone)
   }
 }
 
@@ -102,9 +107,19 @@ export function paintBed(ctx: Canvas, level: number): void {
   for (const y of [-0.19, -0.02, 0.15]) {
     line(ctx, [raised(-0.28, y, 7), raised(0.26, y, 7)], '#966c51', 1.1)
   }
-  if (level === 3) {
-    line(ctx, [...diamond(51, 24, -8), at(0,-32)], '#d6aa4e', 3)
-    for (const p of [d,c,b]) polygon(ctx, diamond(3,5).map(q => at(p.x+q.x,p.y-6+q.y)), '#a6e1cf')
+  if (level >= 3) {
+    const trim = ['#d6aa4e','#72b5aa','#f2cb74'][level - 3]
+    const gem = ['#a6e1cf','#cbbfea','#ffedb5'][level - 3]
+    line(ctx, [...diamond(51, 24, -8), at(0,-32)], trim, level === 5 ? 4 : 3)
+    for (const p of [d,c,b]) {
+      polygon(ctx, diamond(level >= 4 ? 5 : 3, level >= 4 ? 7 : 5)
+        .map(q => at(p.x+q.x,p.y-6+q.y)), gem)
+    }
+    if (level >= 4) {
+      for (const p of [raised(.19,.43,3),raised(.43,.19,3)]) {
+        polygon(ctx, diamond(3,4).map(q => at(p.x+q.x,p.y+q.y)), trim)
+      }
+    }
   }
   if (level >= 2) {
     for (const p of [d, c, b]) ellipse(ctx, p.x, p.y - 6, 2.6, 2.4, '#f2d492')
@@ -204,16 +219,22 @@ export function pond(ctx: Canvas): void {
   }
 }
 
-export function bridge(ctx: Canvas): void {
-  for (let i = 0; i < 7; i++) {
+export function bridge(ctx: Canvas, repaired = false): void {
+  const planks = repaired ? 13 : 7
+  const end = repaired ? 1.78 : 0.98
+  for (let i = 0; i < planks; i++) {
     const y = 0.19 + i * 0.126
-    box(ctx, -0.32 + i * 0.014, y, 0.64 - i * 0.04, 0.11, 4,
+    box(ctx, repaired ? -0.32 : -0.32 + i * 0.014, y, repaired ? 0.64 : 0.64 - i * 0.04, 0.11, 4,
       i % 2 ? '#bb9271' : '#ccab85', '#977050', '#7c5d49')
   }
   for (const x of [-0.33,0.30]) {
-    line(ctx, [raised(x,0.22,26),raised(x,0.65,20),raised(x,0.98,25)], '#7b6045', 4)
+    line(ctx, [raised(x,0.22,26),raised(x,end / 2 + .1,20),raised(x,end,25)], '#7b6045', 4)
     line(ctx, [raised(x,0.22,0),raised(x,0.22,30)], '#876245', 5)
-    line(ctx, [raised(x,0.97,0),raised(x,0.97,27)], '#876245', 5)
+    line(ctx, [raised(x,end,0),raised(x,end,27)], '#876245', 5)
+    if (repaired) {
+      line(ctx, [raised(x,.97,0),raised(x,.97,23)], '#876245', 4)
+      line(ctx, [raised(x,.22,29),raised(x,end / 2 + .1,23),raised(x,end,28)], '#dbb98d', 1.4)
+    }
   }
 }
 

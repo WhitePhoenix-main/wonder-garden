@@ -1,10 +1,14 @@
+import { evolutionPanel } from './panels/evolution'
+import { availableStock, defaultPolicy, isBusy } from '../game/evolution'
 import { inventoryPanel, inventoryWords, type InventoryTab, type InventorySort } from './inventory'
-import { describe, field, portrait } from './specimens'
-import { common, sameProfile } from '../game/genetics'
-import { chance, cycleSeconds, pollinationFor } from '../game/queries'
-import type { Profile, Species } from '../game/model'
+import { describe, field, plantDescriptions, portrait } from './specimens'
+import { availableTraits, canonical, common, sameProfile } from '../game/genetics'
+import { allSeedPacks } from '../game/stock-policy'
+import { auraBonus, chance, cycleSeconds, pollinationFor } from '../game/queries'
+import { plantStats } from '../game/genetics'
+import { rarities, type BedLevel, type Profile, type Species } from '../game/model'
 import type { Mode, WorldView } from '../runtime/presentation'
-import { adjacent, auras, bedLevels, isHybrid, recipes, speciesIds, speciesInfo } from '../game/config'
+import { adjacent, auras, bedLevels, isHybrid, plotIndices, recipes, speciesIds, speciesInfo } from '../game/config'
 import { isRecipeActive, basketCapacity, basketCount, canRecoverGarden, canReplace, expansionCost, isRecipeRevealed, seedUnlocked } from '../game/queries'
 import { quickSaleValue } from '../game/trade'
 import { decorUnlocked, harmony } from '../game/decor'
@@ -13,13 +17,18 @@ import { removalIssue, secondsLeft } from '../game/queries'
 import { gardenHint, recoveryHint } from './onboarding'
 import { recipeCard, recipeKnown } from './panels/recipes'
 import { decorPanel, gardenWords, journalPanel, type DecorChoice } from './panels/garden'
-import { automationPanel, automationWords } from './panels/automation'
+import { automationPanel, automationWords, modeLabels } from './panels/automation'
 import { plantName, words } from './strings'
 
-export type Overlay = 'nursery' | 'settings' | 'collection' | 'helper' | 'journal' | 'decor' | 'inventory'
+export type Overlay = 'nursery' | 'settings' | 'collection' | 'helper' | 'journal' | 'decor' | 'inventory' | 'evolution'
 export type CollectionFilter = 'all' | 'base' | 'hybrids'
 
 interface PanelState {
+  crossParents:number[]
+  inventorySelected:string[]
+  favoriteOnly:boolean
+  inventorySearch:string
+  inventoryPage:number
   inventoryFilter:string
   inventoryTab:InventoryTab
   inventorySort:InventorySort
@@ -54,7 +63,7 @@ const button = (action:string, label:string, extra='', disabled=false) => `<butt
 
 export function uiMarkup(view: WorldView, {
   inventoryFilter, inventoryTab, inventorySort, inventoryAmounts, inventoryMinimum, inventoryDetail,
-  stock, cornerPlanted, firstSeeds, branch, confirmId, overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
+  stock, cornerPlanted, firstSeeds, branch, confirmId, overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice, crossParents, inventorySelected, favoriteOnly, inventorySearch, inventoryPage
 }:PanelState):string {
   const settingsOpen = overlay === 'settings'
   const collectionOpen = overlay === 'collection'
@@ -77,13 +86,23 @@ export function uiMarkup(view: WorldView, {
     <h1>${w.title}</h1><p>${a.promise}</p>${view.started ? '<p>'+progress+'</p>' : ''}
     ${button('enter',view.started ? a.resume : a.start,'class="menu-primary"')}${view.started || warning==='future' || warning==='damaged' ? button('new-game',a.fresh) : ''}
     <div class="switches">${switches}</div>${warning ? '<p role="status">'+(w as Record<string,string>)[warning]+'</p>'+button('export-save',garden.export) : ''}
-    <small>Wonder Garden · Alpha 04</small></section></main>`
-  if (overlay==='inventory') {
+    <small>Wonder Garden · Alpha 05</small></section></main>`
+  if (overlay==='evolution') {
+    panel=evolutionPanel(s,crossParents)
+  } else if (overlay==='inventory') {
     panel=inventoryPanel(s,{tab:inventoryTab,sort:inventorySort,amounts:inventoryAmounts,
-      filter:inventoryFilter,minimum:inventoryMinimum,detail:inventoryDetail})
+      filter:inventoryFilter,minimum:inventoryMinimum,detail:inventoryDetail,selected:inventorySelected,
+      favoriteOnly,search:inventorySearch,page:inventoryPage})
   } else if (overlay==='nursery') {
     panel='<h2>'+w.nursery+'</h2><p>'+f.help+'</p>'
-    for(const p of s.nursery)panel+=button('nursery-return',name(p.species)+' #'+p.id+' · '+describe(s.lang,p)+' · '+f.lives+' '+p.lives+'/'+p.maxLives+' · '+w.return,'data-id="'+p.id+'"')
+    if(!s.tutorialSkipped && s.greenhouseLevel>=2 && !s.crosses.length) panel+=`<p class="hint">${s.lang==='ru'?'Уберите в питомник два растения одного вида, затем откройте «Развитие» для селекции.':'Store two plants of the same species, then open Develop to breed them.'}</p>`
+    for (const p of s.nursery) {
+      const attrs='data-id="'+p.id+'"'
+      panel+=button('nursery-return',name(p.species)+' #'+p.id+' · '+describe(s.lang,p)+' · '+f.lives+' '+p.lives+'/'+p.maxLives+
+        ' · '+(isBusy(s,p.id) ? (s.lang==='ru'?'В эксперименте':'In an experiment') : w.return),attrs,isBusy(s,p.id))
+      panel+=button('nursery-protect',(s.lang==='ru'?'Защита экземпляра':'Protect plant')+
+        ' · '+(s.protectedPlants.includes(p.id)?'✓':'—'),attrs)
+    }
   } else if (settingsOpen) {
     panel = `<h2>${w.settings}</h2>${switches}${button('menu',a.menu)}
       ${button('center',w.center)}${button('export-save',garden.export)}${button('reset',w.reset)}`
@@ -91,7 +110,9 @@ export function uiMarkup(view: WorldView, {
   else if (decorOpen) panel = decorPanel(s,slot,decorChoice)
   else if (helperOpen) panel = automationPanel(s)
   else if (collectionOpen) {
-    panel = '<h2>' + w.collection + ' · ' + s.planted.length + '/' + speciesIds.length + '</h2>'
+    panel = '<h2>' + w.collection + ' · ' + s.collection.length + '/'+(speciesIds.length*rarities.length)+'</h2>'
+    if(!s.tutorialSkipped) panel+=`<p class="hint">${s.lang==='ru'?'Посадите растение каждого вида и редкости, чтобы заполнить коллекцию.':'Plant each species and rarity to fill the collection.'}</p>`
+    panel += '<div class="collection-matrix"><table><thead><tr><th>'+w.collection+'</th>'+(['common','uncommon','rare','epic','legendary'] as const).map(r=>'<th>'+f[r]+'</th>').join('')+'</tr></thead><tbody>'+speciesIds.map(id=>'<tr><th>'+name(id)+'</th>'+(['common','uncommon','rare','epic','legendary'] as const).map(r=>'<td>'+(s.collection.some(c=>c.species===id && c.rarity===r)?'✓':'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'
     panel += '<div class="book-filters">' + (['all','base','hybrids'] as const).map(filter =>
       button('filter',w[filter],`data-filter="${filter}" aria-pressed="${collectionFilter === filter}"`)
     ).join('') + '</div>'
@@ -106,12 +127,44 @@ export function uiMarkup(view: WorldView, {
         panel += `<p>${single?inventory.single:inventory.multi} · ${w.cycle} ${info.cycleSec} ${w.sec}
           ${single?'':' · '+inventory.regrow+' '+info.regrowSec+' '+w.sec}</p>`
         panel+='<p>'+f.fruits+' '+info.fruits.join('–')+' × '+info.fruitValue+' ◈ · '+w.seeds+' '+info.ownSeeds.join('–')+' · '+f.lives+' '+info.lives+'</p>'
+        const entries=s.collection.filter(row=>row.species===id)
+          .sort((a,b)=>rarities.indexOf(b.rarity)-rarities.indexOf(a.rarity))
+        const collectionWords=s.lang==='ru'
+          ? {traits:'Возможные признаки', records:'Изученные профили', planted:'Посадки', harvested:'Плоды собраны', empty:'Посадите экземпляр этого вида.', profiles:'Профилей', source:'Семена продаются в лавке.'}
+          : {traits:'Available traits', records:'Studied profiles', planted:'Plantings', harvested:'Fruit collected', empty:'Plant this species to start recording profiles.', profiles:'Profiles', source:'Seeds are available from the shop.'}
+        const producesAura=auras.some(a=>a.source===id)
+        panel+=`<p>${plantDescriptions[id][s.lang==='ru'?0:1]}</p>
+          <p>${collectionWords.traits} · ${availableTraits(id).map(trait=>f[trait]).join(', ')}</p>
+          <h3>${collectionWords.records}</h3>`
+        if (!entries.length) panel+=`<p>${collectionWords.empty}</p>`
+        for (const row of entries) {
+          const representative=plantStats(id,row.profile)
+          panel+=`<p><strong>${describe(s.lang,row.profile)}</strong><br>
+            ${collectionWords.planted} ${row.planted} · ${collectionWords.harvested} ${row.harvested} · ${collectionWords.profiles} ${row.profiles.length}<br>
+            ${w.cycle} ${representative.growthSec.toFixed(1)} ${w.sec} · ${f.lives} ${representative.maxLives} · ${w.price} ×${representative.fruitPriceMultiplier.toFixed(2)}
+            ${producesAura ? ' · '+w.aura+' ×'+representative.auraMultiplier.toFixed(2) : ''}</p>`
+        }
+        const profiles=entries.flatMap(row=>row.profiles).map(profile=>({profile,stats:plantStats(id,profile)}))
+        if (profiles.length>1) {
+          const measures=[
+            {label:s.lang==='ru'?'Самый быстрый первый рост':'Fastest first growth',value:(p:typeof profiles[number])=>-p.stats.growthSec},
+            {label:s.lang==='ru'?'Больше всего жизней':'Most lives',value:(p:typeof profiles[number])=>p.stats.maxLives},
+            {label:s.lang==='ru'?'Самый ценный урожай':'Highest fruit value',value:(p:typeof profiles[number])=>p.stats.fruitPriceMultiplier},
+            {label:s.lang==='ru'?'Самое стабильное размножение':'Most stable propagation',value:(p:typeof profiles[number])=>p.stats.copyChance}
+          ]
+          panel+=`<h3>${s.lang==='ru'?'Рекорды характеристик':'Trait records'}</h3>`
+          for (const {label,value} of measures) {
+            const best=profiles.reduce((a,b)=>value(a)>=value(b)?a:b)
+            panel+=`<p>${label} · ${describe(s.lang,best.profile)}</p>`
+          }
+        }
         const rates=(v:typeof info)=>60*v.lives/(v.cycleSec+v.regrowSec*(v.lives-1))
         const income=(v:typeof info)=>rates(v)*(v.fruits[0]+v.fruits[1])/2*v.fruitValue
         for(const [label,get] of [[f.speed,rates],[f.income,income],[garden.harmony,(v:typeof info)=>v.harmony]] as const){
           panel+='<label class="rating">'+label+' <meter value="'+get(info)+'" max="'+Math.max(...Object.values(speciesInfo).map(get))+'"></meter></label>'
         }
-        for(const r of recipes.filter(r=>recipeKnown(s,r) && (r.primary===id || r.neighbors.includes(id))))panel+=recipeCard(s,r,null)
+        if (!isHybrid(id)) panel+=`<p>${collectionWords.source}</p>`
+        for(const r of recipes.filter(r=>r.result===id || recipeKnown(s,r) && (r.primary===id || r.neighbors.includes(id))))panel+=recipeCard(s,r,null)
         for (const aura of auras.filter(a => a.source === id)) {
           const targets = Array.isArray(aura.targets) ? aura.targets.map(s => name(s as Species)).join(', ') : aura.targets === 'all' ? w.allPlants : w.hybrids
           const amount = Math.round(100*aura.bonus) + '%'
@@ -161,7 +214,7 @@ export function uiMarkup(view: WorldView, {
     if (view.moveFrom !== null) panel += `<p>${w.destination}</p>` + button('cancel',w.cancel)
     else if (!plot) panel += `<p>${w.selectPlot}</p>`
     else if (!plot.open) {
-      const cost = expansionCost(s)!
+      const cost = expansionCost(s,selected!)!
       const neighboring = adjacent(selected!).some(index => s.plots[index].open)
       panel += `<p>${w.closed}</p>` + button('clear',`${w.clear} · ${cost} ◈`,'class="primary"',!neighboring || s.coins < cost)
       if (!neighboring) panel += `<p>${w.notAdjacent}</p>`
@@ -169,27 +222,65 @@ export function uiMarkup(view: WorldView, {
     }
     else {
       panel += `<p>${w.plot} ${selected! + 1} · ${w.level} ${plot.level}</p>`
-      if (plot.level < 3) {
-        const cost = bedLevels[plot.level === 1 ? 2 : 3].upgradeCost
-        const next=plot.level === 1 ? 2 : 3
-        panel += `<p>${['','I','II','III'][plot.level]} → ${['','I','II','III'][next]}<br>${w.growth} ×${bedLevels[plot.level].growthMultiplier} → ×${bedLevels[next].growthMultiplier}<br>${w.price} ×${bedLevels[plot.level].priceMultiplier} → ×${bedLevels[next].priceMultiplier}</p>`
+      if (plot.level < 5) {
+        const next=(plot.level+1) as BedLevel
+        const cost = bedLevels[next].upgradeCost
+        panel += `<p>${['','I','II','III','IV','V'][plot.level]} → ${['','I','II','III','IV','V'][next]}<br>${w.growth} ×${bedLevels[plot.level].growthMultiplier} → ×${bedLevels[next].growthMultiplier}<br>${w.price} ×${bedLevels[plot.level].priceMultiplier} → ×${bedLevels[next].priceMultiplier}</p>`
         panel += button('upgrade',`${w.upgrade} · ${cost} ◈`,'class="primary"',s.coins < cost)
       }
-      if (plot.plant) panel += button('move',w.move)
+      if (plot.plant) {
+        panel += button('move',w.move)
+        panel += button('plant-protect',(s.lang==='ru'?'Защита экземпляра':'Protect plant')+' · '+
+          (s.protectedPlants.includes(plot.plant.id)?'✓':'—'),`data-id="${plot.plant.id}"`)
+      }
       if (plot.plant && isRecipeRevealed(s)) panel += button('store',w.store,'data-id="'+plot.plant.id+'"')
     }
   } else if (view.shovel && !plot?.plant) panel='<h2>'+a.shovel+'</h2><p>'+a.select+'</p>'
   else if (plot) {
     panel += `<h2>${plot.plant ? name(plot.plant.species) : plot.open ? w.empty : w.closed}</h2><p>${w.plot} ${selected! + 1} · ${w.level} ${plot.level}</p>`
+    if (plot.open) {
+      const policy=plot.policy ?? defaultPolicy
+      const labels=modeLabels[s.lang]
+      panel+='<p>'+(s.lang==='ru'?'Назначение':'Bed mode')+'</p><div class="book-filters">'+
+        (['manual','commercial','seed','breeding','support'] as const).map((mode,i)=>button('plot-mode',labels[i],`data-mode="${mode}" aria-pressed="${policy.mode===mode}"`)).join('')+'</div>'
+      panel+=button('plot-harvest',(s.lang==='ru'?'Автосбор':'Auto harvest')+' · '+(policy.harvest?'✓':'—'))
+      if(plot.plant) panel+=button('plot-replant',(s.lang==='ru'?'Пересадка этого профиля':'Replant this profile')+' · '+(policy.replant?'✓':'—'))
+      const profiles=allSeedPacks(s).map(pack=>({species:pack.species,profile:canonical(pack)}))
+      const current=policy.replant
+      if (current && !profiles.some(pack=>pack.species===current.species && sameProfile(pack.profile,current.profile))) profiles.push(current)
+      panel+=`<div class="inventory-tools">
+        <label>${s.lang==='ru'?'Приоритет грядки':'Bed priority'}<select data-plot-priority>
+        ${[0,1,2,3].map(rank=>`<option value="${rank}" ${rank===policy.priority?'selected':''}>${rank}</option>`).join('')}
+        </select></label>
+        ${policy.mode==='seed' || policy.mode==='breeding' ? `<label>${s.lang==='ru'?'Цель производства семян':'Seed production target'}
+        <input type="number" min="0" value="${policy.target}" data-plot-target inputmode="numeric"></label>` : ''}
+        <label>${s.lang==='ru'?'Точный профиль пересадки':'Exact replanting profile'}
+        <select data-replant-profile><option value="">${s.lang==='ru'?'Без пересадки':'No replanting'}</option>
+        ${profiles.map(pack=>`<option value='${JSON.stringify(pack)}' ${current?.species===pack.species &&
+          sameProfile(current.profile,pack.profile)?'selected':''}>${name(pack.species)} · ${describe(s.lang,pack.profile)}</option>`).join('')}
+        </select></label></div>`
+      if (current) {
+        const amount=availableStock(s,current.species,current.profile)
+        const status=!s.automation.enabled || !s.automation.replant || !s.helperLevel
+          ? (s.lang==='ru'?'Автопересадка выключена':'Automatic replanting is off')
+          : amount===0 ? (s.lang==='ru'?'Нет доступных семян этого профиля':'No available seeds of this profile')
+          : (s.lang==='ru'?'Семян для пересадки':'Seeds available to replant')+` · ${amount}`
+        panel+=`<p class="hint">${status}</p>`
+      }
+    }
     if (plot.plant) {
       panel += `<div class="progress"><span style="width:${Math.round(plot.plant.progress * 100)}%"></span></div><p>${plot.plant.readySince !== null ? w.ready : `${w.growing} · ${secondsLeft(s,selected!)} ${w.sec}`}</p>`
       panel+='<p>T'+(speciesInfo[plot.plant.species].generation+1)+' · '+describe(s.lang,plot.plant)+' · '+f.lives+' '+plot.plant.lives+'/'+plot.plant.maxLives+' · '+w.cycle+' '+cycleSeconds(s,selected!).toFixed(1)+' '+w.sec+'</p>'
+      const stats=plantStats(plot.plant.species,plot.plant)
+      panel+=`<p>${f.fruits} ${stats.fruits.join('–')} · ${w.seeds} ${stats.ownSeeds.join('–')} · ${inventory.regrow} ${stats.regrowSec.toFixed(1)} ${w.sec}</p>`
+      const activeAuras=(['growth','price','propagation'] as const).map(kind=>({kind,bonus:auraBonus(s,selected!,kind)})).filter(a=>a.bonus>0)
+      if(activeAuras.length) panel+=`<p>${w.aura} · ${activeAuras.map(a=>w[a.kind]+' +'+Math.round(a.bonus*100)+'%').join(' · ')}</p>`
       panel += '<p>'+(speciesInfo[plot.plant.species].lifecycle==='single' ? inventory.single : inventory.multi)
         +' · '+(pollinationFor(s,selected!) ? inventory.pollinated : inventory.plain)+'</p>'
       if (view.shovel) {
         const id=plot.plant.id
         if (confirmId===id) {
-          panel += '<p>'+a.confirm(name(plot.plant.species),['','I','II','III'][plot.level])+' '+(plot.plant.readySince!==null?a.lost:'')+'</p>'
+          panel += '<p>'+a.confirm(name(plot.plant.species),['','I','II','III','IV','V'][plot.level])+' '+(plot.plant.readySince!==null?a.lost:'')+'</p>'
           if (s.plots.filter(p=>p.plant).length===1) panel+='<p>'+recoveryHint(s)+'</p>'
           panel+=button('confirm-compost',a.compost,'data-id="'+id+'"')+button('cancel-compost',w.cancel)
         } else {
@@ -199,6 +290,7 @@ export function uiMarkup(view: WorldView, {
         }
        } else {
         const p=plot.plant
+        panel+=button('plant-protect',(s.lang==='ru'?'Защита экземпляра':'Protect plant')+' · '+(s.protectedPlants.includes(p.id)?'✓':'—'),`data-id="${p.id}"`)
         const attrs='data-id="'+p.id+'" data-cycle="'+p.lives+'"'
         const disabled=p.readySince===null
         panel+=button('harvest',w.harvest,attrs,disabled)
@@ -236,12 +328,12 @@ export function uiMarkup(view: WorldView, {
     s.basket.length && (!s.sold || s.coins<needed) ? 'sell' :
     !s.sold || s.coins<needed || !targetSeed ? 'collect' : s.plots.every(p=>!p.open || p.plant) && !canReplace(s) ? 'shovel' : 'plant'
   const quickValue=quickSaleValue(s)
-  return `<div class="garden-ui" data-guide="${guide ? guideAction : ''}" data-guide-seed="${guide && targetSeed ? targetSeed : ''}"><header class="topbar"><div class="brand"><span class="brand-mark">${svg(icons.garden)}</span><span><small>${w.subtitle}</small><strong>${w.title}</strong></span></div><div class="stats"><div class="stat"><span class="stat-icon">${svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v10m-3-7h6m-6 4h6"/>')}</span><span><small>${w.coins}</small><strong>${s.coins}</strong></span></div><button type="button" class="stat basket" data-action="inventory" aria-expanded="${overlay==='inventory'}"><span class="stat-icon">${svg('<path d="M4 10h16l-2 10H6L4 10ZM8 10c0-7 8-7 8 0M8 13l1 4m3-4v4m4-4-1 4"/>')}</span><span><small>${inventory.title}</small><strong>${basketCount(s)}/${basketCapacity(s)}</strong></span></button>${button('sell',`${w.sell} · ${quickValue} ◈`,'class="sell"',!quickValue)}<button type="button" data-action="collection" aria-expanded="${collectionOpen}" class="stat collection"><span class="stat-icon">${svg(icons.breed)}</span><span><small>${w.collection}</small><strong>${s.planted.length}/${speciesIds.length}</strong></span></button></div><div class="top-actions">${isRecipeRevealed(s)?button('nursery',w.nursery):''}${button('journal',garden.journal,'class="quiet" aria-expanded="'+journalOpen+'"')}${button('settings',w.settings,'class="quiet" aria-expanded="'+settingsOpen+'"')}</div></header>
+  return `<div class="garden-ui" data-guide="${guide ? guideAction : ''}" data-guide-seed="${guide && targetSeed ? targetSeed : ''}"><header class="topbar"><div class="brand"><span class="brand-mark">${svg(icons.garden)}</span><span><small>${s.activeIsland==='valley' ? (s.lang==='ru'?'Цветочная долина':'Flower Valley') : w.subtitle}</small><strong>${w.title}</strong></span></div><div class="stats"><div class="stat"><span class="stat-icon">${svg('<circle cx="12" cy="12" r="8"/><path d="M12 7v10m-3-7h6m-6 4h6"/>')}</span><span><small>${w.coins}</small><strong>${s.coins}</strong></span></div><button type="button" class="stat basket" data-action="inventory" aria-expanded="${overlay==='inventory'}"><span class="stat-icon">${svg('<path d="M4 10h16l-2 10H6L4 10ZM8 10c0-7 8-7 8 0M8 13l1 4m3-4v4m4-4-1 4"/>')}</span><span><small>${inventory.title}</small><strong>${basketCount(s)}/${basketCapacity(s)}</strong></span></button>${button('sell',`${w.sell} · ${quickValue} ◈`,'class="sell"',!quickValue)}<button type="button" data-action="collection" aria-expanded="${collectionOpen}" class="stat collection"><span class="stat-icon">${svg(icons.breed)}</span><span><small>${w.collection}</small><strong>${s.planted.length}/${speciesIds.length}</strong></span></button></div><div class="top-actions">${isRecipeRevealed(s)?button('nursery',w.nursery):''}${button('evolution',s.lang==='ru'?'Развитие':'Develop')}${button('journal',garden.journal,'class="quiet" aria-expanded="'+journalOpen+'"')}${button('settings',w.settings,'class="quiet" aria-expanded="'+settingsOpen+'"')}</div></header>
     <div class="goal-card"><span class="eyebrow">${w.goal}</span><p>${!s.plots.some(p=>p.plant) ? recoveryHint(s) : s.planted.includes('solar_strawberry') && branch ? branchHint : s.tutorialSkipped && !s.planted.includes('solar_strawberry') ? '' : goal}</p>${branchButton}
     ${s.planted.includes('solar_strawberry') ? button('experiment',a.experiment)+button('corner',a.corner) : !s.tutorialSkipped ? button('skip',a.skip,'class="quiet"') : ''}
     ${s.sold && view.mode==='garden' ? button('shovel',svg('<path d="m16 3 4 4-3 3-4-4zM15 8l-6 7m-2-3 5 5-4 4-5-1 0-5z"/>')+a.shovel,'class="shovel" aria-pressed="'+view.shovel+'"') : ''}<small class="harmony-label">${garden.harmony} · ${harmony(s)}</small>${s.sold ? button('helper',svg(icons.garden) + automationWords[s.lang].name,`class="helper-link" aria-expanded="${helperOpen}"`) : ''}</div>
-    ${panel ? `<aside class="context${overlay==='inventory'?' inventory-context':''}">${overlay || journalOpen || decorOpen || helperOpen || collectionOpen || selected !== null ? button('close','×',`class="close" aria-label="${w.close}"`) : ''}<div class="context-inner">${panel}</div></aside>` : ''}
+    ${panel ? `<aside class="context${overlay==='inventory' || overlay==='evolution' || overlay==='helper'?' inventory-context':''}">${overlay || journalOpen || decorOpen || helperOpen || collectionOpen || selected !== null ? button('close','×',`class="close" aria-label="${w.close}"`) : ''}<div class="context-inner">${panel}</div></aside>` : ''}
     ${overlay==='inventory'?'':`<div class="camera">${button('zoomIn','+',`aria-label="${w.zoomIn}" title="${w.zoomIn}"`)}${button('zoomOut','−',`aria-label="${w.zoomOut}" title="${w.zoomOut}"`)}${button('center','⌾',`aria-label="${w.center}" title="${w.center}"`)}</div>`}
     <nav class="modes" aria-label="${w.title}">${modes.map(m => button('mode',`${svg(icons[m])}<strong>${w[m]}</strong>`,`data-mode="${m}" class="${view.mode === m ? 'active' : ''}" aria-pressed="${view.mode === m}"`,(m === 'build' && !s.sold) || (m === 'breed' && !s.planted.includes('strawberry') && !isRecipeRevealed(s)))).join('')}</nav>
-    ${warningText ? `<div class="warning" role="status">${warningText}</div>` : ''}${firstSeeds.length ? `<div class="notice reward" role="status"><strong>${firstSeeds.map(name).join(' · ')} · ${a.restored}</strong><p>${f.help}</p>${firstSeeds.map(id=>button('plant-reward',firstSeeds.length===1 ? f.hybrid : a.plant+' · '+name(id),'data-seed="'+id+'"')).join('')}${button('nursery',f.green)}${button('later',a.later)}</div>` : notice ? `<div class="notice" role="status">${notice}</div>` : ''}<div class="keyboard-beds">${s.plots.map((p,i)=>button('pick-bed',w.plot+' '+(i+1)+' · '+(p.plant ? name(p.plant.species) : p.open ? w.empty : w.closed),'data-id="'+i+'"')).join('')}</div></div>`
+    ${warningText ? `<div class="warning" role="status">${warningText}</div>` : ''}${firstSeeds.length ? `<div class="notice reward" role="status"><strong>${firstSeeds.map(name).join(' · ')} · ${a.restored}</strong><p>${f.help}</p>${firstSeeds.map(id=>button('plant-reward',firstSeeds.length===1 ? f.hybrid : a.plant+' · '+name(id),'data-seed="'+id+'"')).join('')}${button('nursery',f.green)}${button('later',a.later)}</div>` : notice ? `<div class="notice" role="status">${notice}</div>` : ''}<div class="keyboard-beds">${plotIndices(s.activeIsland).filter(i=>!!s.plots[i]).map(i=>{const p=s.plots[i];return button('pick-bed',w.plot+' '+(i+1)+' · '+(p.plant ? name(p.plant.species) : p.open ? w.empty : w.closed),'data-id="'+i+'"')}).join('')}</div></div>`
 }

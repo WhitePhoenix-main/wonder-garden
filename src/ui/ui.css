@@ -616,6 +616,11 @@ svg {
     padding: 4px;
   }
 
+  .top-actions button {
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
   .top-actions .reset {
     max-width: 70px;
     line-height: 1.1;
@@ -767,6 +772,20 @@ svg {
 [data-action="inventory"] { min-height:44px; }
 @media (max-width:600px) {
   .context.inventory-context { right:9px; left:9px; width:auto; max-height:57dvh; }
+  .garden-ui:has(.inventory-context) .camera { display:none; }
+  .garden-ui:has(.inventory-context) .notice:not(.reward) { bottom:calc(57dvh + 90px); }
+}
+@media (max-width:460px) {
+  .brand { gap:5px; }
+  .brand-mark { flex:none; }
+  .brand > span:last-child { min-width:0; }
+  .brand small { margin:0; letter-spacing:.04em; overflow-wrap:anywhere; }
+  .brand strong { display:none; }
 }
 
 [data-inventory-filter] { min-height:44px; max-width:100%; }
+
+.collection-matrix { overflow-x: auto; }
+.collection-matrix table { border-collapse: collapse; min-width: 100%; }
+.collection-matrix th, .collection-matrix td { padding: 0.4rem; text-align: center; }
+.collection-matrix th:first-child { text-align: left; }

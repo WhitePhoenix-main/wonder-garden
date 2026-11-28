@@ -12,26 +12,31 @@ const rare:Profile={...common,rarity:'rare',plus:'early'}
 const uncommon:Profile={...common,rarity:'uncommon',plus:'hardy'}
 
 it.each([[common,common,65,90],[common,uncommon,55,85],[common,rare,45,80],[uncommon,uncommon,45,80],
-  [uncommon,rare,35,75],[rare,rare,25,65]] as const)('rolls rarity at both cumulative boundaries %j × %j',(a,b,x,y)=>{
+  [uncommon,rare,35,75],[rare,rare,20,55]] as const)('rolls rarity at both cumulative boundaries %j × %j',(a,b,x,y)=>{
   for(const [roll,expected] of [[x-.01,'common'],[x,'uncommon'],[y-.01,'uncommon'],[y,'rare']] as const)
     expect(inherit(a,b,sequence(roll/100)).rarity).toBe(expected)
 })
 it('inherits pluses and flaws, including collisions and mutation',()=>{
   for(const [choice,index,expected] of [[.79,0,'hardy'],[.79,.99,'early'],[.8,0,'fruitful']] as const)
-    expect(inherit(uncommon,rare,sequence(.99,choice,index)).plus).toBe(expected)
+    expect(inherit(uncommon,rare,sequence(.99,choice,index)).plus).toEqual([expected])
   for(const b of [common,uncommon]){
-    expect(inherit(uncommon,b,sequence(.99,.799,0)).plus).toBe('hardy')
-    expect(inherit(uncommon,b,sequence(.99,.8,0)).plus).toBe('early')
+    expect(inherit(uncommon,b,sequence(.99,.799,0)).plus).toEqual(['hardy'])
+    expect(inherit(uncommon,b,sequence(.99,.8,0)).plus).toEqual(['early'])
   }
   for(const [a,b,chance] of [[null,null,.1],['small',null,.35],['small','small',.6],['small','slow',.6]] as const){
     const left={...common,minus:a},right={...common,minus:b}
     expect(inherit(left,right,sequence(0,chance)).minus).toBeNull()
-    expect(inherit(left,right,sequence(0,chance-.001,0)).minus).toBe(a??'fragile')
-    if(b==='slow')expect(inherit(left,right,sequence(0,.59,.999)).minus).toBe(b)
+    const allowed=negatives.filter(minus=>minus===a || minus===b)
+    expect(inherit(left,right,sequence(0,chance-.001,0)).minus).toBe(allowed[0]??'fragile')
+    if(b==='slow')expect(inherit(left,right,sequence(0,.59,.999)).minus).toBe(allowed.at(-1))
   }
-  for(const [i,minus] of [[0,'fragile'],[1,'slow']] as const)
-    expect(inherit(common,common,sequence(.99,i/4,0,i/4))).toMatchObject({plus:positives[i],minus:null})
-  expect(positives.flatMap(plus=>negatives.filter(minus=>compatible({...rare,plus,minus})))).toHaveLength(14)
+  for(const [i,minus] of [[0,'fragile'],[1,'slow']] as const) {
+    const child=inherit(common,{...common,minus},sequence(.99,i/positives.length,0,0))
+    expect(child.plus).toEqual([positives[i]])
+    expect(child.minus).not.toBe(minus)
+    expect(compatible(child)).toBe(true)
+  }
+  expect(positives.flatMap(plus=>negatives.filter(minus=>compatible({...rare,plus,minus})))).toHaveLength(26)
 })
 it('matches the expected output distributions and income per minute',()=>{
   const mean=(range:number[],delta:number)=>Array.from({length:6000},(_,i)=>quantity(range,delta,(i+.5)/6000)).reduce((a,b)=>a+b)/6000
@@ -55,18 +60,18 @@ it('retains an oversized crop and copies exactly one seed on the final life',()=
   s.rng=1
   const batch=s.basket[0]
   commit(s,{type:'extractSeeds',id:batch.id,count:batch.count})
-  expect(s.variants).toEqual([{species:'radish',rarity:'rare',plus:'seedy',minus:'sparse',count:1}])
+  expect(s.variants).toEqual([{species:'radish',rarity:'rare',plus:['seedy'],minus:'sparse',count:1}])
   expect(s.basket).toHaveLength(0)
   reject(s,c,'notReady')
   const stock=s.variants[0],coins=s.coins
   commit(s,{type:'plant',plot:12,species:'radish',stock})
   expect(s.coins).toBe(coins);expect(s.variants).toEqual([])
-  expect(s.plots[12].plant).toMatchObject({...rare,plus:'seedy',minus:'sparse',lives:1})
+  expect(s.plots[12].plant).toMatchObject({...rare,plus:['seedy'],minus:'sparse',lives:1})
   expect(parseSave(JSON.stringify(s))).toEqual(s)
 })
 it('upgrades a snapshot generated and validated by 1465cf9; rejects invalid legacy inventory',()=>{
   const s=parseSave(JSON.stringify(fixture)) as GameState
-  expect(s).toMatchObject({schemaVersion:8,coins:fixture.coins,planted:fixture.planted,
+  expect(s).toMatchObject({schemaVersion:9,coins:fixture.coins,planted:fixture.planted,
     seeds:{solar_strawberry:1},failures:{solar_strawberry:0,moonberry:1},musicMuted:true,lang:'en'})
   expect(saleValue(s)).toBe(60)
   expect(s.basket).toMatchObject([{species:'strawberry',count:4,valueUnits:150000,profile:null,pollination:null}])
@@ -109,7 +114,7 @@ it('captures the configured recipe and the first eligible donor even when donors
 it('preserves profiles and partial growth in nursery, replacement and next draw',()=>{
   const s=parseSave(JSON.stringify(fixture)) as GameState
   const base=s.plots[8].plant!
-  s.variants.push({species:'strawberry',count:2,rarity:'rare',plus:'early',minus:'small'})
+  s.variants.push({species:'strawberry',count:2,rarity:'rare',plus:['early'],minus:'small'})
   const pack=s.variants[0]
   const old=structuredClone(base),coins=s.coins
   commit(s,{type:'plant',plot:8,species:'strawberry',replaceId:base.id,stock:pack})
@@ -144,7 +149,7 @@ it('retains the roll on the bed if another harvest advances the generator',()=>{
   expect(copy.basket[0].count).toBe(9)
 })
 
-it('rebreeds a lost hybrid and never repeats the introductory guarantee',()=>{
+it('rebreeds an expired hybrid, retains its last harvest and never repeats the introductory guarantee',()=>{
   const s=parseSave(JSON.stringify(fixture)) as GameState
   commit(s,{type:'store',plot:4,expectedId:s.plots[4].plant!.id})
   commit(s,{type:'plant',species:'solar_strawberry',plot:12,replaceId:s.plots[12].plant!.id})
@@ -153,7 +158,7 @@ it('rebreeds a lost hybrid and never repeats the introductory guarantee',()=>{
   expect(s.planted).toContain('solar_strawberry')
   expect(parseSave(JSON.stringify(s))).toEqual(s)
   const lost=s.basket.find(b=>b.species==='solar_strawberry')!
-  commit(s,{type:'sellHarvest',id:lost.id,count:lost.count})
+  reject(s,{type:'sellHarvest',id:lost.id,count:lost.count},'lastHybrid')
   commit(s,{type:'harvest',plot:8})
   const batch=s.basket.find(b=>b.pollination?.result==='solar_strawberry')!
   s.rng=1000
@@ -179,7 +184,7 @@ it('uses the strongest single copy chance from the parent and honey clover',()=>
   const s=parseSave(JSON.stringify(fixture)) as GameState
   commit(s,{type:'plant',species:'solar_strawberry',plot:12,replaceId:s.plots[12].plant!.id})
   const parent=s.plots[12].plant!
-  Object.assign(parent,{rarity:'uncommon',plus:'seedy',minus:'sparse'})
+  Object.assign(parent,{rarity:'uncommon',plus:['seedy'],minus:'sparse'})
   const noAura=structuredClone(s)
   s.revealed.push('honey_clover')
   s.planted.push('clover')
@@ -195,6 +200,6 @@ it('uses the strongest single copy chance from the parent and honey clover',()=>
     commit(g,{type:'extractSeeds',id:batch.id,count:batch.count})
     expect(parseSave(JSON.stringify(g))).toEqual(g)
   }
-  expect(s.variants[0]).toMatchObject({species:'solar_strawberry',rarity:'uncommon',plus:'seedy',minus:'sparse',count:1})
+  expect(s.variants[0]).toMatchObject({species:'solar_strawberry',rarity:'uncommon',plus:['seedy'],minus:'sparse',count:1})
   expect(noAura.variants).toEqual([])
 })

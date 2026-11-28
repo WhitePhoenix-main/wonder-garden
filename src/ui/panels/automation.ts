@@ -1,7 +1,14 @@
 import type { GameState } from '../../game/model'
 import { basketCapacity, oldestReadyPlot } from '../../game'
 import { basketCount } from '../../game/queries'
-import { autoSellOffer, helperLevels, basketLevels } from '../../game/config'
+import { autoSellOffer, helperLevels, basketLevels, evolution } from '../../game/config'
+import { plotModes, rarities } from '../../game/model'
+import { field } from '../specimens'
+
+export const modeLabels={
+  ru:['Ручная','Продажа','Семена','Селекция','Поддержка'],
+  en:['Manual','Commercial','Seeds','Breeding','Support']
+}
 
 export const automationWords = {
   ru: {
@@ -29,10 +36,28 @@ export function automationPanel(state:GameState) {
   const used=basketCount(state)
   const status = used === basketCapacity(state) ? w.full :
     oldestReadyPlot(state) === null ? w.waiting : w.ready
-  const numerals = ['','I','II','III']
+  const numerals = ['','I','II','III','IV','V']
   let html = `<h2>${w.name} ${numerals[level]}</h2><p>${w.offer}</p>`
+  if(!state.tutorialSkipped && level) html+=`<p class="hint">${state.lang==='ru'?'Назначьте грядке режим и профиль пересадки в карточке грядки. Резерв семян настраивается в инвентаре.':'Choose a bed mode and replanting profile on the bed card. Set seed reserves in the inventory.'}</p>`
+  const settings = state.lang === 'ru'
+    ? {enabled:'Помощник',replant:'Автопересадка',extractPollinated:'Переработка опылённого урожая',sellSeeds:'Продажа лишних семян',sellFruit:'Продажа урожая'}
+    : {enabled:'Helper',replant:'Automatic replanting',extractPollinated:'Extract pollinated harvest',sellSeeds:'Sell excess seeds',sellFruit:'Sell harvest'}
   if (level) {
-    html += `<p class="hint">${status}<br>${w.pace} · ${helperLevels[level].intervalSec} ${w.sec}
+    const toggles=['enabled','replant',...(state.stallLevel>=2 ? ['sellFruit'] as const : []),
+      ...(state.stallLevel>=3 ? ['extractPollinated','sellSeeds'] as const : [])] as const
+    for (const key of toggles) {
+      html += `<button type="button" data-action="automation-toggle" data-setting="${key}" aria-pressed="${state.automation[key]}">${settings[key]} · ${state.automation[key]?'✓':'—'}</button>`
+    }
+    html+=`<div class="inventory-tools"><label>${state.lang==='ru'?'Приоритет режима':'Preferred bed mode'}
+      <select data-automation-preferred><option value="">${state.lang==='ru'?'По времени':'Oldest first'}</option>
+      ${plotModes.map((mode,i)=>`<option value="${mode}" ${mode===state.automation.preferred?'selected':''}>${modeLabels[state.lang][i]}</option>`).join('')}
+      </select></label>${state.stallLevel>=4 ? `<label>${state.lang==='ru'?'Редкость автопродажи до':'Auto-sell rarity up to'}
+      <select data-sale-rarity><option value="">${state.lang==='ru'?'По назначению грядки':'Bed mode default'}</option>
+      ${rarities.map(r=>`<option value="${r}" ${r===state.automation.saleRarity?'selected':''}>${field[state.lang][r]}</option>`).join('')}
+      </select></label>` : ''}</div>`
+  }
+  if (level) {
+    html += `<p class="hint">${status}<br>${w.pace} · ${evolution.helperThroughput[level]} / ${helperLevels[level].intervalSec} ${w.sec}
       <br>${w.next} · ${Math.ceil(state.harvestRemaining)} ${w.sec}</p>`
   }
   if (next) {

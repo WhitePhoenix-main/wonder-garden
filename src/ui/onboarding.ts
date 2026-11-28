@@ -1,5 +1,6 @@
 import type { GameState } from '../game/model'
 import { canReplace, isRecipeActive, recipes, speciesIds, speciesInfo } from '../game'
+import { plotCount } from '../game/config'
 
 import { saleValue } from '../game/queries'
 import { extractionYield } from '../game/trade'
@@ -31,7 +32,7 @@ const hints = {
     breed: 'Соберите клубнику, опылённую подсолнечником.',
     explore: 'Выберите следующий опыт или обустройте уголок сада.',
     expand: 'Все виды изучены. Откройте оставшиеся грядки.',
-    complete: 'Хранитель острова · сад полностью открыт'
+    complete: 'Зелёный остров освоен. Следующие цели — в журнале и панели «Развитие».'
   },
   en: {
     harvest: 'Tap a ripe radish to collect its harvest.',
@@ -49,7 +50,7 @@ const hints = {
     breed: 'Harvest a strawberry pollinated by a sunflower.',
     explore: 'Choose another experiment or create a garden corner.',
     expand: 'Every species studied. Open the remaining beds.',
-    complete: 'Island Keeper · garden complete'
+    complete: 'Green Island is complete. Find your next goals in the Journal and Develop panels.'
   }
 } as const
 
@@ -61,7 +62,7 @@ export function gardenHint(state:GameState):string {
   if (!state.sold) return text.harvest
   if (state.planted.includes('solar_strawberry')) {
     if (state.planted.length < speciesIds.length) return text.explore
-    return state.plots.every(plot => plot.open) ? text.complete : text.expand
+    return state.plots.slice(0,plotCount).every(plot => plot.open) ? text.complete : text.expand
   }
   const revealed = state.revealed.includes('solar_strawberry')
   if (!revealed && state.basket.some(b=>b.pollination?.result==='solar_strawberry' && extractionYield(b).attempts>0)) return text.cross

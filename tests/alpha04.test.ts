@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import alpha03 from './fixtures/alpha03.json'
 import { advance, basketCount, execute, initialState, speciesIds, speciesInfo } from '../src/game'
-import { common, inherit, maxLives, rules } from '../src/game/genetics'
+import { common, inherit, maxLives, rules, traits } from '../src/game/genetics'
 import type { GameState, Profile } from '../src/game/model'
 import { extractionYield, harvestSaleValue, seedSaleValue } from '../src/game/trade'
 import { parseSave } from '../src/persistence/migration'
@@ -13,7 +13,7 @@ const fragile:Profile = {rarity:'common',plus:null,minus:'fragile'}
 
 function reload(state:GameState):GameState {
   const restored=parseSave(JSON.stringify(state))
-  if (!restored || restored==='future') throw Error('Expected a valid Alpha-4 snapshot')
+  if (!restored || restored==='future') throw Error('Expected a valid current snapshot')
   expect(restored).toEqual(state)
   return restored
 }
@@ -48,7 +48,7 @@ describe('Alpha-4 harvest and inventory',()=>{
         expect(maxLives(species,fragile)).toBe(1)
         for(let i=0;i<100;i++){
           const offspring=inherit(rareHardy,fragile,()=>i/100,species)
-          expect(offspring.plus).not.toBe('hardy')
+          expect(traits(offspring)).not.toContain('hardy')
           expect(offspring.minus).not.toBe('fragile')
         }
       }else{
@@ -60,7 +60,7 @@ describe('Alpha-4 harvest and inventory',()=>{
 
   it('groups like crops, keeps a second genome separate and trades against stock atomically',()=>{
     const state=initialState(37)
-    const rare:Profile={rarity:'rare',plus:'seedy',minus:'sparse'}
+    const rare:Profile={rarity:'rare',plus:['seedy'],minus:'sparse'}
     state.variants.push({species:'radish',count:1,...rare})
     commit(state,{type:'plant',plot:8,species:'radish',stock:rare})
     expect(state.variants).toEqual([])
@@ -106,7 +106,7 @@ describe('Alpha-4 harvest and inventory',()=>{
 
   it('freezes parents through removal and reload, with one cross roll per harvested lot',()=>{
     const state=initialState(11)
-    const donor:Profile={rarity:'rare',plus:'seedy',minus:'small'}
+    const donor:Profile={rarity:'rare',plus:['seedy'],minus:'small'}
     state.coins=150
     state.sold=true
     commit(state,{type:'plant',plot:8,species:'strawberry'})
@@ -139,7 +139,7 @@ describe('Alpha-4 harvest and inventory',()=>{
 
   it('keeps extraction deterministic when the first processed fruit has no own seed',()=>{
     const state=initialState(1)
-    const seedy:Profile={rarity:'rare',plus:'seedy',minus:null}
+    const seedy:Profile={rarity:'rare',plus:['seedy'],minus:null}
     state.coins=1000
     state.sold=true
     commit(state,{type:'plant',plot:8,species:'strawberry'})
@@ -171,16 +171,17 @@ describe('Alpha-4 harvest and inventory',()=>{
   it('migrates validated d4b0232 data once and keeps progress, lifetimes, prices and genetics',()=>{
     const result=parseSave(JSON.stringify(alpha03))
     if(!result || result==='future') throw Error('Expected migration of Alpha-3 fixture')
-    expect(result).toMatchObject({schemaVersion:8,coins:alpha03.coins,variants:alpha03.variants,
+    expect(result).toMatchObject({schemaVersion:9,coins:alpha03.coins,
+      variants:alpha03.variants.map(pack=>({...pack,plus:pack.plus===null ? [] : [pack.plus]})),
       revealed:alpha03.revealed,seeds:alpha03.seeds,lang:alpha03.lang,rng:alpha03.rng,
       musicMuted:alpha03.musicMuted,tutorialSkipped:alpha03.tutorialSkipped})
     const [batch]=result.basket
     expect(batch).toMatchObject({species:'strawberry',profile:null,pollination:null,count:4,valueUnits:150000})
     reject(result,{type:'extractSeeds',id:batch.id,count:1},'noExtraction')
     expect(result.plots.map(p=>[p.open,p.level])).toEqual(alpha03.plots.map(p=>[p.open,p.level]))
-    expect(plantAt(result,12)).toMatchObject({rarity:'rare',plus:'hardy',lives:1,maxLives:1,pollination:null})
+    expect(plantAt(result,12)).toMatchObject({rarity:'rare',plus:['hardy'],lives:1,maxLives:1,pollination:null})
     expect(plantAt(result,8)).toMatchObject({progress:alpha03.plots[8].plant!.progress,lives:2,maxLives:6,
-      rarity:'uncommon',plus:'hardy',pollination:null})
+      rarity:'uncommon',plus:['hardy'],pollination:null})
     expect(plantAt(result,9).readySince).toBe(alpha03.plots[9].plant!.readySince)
     expect(reload(result)).toEqual(result)
     expect(validState({...result,basket:[{...batch,count:5}]})).toBe(false)

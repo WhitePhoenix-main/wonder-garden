@@ -85,12 +85,12 @@ describe('Leafy and the market stall', () => {
   it('lets Leafy harvest the last life and keeps uncommon crop out of automatic sales', () => {
     const state=initialState(33)
     earn(state,500)
-    Object.assign(plantAt(state,12),{rarity:'rare',plus:'fruitful'})
+    Object.assign(plantAt(state,12),{rarity:'rare',plus:['fruitful']})
     commit(state,{type:'upgradeHelper',target:1})
     commit(state,{type:'buyAutoSell'})
     advance(state,20)
     expect(state.plots[12].plant).toBeNull()
-    expect(state.basket).toMatchObject([{species:'radish',profile:{rarity:'rare',plus:'fruitful'}}])
+    expect(state.basket).toMatchObject([{species:'radish',profile:{rarity:'rare',plus:['fruitful']}}])
     expect(state.seeds.radish).toBe(0)
   })
 

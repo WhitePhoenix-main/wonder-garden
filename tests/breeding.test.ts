@@ -1,8 +1,9 @@
 import { expect,it } from 'vitest'
 import { advance, initialState, speciesInfo } from '../src/game'
 import { chance, experiments, pollinationFor, secondsLeft } from '../src/game/queries'
-import { balance } from '../src/game/config'
+import { balance, evolution, plotIndices } from '../src/game/config'
 import { common, rules } from '../src/game/genetics'
+import { harmony } from '../src/game/decor'
 import { parseSave } from '../src/persistence/migration'
 import type { Command,Hybrid,Species } from '../src/game/model'
 import { commit,cross,earn,wait } from './helpers'
@@ -63,8 +64,27 @@ it.each([17,42,2026])('completes all 12 species and 16 beds through public comma
   for(const plot of [1,2,3])open(plot)
   expect(s.planted).toHaveLength(12);expect(s.plots.every(p=>p.open)).toBe(true)
   expect(parseSave(JSON.stringify(s))).toEqual(s)
-  console.log({seed,firstHarvest,firstHybrid:first,completion:s.playTime})
-})
+  const completion=s.playTime
+
+  for (const [decor,slot] of [['sakura','northwest'],['statue','northeast'],['fountain','southwest'],
+    ['magic_lantern','southeast']] as const) {
+    if (harmony(s,'green')>=evolution.bridge.harmony) break
+    pay({type:'buyDecor',decor,slot,replaceId:null},balance.decor.find(d=>d.id===decor)!.cost)
+  }
+  expect(harmony(s,'green')).toBeGreaterThanOrEqual(evolution.bridge.harmony)
+  pay({type:'restoreBridge'},evolution.bridge.cost)
+  commit(s,{type:'travel',island:'valley'})
+  expect(plotIndices('valley').filter(i=>s.plots[i].open)).toHaveLength(2)
+  pay({type:'plant',plot:16,species:'radish'},speciesInfo.radish.seedPrice!)
+  const valleyStarted=s.playTime
+  commit(s,{type:'travel',island:'green'})
+  wait(s,speciesInfo.radish.cycleSec)
+  expect(s.plots[16].plant!.readySince).toBeGreaterThan(valleyStarted)
+  commit(s,{type:'travel',island:'valley'})
+  commit(s,{type:'harvest',plot:16})
+  expect(parseSave(JSON.stringify(s))).toEqual(s)
+  console.log({seed,firstHarvest,firstHybrid:first,completion,bridge:s.playTime})
+},10000)
 
 it('keeps failures across reload and relocation and guarantees the fifth extraction attempt',()=>{
   const s=initialState(1);s.coins=2000

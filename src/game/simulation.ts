@@ -1,8 +1,9 @@
 import type { GameState } from './model'
 import { autoSellOffer, helperLevels } from './config'
-import { execute } from './commands'
-import { cycleSeconds, oldestReadyPlot, pollinationFor } from './queries'
+import { sellSurplusSeeds, workGarden } from './automation'
+import { cycleSeconds, pollinationFor } from './queries'
 import { sellBasket } from './trade'
+import { refreshOrders } from './orders'
 
 // Only planted instances grow during active game time.
 function grow(state: GameState, seconds: number): void {
@@ -27,8 +28,10 @@ export function advance(state: GameState, seconds: number): string[] {
   const events: string[] = []
   if (!Number.isFinite(seconds)) return events
   while (seconds > 0) {
-    const dt = Math.min(seconds, state.helperLevel ? state.harvestRemaining : Infinity,
+    const orderDeadline=state.orderRefreshAt>state.playTime ? state.orderRefreshAt-state.playTime : Infinity
+    const dt = Math.min(seconds, orderDeadline, state.helperLevel ? state.harvestRemaining : Infinity,
       state.autoSell ? state.sellRemaining : Infinity)
+    const before=state.playTime
     grow(state, dt)
     seconds -= dt
     if (state.autoSell) state.sellRemaining -= dt
@@ -36,18 +39,16 @@ export function advance(state: GameState, seconds: number): string[] {
       state.harvestRemaining -= dt
       if (state.harvestRemaining <= 1e-9) {
         state.harvestRemaining = helperLevels[state.helperLevel].intervalSec!
-        const plot = oldestReadyPlot(state)
-        if (plot !== null) {
-          const plant=state.plots[plot].plant!
-          const result = execute(state, {type:'harvest', plot,expectedId:plant.id,cycle:plant.lives})
-          if (result.ok) events.push(...result.events, 'HelperHarvested:' + plot)
-        }
+        if (state.automation.enabled) events.push(...workGarden(state))
       }
     }
     if (state.autoSell && state.sellRemaining <= 1e-9) {
-      events.push(...sellBasket(state, true))
+      if (state.automation.sellFruit) events.push(...sellBasket(state, true))
+      events.push(...sellSurplusSeeds(state))
       state.sellRemaining = autoSellOffer.intervalSec
     }
+    if (refreshOrders(state)) events.push('OrdersUpdated')
+    if (state.crosses.some(c=>!c.collected && c.readyAt>before && c.readyAt<=state.playTime)) events.push('CrossReady')
   }
   return events
 }

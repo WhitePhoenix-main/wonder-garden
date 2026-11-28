@@ -2,12 +2,12 @@ export const baseIds = ['radish','strawberry','sunflower','blueberry','moonflowe
 export const hybridIds = ['solar_strawberry','moonberry','honey_clover','golden_flower','crystal_flower','star_orchid'] as const
 export type Hybrid = typeof hybridIds[number]
 export type Species = typeof baseIds[number] | Hybrid
-export type BedLevel = 1 | 2 | 3
+export type BedLevel = 1 | 2 | 3 | 4 | 5
 export type Lang = 'ru' | 'en'
-export type HelperLevel = 0 | 1 | 2 | 3
-export const decorIds = ['bench','lantern','flower_arch','sakura'] as const
+export type HelperLevel = 0 | BedLevel
+export const decorIds = ['bench','lantern','flower_arch','sakura','fountain','apiary','magic_lantern','statue'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 8
+export const saveVersion = 9
 
 export interface Recipe {
   result: Hybrid
@@ -17,12 +17,16 @@ export interface Recipe {
   harvests: number
 }
 
-export const rarities = ['common','uncommon','rare'] as const
-export const positives = ['hardy','early','fruitful','seedy'] as const
+export const rarities = ['common','uncommon','rare','epic','legendary'] as const
+export const positives = ['hardy','early','fruitful','seedy','quality','stable','aura'] as const
 export const negatives = ['fragile','slow','small','sparse'] as const
+export type Rarity = typeof rarities[number]
+export type Positive = typeof positives[number]
+export type IslandId = 'green'|'valley'
 export interface Profile {
-  rarity: typeof rarities[number]
-  plus: typeof positives[number] | null
+  rarity: Rarity
+  /** Scalar inputs are supported for earlier saves. New profiles use an array. */
+  plus: readonly Positive[] | Positive | null
   minus: typeof negatives[number] | null
 }
 export interface SeedPack extends Profile {species:Species; count:number}
@@ -39,6 +43,7 @@ export interface HarvestLot {
   copyChance: number
   copyPending: boolean
   crossPending: boolean
+  origin?: {plot:number; mode:PlotMode; specimen:number; protected:boolean}
 }
 export interface HarvestBatch {
   id: number
@@ -65,6 +70,51 @@ export interface Plot {
   open: boolean
   level: BedLevel
   plant: Plant | null
+  policy?: PlotPolicy
+}
+
+export const plotModes = ['manual','commercial','seed','breeding','support'] as const
+export type PlotMode = typeof plotModes[number]
+export interface PlotPolicy {
+  mode: PlotMode
+  priority: number
+  harvest: boolean
+  replant: {species:Species; profile:Profile}|null
+  target: number
+}
+export interface GreenhouseCross {
+  id:number
+  parents:[number,number]
+  parentProfiles:[Profile,Profile]
+  species:Species
+  profile:Profile
+  startsAt:number
+  readyAt:number
+  collected:boolean
+}
+export const buyers = ['baker','merchant','florist','alchemist','botanist','collector'] as const
+export interface OrderRequirement {
+  kind:'fruit'|'seed'
+  count:number
+  species?:Species
+  tier?:number
+  rarity?:Rarity
+  trait?:Positive
+  clean?:boolean
+}
+export interface Order {
+  id:number
+  buyer:typeof buyers[number]
+  requirements:OrderRequirement[]
+  reward:number
+}
+export interface CollectionRecord {
+  species:Species
+  rarity:Rarity
+  profile:Profile
+  planted:number
+  harvested:number
+  profiles:Profile[]
 }
 
 export interface Decoration {
@@ -106,17 +156,50 @@ export interface GameState {
   pendingHybrid:Hybrid|null
   tutorialSkipped: boolean
   muted: boolean
+  activeIsland: IslandId
+  greenhouseLevel: number
+  stallLevel: number
+  crosses: GreenhouseCross[]
+  orders: Order[]
+  orderRefreshAt: number
+  ordersCompleted: number
+  collection: CollectionRecord[]
+  achievements: string[]
+  rank: number
+  protectedPlants: number[]
+  protectedProfiles: string[]
+  favorites: string[]
+  reserves: Record<string,number>
+  automation: {
+    enabled:boolean; replant:boolean; extractPollinated:boolean; sellSeeds:boolean; preferred:PlotMode|null
+    sellFruit:boolean; saleRarity:Rarity|null
+  }
 }
-export type Command =
-  | {type:'clear'|'upgrade';plot:number}
-  | {type:'harvest';plot:number;expectedId:number;cycle:number}
+export type BulkItem =
   | {type:'sellHarvest';id:number;count:number}
   | {type:'extractSeeds';id:number;count:number}
   | {type:'sellSeeds';species:Species;profile:Profile;count:number}
+  | {type:'plant';plot:number;species:Species;replaceId?:number;stock?:Profile}
+export type EvolutionCommand =
+  | {type:'upgradeGreenhouse'|'upgradeStall';target:number}
+  | {type:'startCross';parents:[number,number]}
+  | {type:'collectCross'|'fulfillOrder'|'declineOrder';id:number}
+  | {type:'restoreBridge'}
+  | {type:'travel';island:IslandId}
+  | {type:'protectPlant';id:number;enabled:boolean}
+  | {type:'protectProfile'|'favoriteProfile';species:Species;profile:Profile;enabled:boolean}
+  | {type:'setReserve';species:Species;profile?:Profile;count:number}
+  | {type:'plotPolicy';plot:number;policy:PlotPolicy}
+  | {type:'setAutomation';settings:GameState['automation']}
+  | {type:'bulk';commands:BulkItem[]}
+export type Command =
+  | EvolutionCommand
+  | BulkItem
+  | {type:'clear'|'upgrade';plot:number}
+  | {type:'harvest';plot:number;expectedId:number;cycle:number}
   | {type:'store'|'compost';plot:number;expectedId:number}
   | {type:'dismissHybrid'} | {type:'tutorialBranch';branch:'experiment'|'corner'}
   | {type:'music';muted:boolean} | {type:'skipTutorial'|'showOccupiedHint'}
-  | {type:'plant';plot:number;species:Species;replaceId?:number;stock?:Profile}
   | {type:'return';plot:number;id:number}
   | {type:'move';from:number;to:number}
   | {type:'upgradeHelper'; target:Exclude<HelperLevel,0>} | {type:'buyAutoSell'}

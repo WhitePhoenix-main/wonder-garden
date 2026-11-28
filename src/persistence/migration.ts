@@ -2,9 +2,11 @@ import { saveVersion, type GameState, type Plant } from '../game/model'
 import { balance, hybridCounts, isHybrid, recipes } from '../game/config'
 import { inactiveAutomation, initialAmenities } from '../game/state'
 import { record, integer } from './shape'
-import { initialState, newPlant } from '../game/state'
-import { maxLives, nextRandom, rules } from '../game/genetics'
-import { legacyBalanceVersion, type AlphaThreeState, type LegacyState, validAlphaThree, validLegacy, validState } from './validation'
+import { initialEvolution, initialState, newPlant } from '../game/state'
+import { canonical, maxLives, nextRandom, rules } from '../game/genetics'
+import { milestones, recordPlanting } from '../game/collection'
+import type { PollinationSnapshot } from '../game/model'
+import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
 
 // Keep the existing storage key so either snapshot from the first sprint can be recovered.
 function migrateFirstSprint(value: Record<string, unknown>): GameState|null {
@@ -64,11 +66,35 @@ function upgradeAlphaThree(old:AlphaThreeState):GameState {
     const limit = maxLives(plant.species,plant)
     return {...plant, maxLives:limit, lives:Math.min(plant.lives,limit), pollination:null}
   }
-  return {
-    ...old, ...convertBasket(old.basket,old.nextId), schemaVersion:saveVersion, balanceVersion:balance.version,
+  return upgradeAlphaFour({
+    ...old, ...convertBasket(old.basket,old.nextId), schemaVersion:8, balanceVersion:2,
     plots:old.plots.map(plot=>({...plot,plant:plot.plant && convert(plot.plant)})),
     nursery:old.nursery.map(convert), firstExtraction:old.firstPropagation, firstSeedPlanting:old.planted.some(isHybrid)
-  }
+  })
+}
+
+function upgradeAlphaFour(old:AlphaFourState):GameState {
+  const snapshot=(pollination:PollinationSnapshot|null):PollinationSnapshot|null=>pollination && ({
+    result:pollination.result,donor:{species:pollination.donor.species,...canonical(pollination.donor)},
+    supporting:pollination.supporting.map(parent=>({species:parent.species,...canonical(parent)}))
+  })
+  const plant=(p:Plant):Plant=>({...p,...canonical(p),pollination:snapshot(p.pollination)})
+  return backfill({
+    ...old,...initialEvolution(),schemaVersion:saveVersion,balanceVersion:balance.version,stallLevel:old.autoSell ? 2 : 1,
+    plots:old.plots.map(p=>({...p,plant:p.plant && plant(p.plant)})),
+    nursery:old.nursery.map(plant),
+    variants:old.variants.map(pack=>({...pack,...canonical(pack)})),
+    basket:old.basket.map(b=>({...b,profile:b.profile && canonical(b.profile),pollination:snapshot(b.pollination)}))
+  })
+}
+
+function backfill(state:GameState):GameState {
+  const live=[...state.plots.flatMap(plot=>plot.plant ?? []),...state.nursery]
+  for (const plant of live) recordPlanting(state,plant)
+  // A common radish was present in every new Alpha 04 garden.
+  if (!state.collection.some(r=>r.species==='radish' && r.rarity==='common')) recordPlanting(state,newPlant(0,'radish'))
+  milestones(state)
+  return state
 }
 
 function upgrade(old:LegacyState):GameState {
@@ -79,14 +105,15 @@ function upgrade(old:LegacyState):GameState {
     const {id,species,progress,readySince,mature}=p
     return {...newPlant(id,species,undefined,nextRandom(stream)),progress,readySince,mature}
   }
-  const state:GameState={...rest,...convertBasket(old.basket,old.nextId),schemaVersion:saveVersion,balanceVersion:balance.version,
+  const state:GameState={...rest,...initialEvolution(),...convertBasket(old.basket,old.nextId),schemaVersion:saveVersion,balanceVersion:balance.version,
+    stallLevel:old.autoSell ? 2 : 1,
     revealed:[],tutorialBranch:null,pendingHybrid:null,firstExtraction:old.firstPropagation,firstSeedPlanting:old.planted.some(isHybrid),
     seeds:{...fresh.seeds,...old.seeds},variants:[],failures:hybridCounts(),
     plots:plots.map(b=>({...b,plant:b.plant && convert(b.plant)})),nursery:nursery.map(convert),rng:stream.rng}
   for(const r of recipes)if(recipeProgress[r.result]<r.harvests){
     state.failures[r.result]=Math.min(rules.pity,recipeProgress[r.result])
   }else state.revealed.push(r.result)
-  return state
+  return backfill(state)
 }
 export function parseSave(raw: string | null) {
   if (raw === null) return null
@@ -110,6 +137,7 @@ export function parseSave(raw: string | null) {
     }
     if (validLegacy(value)) return upgrade(value)
     if (validAlphaThree(value)) return upgradeAlphaThree(value)
+    if (validAlphaFour(value)) return upgradeAlphaFour(value)
     if (validState(value)) return value
     if (record(value) && (Number(value.schemaVersion) > saveVersion || Number(value.balanceVersion) > balance.version)) return 'future'
   } catch { /* Try the backup below. */ }
