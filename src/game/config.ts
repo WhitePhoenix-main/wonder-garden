@@ -222,7 +222,9 @@ requireConfig([evolution.greenhouseCosts,evolution.stallCosts,evolution.crossSlo
   .every(list=> list.length===5 && list.every(nonnegativeInteger)), 'building levels')
 requireConfig(evolution.stallCosts[1]===autoSellOffer.cost && evolution.experiments.length===4 &&
   evolution.experiments.every(e=>positiveInteger(e.cost) && positiveInteger(e.seconds)) &&
-  probability(evolution.levelFiveInheritance), 'breeding and trading')
+  probability(evolution.levelFiveInheritance) &&
+  positiveInteger(evolution.rarityGuarantee) && evolution.rarityGuarantee>=2 &&
+  evolution.cloning.length===4 && evolution.cloning.every(e=>positiveInteger(e.cost) && positiveInteger(e.seconds)), 'breeding and trading')
 requireConfig(evolution.helperThroughput.length===helperLevels.length && evolution.helperThroughput.every(nonnegativeInteger)
   && evolution.harmonyGrowth.length===balance.harmonyMilestones.length+1 && evolution.harmonyGrowth.every(probability), 'growth and helper bonuses')
 requireConfig(evolution.valleyCosts.length===valleyPlotCount-valley.startOpen.length && evolution.valleyCosts.every(positiveInteger) &&
@@ -241,6 +243,11 @@ requireConfig(positiveInteger(market.tickSeconds) && positiveInteger(market.dema
   positiveInteger(market.maximumPricePercent) && market.maximumPricePercent>=100 &&
   positiveInteger(market.saturationPenalty) && market.saturationPenalty<=100 &&
   positiveInteger(market.recoveryPercentPerTick) && market.recoveryPercentPerTick<=100 &&
+  positiveInteger(market.backlogRecoveryPercentPerTick) && market.backlogRecoveryPercentPerTick<=100 &&
+  [market.strategy.balancedMinimum,market.strategy.profitMinimum].every(n=>
+    Number.isInteger(n) && n>=market.minimumPricePercent && n<=market.maximumPricePercent) &&
+  market.strategy.profitMinimum>market.strategy.balancedMinimum &&
+  positiveInteger(market.strategy.overflowPercent) && market.strategy.overflowPercent<=100 &&
   Object.keys(market.capacity).length===speciesIds.length &&
   speciesIds.every(id=>positiveInteger(market.capacity[id]?.fruit) && positiveInteger(market.capacity[id]?.seed)), 'market')
 

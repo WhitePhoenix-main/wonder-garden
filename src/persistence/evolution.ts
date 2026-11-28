@@ -1,6 +1,6 @@
 import { evolution, isSpecies, plotCount, speciesInfo } from '../game/config'
 import { validAutomation, validPlotPolicy } from '../game/evolution'
-import { profileKey, sameProfile, validGenome } from '../game/genetics'
+import { profileKey, rarityOdds, sameProfile, validGenome } from '../game/genetics'
 import { buyers, negatives, plotModes, positives, rarities, type GameState, type Plant, type Profile } from '../game/model'
 import { finite, integer, record } from './shape'
 
@@ -20,6 +20,19 @@ function validKey(key:unknown):boolean {
 
 function unique<T>(items:T[]):boolean {return new Set(items).size===items.length}
 const level=(value:unknown):value is number=>integer(value) && value>=1 && value<=5
+
+function validRarityProgress(state:GameState):boolean {
+  if (!record(state.rarityProgress) || Array.isArray(state.rarityProgress)) return false
+  return Object.entries(state.rarityProgress).every(([key,count])=>{
+    const [species,target,...extra]=key.split('/')
+    if (!isSpecies(species) || !state.planted.includes(species) || extra.length ||
+      !integer(count) || !count || count>=evolution.rarityGuarantee) return false
+    return rarities.some((a,i)=>rarities.some((b,j)=>{
+      const firstHigher=rarityOdds(a,b).findIndex((weight,k)=>weight>0 && k>Math.max(i,j))
+      return firstHigher>=0 && rarities[firstHigher]===target
+    }))
+  })
+}
 
 export function validateEvolution(state:GameState,seen:Set<number>,plants:Plant[]):boolean {
   if (state.activeIsland!=='green' && (state.activeIsland!=='valley' || state.plots.length<=plotCount)) return false
@@ -66,6 +79,26 @@ export function validateEvolution(state:GameState,seen:Set<number>,plants:Plant[
     if (cross.readyAt>state.playTime) for (const parent of cross.parents) {
       if (busy.has(parent) || !state.nursery.some(p=>p.id===parent && p.species===cross.species)) return false
       busy.add(parent)
+    }
+  }
+  if (Number(state.schemaVersion)>=11) {
+    if (!validRarityProgress(state) || !Array.isArray(state.clones) ||
+      state.clones.length && state.greenhouseLevel<3) return false
+    for (const clone of state.clones) {
+      if (!record(clone) || !validId(clone.id) || !integer(clone.parent) ||
+        clone.parent===0 || clone.parent>=clone.id || !isSpecies(clone.species) ||
+        !state.planted.includes(clone.species) || !genome(clone.species,clone.profile,true) ||
+        rarities.indexOf(clone.profile.rarity)<2 ||
+        !finite(clone.startsAt) || clone.startsAt>state.playTime ||
+        clone.readyAt!==clone.startsAt+evolution.cloning[speciesInfo[clone.species].generation].seconds) return false
+      if (clone.readyAt>state.playTime) {
+        const parent=state.nursery.find(p=>p.id===clone.parent)
+        if (!parent || busy.has(clone.parent) || parent.species!==clone.species ||
+          !sameProfile(parent,clone.profile)) return false
+        busy.add(clone.parent)
+      }
+      seen.add(clone.id)
+      occupied++
     }
   }
   if (occupied>evolution.crossSlots[state.greenhouseLevel-1]) return false

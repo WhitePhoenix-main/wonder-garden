@@ -1,3 +1,4 @@
+import { measure } from './analytics'
 import { bedLevels, speciesInfo, valueScale } from './config'
 import { canonical, nextRandom, plantStats, profileAllowed, quantity, rules, sameProfile, traits } from './genetics'
 import type { Command, GameState, HarvestLot, PollinationSnapshot, Result } from './model'
@@ -53,6 +54,7 @@ export function harvest(state:GameState, command:Extract<Command,{type:'harvest'
   }
 
   const events = ['Harvested', 'Harvested:' + command.plot + ':' + species + ':' + count]
+  measure(state,species,{harvests:1,fruit:count})
   recordHarvest(state,plant,count)
   state.firstHarvest = true
   plant.lives--

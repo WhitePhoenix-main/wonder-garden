@@ -1,6 +1,6 @@
 import { speciesIds } from './config'
 import { common, profileKey, sameProfile, stockCount } from './genetics'
-import type { GameState, HarvestLot, PlotPolicy, Profile, SeedPack, Species } from './model'
+import { rarities, type GameState, type HarvestLot, type Plant, type PlotPolicy, type Profile, type SeedPack, type Species } from './model'
 
 export const defaultPolicy:Readonly<PlotPolicy>={mode:'manual',priority:0,harvest:true,replant:null,target:2}
 
@@ -11,6 +11,11 @@ export function allSeedPacks(state:GameState):SeedPack[] {
 
 export function protectedProfile(state:GameState,species:Species,profile:Profile):boolean {
   return state.protectedProfiles.includes(profileKey(species,profile))
+}
+
+export function isValuablePlant(state:GameState,plant:Plant):boolean {
+  return rarities.indexOf(plant.rarity)>=rarities.indexOf('rare') ||
+    state.protectedPlants.includes(plant.id) || protectedProfile(state,plant.species,plant)
 }
 
 export function availableStock(state:GameState,species:Species,profile:Profile):number {
@@ -43,5 +48,5 @@ export function hasOtherSource(state:GameState,species:Species,profile?:Profile,
 
 export function protectedHarvest(state:GameState,batch:GameState['basket'][number]):boolean {
   return Boolean(batch.profile && protectedProfile(state,batch.species,batch.profile)) ||
-    batch.lots.some(l=>l.origin && state.protectedPlants.includes(l.origin.specimen))
+    batch.lots.some(l=>l.origin && (l.origin.protected || state.protectedPlants.includes(l.origin.specimen)))
 }

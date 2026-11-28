@@ -1,3 +1,4 @@
+import { beginObservation } from './game/analytics'
 import { gardenAudio } from './runtime/audio'
 import { createClock } from './runtime/clock'
 import type { Command } from './game/model'
@@ -13,6 +14,7 @@ const audio = gardenAudio()
 
 let speed = 1
 const view: WorldView = { state:storage.load(), started:storage.hasGarden, menu:true, shovel:false, mode:'garden', selected:null, moveFrom:null, decorEditing:false, decorPreview:null }
+beginObservation(view.state)
 const prefKey = debug ? 'wonder-garden.dev.preferences' : 'wonder-garden.preferences'
 if (!view.started) {
   try {
@@ -33,8 +35,9 @@ function command(cmd: Command) {
   const result = execute(view.state, cmd)
   if (result.ok && result.events.length) {
     world.effects(result.events)
-    const cue = result.obtained?.some(seed=>['rare','epic','legendary'].includes(seed.rarity)) ? ['RareSeed',...result.events] : result.events
-    audio.play(cue,view.state.muted)
+    const rarity = ['legendary','epic','rare'].find(rank=>result.obtained?.some(seed=>seed.rarity===rank))
+    const cue = rarity==='legendary' ? 'LegendarySeed' : rarity==='epic' ? 'EpicSeed' : rarity==='rare' ? 'RareSeed' : null
+    audio.play(cue ? [cue,...result.events] : result.events,view.state.muted)
     if (cmd.type === 'sound' || cmd.type === 'music' || cmd.type === 'language') {
       const {lang,muted,musicMuted}=view.state
       try { localStorage.setItem(prefKey,JSON.stringify({lang,muted,musicMuted})) } catch { /* In-memory preferences remain active. */ }
@@ -80,6 +83,7 @@ ui = createUI(document.querySelector<HTMLElement>('#ui')!, {
   reset() {
     const {lang, muted, musicMuted} = view.state
     view.state = initialState()
+    beginObservation(view.state)
     Object.assign(view.state,{lang,muted,musicMuted})
     Object.assign(view,{ shovel:false, mode:'garden', selected:null, moveFrom:null, decorEditing:false, decorPreview:null })
     lastSaveTime = 0

@@ -1,7 +1,12 @@
-import { speciesIds } from '../../game/config'
+import { market, speciesIds } from '../../game/config'
 import { marketKinds, marketQuote } from '../../game/market'
 import type { GameState, MarketKind } from '../../game/model'
 import { plantName } from '../strings'
+import { basketSalePlan, harvestSaleValue, seedSaleIssue, seedSaleValue } from '../../game/trade'
+import { allSeedPacks, availableStock } from '../../game/stock-policy'
+import { changeStock } from '../../game/genetics'
+
+export type MarketSort = 'price' | 'value'
 
 export const marketWords={
   ru:{title:'Рынок',fruit:'Урожай',seed:'Семена',species:'Вид',demand:'Спрос',stock:'Насыщение',price:'Цена',
@@ -12,21 +17,42 @@ export const marketWords={
     hint:'Demand changes with active game time. Sales lower prices until supply clears. For harvests, the quote applies to their value at collection.'}
 } as const
 
-export function marketPanel(state:GameState,kind:MarketKind):string {
+export function marketPanel(state:GameState,kind:MarketKind,sort:MarketSort='price'):string {
   const w=marketWords[state.lang]
+  const ru=state.lang==='ru'
   const tabs=marketKinds.map(id=>`<button type="button" data-action="market-product" data-kind="${id}"
     aria-pressed="${id===kind}">${w[id]}</button>`).join('')
-  const rows=speciesIds.filter(id=>state.planted.includes(id)).map(id=>{
+  const packs=kind==='seed' ? allSeedPacks(state) : []
+  const inventory={...state,seeds:{...state.seeds},variants:state.variants.map(pack=>({...pack}))}
+  const items=kind==='fruit' ? basketSalePlan(state) : []
+  const rows=speciesIds.filter(id=>state.planted.includes(id) || state.revealed.includes(id as GameState['revealed'][number])).map(id=>{
     const quote=marketQuote(state,id,kind)
-    const direction=quote.pricePercent>100 ? 'up' : quote.pricePercent<100 ? 'down' : 'flat'
-    return `<tr data-market-species="${id}"><th scope="row">${plantName(state.lang,id)}</th>
+    let count=0,value=0
+    if (kind==='fruit') for (const item of items.filter(({batch})=>batch.species===id)) {
+      count+=item.count
+      value+=harvestSaleValue(item.batch,item.count,state)
+    }
+    if (kind==='seed') for (const pack of packs.filter(p=>p.species===id)) {
+      let quantity=availableStock(inventory,id,pack)
+      if (quantity && seedSaleIssue(inventory,id,pack,quantity)==='lastProfile') quantity--
+      count+=quantity
+      value+=quantity*seedSaleValue(id,pack,state)
+      if (quantity) changeStock(inventory,id,pack,-quantity)
+    }
+    return {id,quote,count,value}
+  }).sort((a,b)=>sort==='price' ? b.quote.pricePercent-a.quote.pricePercent : b.value-a.value).map(({id,quote,count,value})=>{
+    const direction=quote.pricePercent>=market.strategy.profitMinimum ? 'up' : quote.pricePercent<market.strategy.balancedMinimum ? 'down' : 'flat'
+    const label=direction==='up' ? (ru?'Выгодно':'Favorable') : direction==='down' ? (ru?'Низкая':'Low') : (ru?'Нейтрально':'Neutral')
+    return `<tr data-market-species="${id}"><th scope="row">${plantName(state.lang,id)}<br><small>${count} · ${value} ◈</small></th>
       <td data-demand="${quote.demand}">${quote.demand}%</td>
-      <td data-saturation="${quote.saturation}">${quote.saturation}%</td>
+      <td data-saturation="${quote.saturation}">${quote.saturation}%${quote.saturation>=80 ? '<br><small>'+(ru?'Высокое':'High')+'</small>' : ''}
+        ${quote.backlog ? '<br><small>+'+quote.backlog.toLocaleString(state.lang)+' '+(ru?'сверх ёмкости':'over capacity')+'</small>' : ''}</td>
       <td data-market-price="${quote.pricePercent}" class="market-${direction}">
-        ${direction==='up'?'↑ ':direction==='down'?'↓ ':''}${quote.pricePercent}%</td></tr>`
+        ${quote.pricePercent}% · ${label}${quote.change ? '<br><small>'+(quote.change>0?'+':'')+quote.change+' '+(ru?'п.п. за такт':'pp this tick')+'</small>' : ''}</td></tr>`
   }).join('')
   return `<h2>${w.title}</h2><p>${state.sold ? w.next+' '+Math.ceil(state.market.remaining)+' '+w.unit : w.closed}</p>
     <div class="book-filters">${tabs}</div>
+    <div class="book-filters">${(['price','value'] as const).map(key=>`<button type="button" data-action="market-sort" data-sort="${key}" aria-pressed="${sort===key}">${key==='price' ? (ru?'По котировке':'By quote') : (ru?'По стоимости запаса':'By stock value')}</button>`).join('')}</div>
     <table class="market-table"><thead><tr><th scope="col">${w.species}</th><th scope="col">${w.demand}</th>
       <th scope="col">${w.stock}</th><th scope="col">${w.price}</th></tr></thead><tbody>${rows}</tbody></table>
     <p class="hint">${w.hint}</p>`

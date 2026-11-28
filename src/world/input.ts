@@ -1,3 +1,4 @@
+import { isValuablePlant } from '../game/stock-policy'
 import Phaser from 'phaser'
 import type { IslandId } from '../game/model'
 import type { WorldView } from '../runtime/presentation'
@@ -55,6 +56,9 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
       const y = Phaser.Math.Linear(a.y,b.y,i / steps)
       const index = plotAt({x,y},islandFromView(input.view()))
       if (index === null || visited.has(index) || input.view()?.state.plots[index]?.plant?.readySince == null) continue
+      const state=input.view()!.state
+      const plant=state.plots[index].plant!
+      if (plant.lives===1 && isValuablePlant(state,plant)) continue
       visited.add(index)
       input.pick(index)
     }

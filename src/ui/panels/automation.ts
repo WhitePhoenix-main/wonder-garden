@@ -1,13 +1,30 @@
 import type { GameState } from '../../game/model'
 import { basketCapacity, oldestReadyPlot } from '../../game'
 import { basketCount } from '../../game/queries'
-import { autoSellOffer, helperLevels, basketLevels, evolution } from '../../game/config'
+import { autoSellOffer, helperLevels, basketLevels, evolution, market } from '../../game/config'
 import { plotModes, rarities } from '../../game/model'
 import { field } from '../specimens'
+import { saleStatus } from '../../game/automation'
+import { saleMinimum } from '../../game/market'
 
 export const modeLabels={
   ru:['Ручная','Продажа','Семена','Селекция','Поддержка'],
   en:['Manual','Commercial','Seeds','Breeding','Support']
+}
+
+export const templateDetails={
+  ru:['Ручной сбор, без автопересадки','Автосбор для продажи','Автосбор для пополнения семян','Автосбор для селекции','Сохранение растения для ауры, без автосбора и пересадки'],
+  en:['Manual harvest, no automatic replanting','Automatic harvest for sale','Automatic harvest to replenish seeds','Automatic harvest for breeding','Preserve the aura plant without automatic harvesting or replanting']
+}
+
+export const productionLabels={
+  ru:{manual:'Ручное управление',protected:'Растение сохраняется',growing:'Ожидает роста',awaitingSale:'Ждёт выгодной продажи',full:'В корзине мало места',busy:'Ожидает Листика',profile:'Выберите профиль пересадки',noSeeds:'Нет семян профиля',reserve:'Достигнут резерв семян'},
+  en:{manual:'Manual operation',protected:'Plant is being preserved',growing:'Waiting for growth',awaitingSale:'Waiting for a favorable sale',full:'Not enough basket space',busy:'Waiting for Leafy',profile:'Choose a replanting profile',noSeeds:'No seeds of this profile',reserve:'Seed reserve reached'}
+}
+
+const saleLabels={
+  ru:{disabled:'Автопродажа выключена',ready:'Есть товары для продажи',price:'Ожидание выгодной котировки',order:'Товары зарезервированы для заказов',protected:'Урожай защищён',breeding:'Партии оставлены для селекции',reserve:'Семена в резерве',empty:'Нет доступных товаров'},
+  en:{disabled:'Auto-sell is off',ready:'Goods are ready for sale',price:'Waiting for a favorable price',order:'Goods reserved for orders',protected:'Harvest is protected',breeding:'Batches kept for breeding',reserve:'Seeds are reserved',empty:'No goods available for sale'}
 }
 
 export const automationWords = {
@@ -68,7 +85,21 @@ export function automationPanel(state:GameState) {
   }
   html += `<h3>${w.stall}</h3><p>${w.sells} ${autoSellOffer.intervalSec} ${w.sec}. ${w.reserve}</p>`
   if (state.autoSell) {
-    html += `<p class="hint">${w.automatic} ✓<br>${w.countdown} · ${Math.ceil(state.sellRemaining)} ${w.sec}</p>`
+    html += `<p class="hint">${saleLabels[state.lang][saleStatus(state)]}<br>${w.countdown} · ${Math.ceil(state.sellRemaining)} ${w.sec}</p>`
+    if (state.stallLevel>=4) {
+      const ru=state.lang==='ru'
+      const labels=ru ? ['Быстрая продажа','Сбалансированная','Максимальная прибыль','Пользовательская'] : ['Quick sale','Balanced','Maximum profit','Custom']
+      html+=`<label>${ru?'Стратегия продаж':'Sale strategy'} <select data-sale-strategy>
+        ${(['quick','balanced','profit','custom'] as const).map((key,i)=>`<option value="${key}" ${state.trading.strategy===key?'selected':''}>${labels[i]}</option>`).join('')}
+        </select></label><p>${ru?'Минимальная котировка':'Minimum quote'} · ${saleMinimum(state.trading)}%</p>`
+      if (state.trading.strategy==='custom') {
+        const values=Array.from({length:market.maximumPricePercent-market.minimumPricePercent+1},(_,i)=>market.minimumPricePercent+i)
+        html+=`<label>${ru?'Порог':'Threshold'} <select data-sale-minimum>
+          ${values.map(value=>`<option value="${value}" ${value===state.trading.minimum?'selected':''}>${value}%</option>`).join('')}</select></label>
+          <button type="button" data-action="trading-toggle" data-setting="overflow" aria-pressed="${state.trading.overflow}">${ru?'Продажа при заполнении':'Sell when basket fills'} · ${market.strategy.overflowPercent}%</button>`
+      }
+      html+=`<button type="button" data-action="trading-toggle" data-setting="reserveOrders" aria-pressed="${state.trading.reserveOrders}">${ru?'Сохранять товары для заказов':'Reserve goods for orders'}</button>`
+    }
   } else {
     html += `<button type="button" data-action="buy-auto-sell"
       ${level < autoSellOffer.minHelperLevel || state.coins < autoSellOffer.cost ? 'disabled' : ''}>
@@ -76,6 +107,10 @@ export function automationPanel(state:GameState) {
     if (level < autoSellOffer.minHelperLevel) html += `<p>${w.needs}</p>`
   }
   const basket = basketLevels[state.basketLevel + 1]
+  if (level) {
+    html+=`<h3>${state.lang==='ru'?'Шаблон для всего участка':'Template for all open beds'}</h3>
+      <div class="book-filters">${plotModes.map((mode,i)=>`<button type="button" data-action="plot-template-all" data-mode="${mode}">${modeLabels[state.lang][i]}</button>`).join('')}</div>`
+  }
   html += `<h3>${w.basket} · ${used}/${basketCapacity(state)}</h3>`
   if (basket) html += `<button type="button" data-action="upgrade-basket" data-level="${state.basketLevel + 1}"
     ${state.coins < basket.upgradeCost ? 'disabled' : ''}>${w.expand} · ${basket.capacity} · ${basket.upgradeCost} ${w.coins}</button>`

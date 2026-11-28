@@ -1,4 +1,4 @@
-import { protectedProfile, profileKey } from '../game/evolution'
+import { availableStock, protectedProfile, profileKey } from '../game/evolution'
 import { common, plantStats, profileAllowed } from '../game/genetics'
 import { speciesIds, speciesInfo } from '../game/config'
 import { marketQuote } from '../game/market'
@@ -98,7 +98,7 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
   const header=(species:Species)=>`<header>${portrait(species)}<strong>${name(species)} · T${speciesInfo[species].generation+1}</strong></header>`
   let pageNav=''
   function currentPage<T>(items:T[]):T[] {
-    const pageSize=80
+    const pageSize=12
     const pages=Math.ceil(items.length/pageSize)
     if (pages<=1) return items
     const index=Math.max(0,Math.min(page,pages-1))
@@ -160,12 +160,14 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
         ${button('inventory-select',bulkLabels.select,`data-key="${key}" aria-pressed="${selected.includes(key)}"`)}
         <p>${describe(s.lang,profile)} · ${single?w.single:w.multi}</p>
         <p>${w.growth} ${format.format(stats.growthSec)} ${s.lang==='ru'?'с':'s'} · ${price} ◈ ${w.per} · ${marketWords[s.lang].title} ${marketQuote(s,pack.species,'seed').pricePercent}%</p>
+        ${s.reserves[profileKey(pack.species,profile)] || s.reserves[pack.species] ?
+          '<p>'+(s.lang==='ru'?'Доступно с учётом резерва':'Available after reserves')+' · '+availableStock(s,pack.species,profile)+'</p>' : ''}
         ${controls(key,pack.count)}
         <div class="inventory-actions">${button('inventory-plant',w.plant,attrs)}
           ${button('profile-protect', protectedProfile(s,pack.species,profile) ? (s.lang==='ru'?'Снять защиту':'Unprotect') : (s.lang==='ru'?'Защитить':'Protect'),attrs)}
-          ${button('profile-favorite', s.favorites.includes(profileKey(pack.species,profile)) ? '★' : '☆',attrs+' aria-label="'+(s.lang==='ru'?'Избранное':'Favorite')+'"')}
-          ${button('profile-reserve',(s.lang==='ru'?'Резерв':'Reserve')+' · '+(s.reserves[profileKey(pack.species,profile)] ?? 0),attrs)}
-          ${button('species-reserve',(s.lang==='ru'?'Резерв вида':'Species reserve')+' · '+(s.reserves[pack.species] ?? 0),attrs)}
+          ${detail===key ? button('profile-favorite', s.favorites.includes(profileKey(pack.species,profile)) ? '★' : '☆',attrs+' aria-label="'+(s.lang==='ru'?'Избранное':'Favorite')+'"') : ''}
+          ${detail===key ? button('profile-reserve',(s.lang==='ru'?'Резерв':'Reserve')+' · '+(s.reserves[profileKey(pack.species,profile)] ?? 0),attrs) : ''}
+          ${detail===key ? button('species-reserve',(s.lang==='ru'?'Резерв вида':'Species reserve')+' · '+(s.reserves[pack.species] ?? 0),attrs) : ''}
           ${button('inventory-sell-s',`${w.sell} · ${price*amount} ◈`,`${attrs} data-key="${key}"`)}
           ${details(key,`<p>${w.fruits} ${stats.fruits.join('–')} · ${w.potential} ${stats.ownSeeds.join('–')} · ${w.lives} ${stats.maxLives}
             ${single?'':' · '+w.regrow+' '+format.format(stats.regrowSec)+' '+(s.lang==='ru'?'с':'s')}</p>

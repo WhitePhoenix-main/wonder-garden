@@ -71,7 +71,7 @@ it('retains an oversized crop and copies exactly one seed on the final life',()=
 })
 it('upgrades a snapshot generated and validated by 1465cf9; rejects invalid legacy inventory',()=>{
   const s=parseSave(JSON.stringify(fixture)) as GameState
-  expect(s).toMatchObject({schemaVersion:10,coins:fixture.coins,planted:fixture.planted,
+  expect(s).toMatchObject({schemaVersion:11,coins:fixture.coins,planted:fixture.planted,
     seeds:{solar_strawberry:1},failures:{solar_strawberry:0,moonberry:1},musicMuted:true,lang:'en'})
   expect(saleValue(s)).toBe(60)
   expect(s.basket).toMatchObject([{species:'strawberry',count:4,valueUnits:150000,profile:null,pollination:null}])

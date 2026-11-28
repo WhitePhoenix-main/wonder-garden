@@ -5,9 +5,9 @@ import { record, integer } from './shape'
 import { initialEvolution, initialState, newPlant } from '../game/state'
 import { canonical, maxLives, nextRandom, rules } from '../game/genetics'
 import { milestones, recordPlanting } from '../game/collection'
-import { initialMarket } from '../game/market'
+import { initialMarket, initialTrading } from '../game/market'
 import type { PollinationSnapshot } from '../game/model'
-import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaFive, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
+import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaSix, validAlphaFive, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
 
 // Keep the existing storage key so either snapshot from the first sprint can be recovered.
 function migrateFirstSprint(value: Record<string, unknown>): GameState|null {
@@ -139,7 +139,11 @@ export function parseSave(raw: string | null):GameState|'future'|null {
     if (validLegacy(value)) return upgrade(value)
     if (validAlphaThree(value)) return upgradeAlphaThree(value)
     if (validAlphaFour(value)) return upgradeAlphaFour(value)
-    if (validAlphaFive(value)) return {...value,schemaVersion:saveVersion,balanceVersion:balance.version,market:initialMarket()}
+    if (validAlphaFive(value) || validAlphaSix(value)) {
+      return {...value,schemaVersion:saveVersion,balanceVersion:balance.version,
+        market:value.schemaVersion===10 ? value.market : initialMarket(),
+        trading:initialTrading(),clones:[],rarityProgress:{}}
+    }
     if (validState(value)) return value
     if (record(value) && (Number(value.schemaVersion) > saveVersion || Number(value.balanceVersion) > balance.version)) return 'future'
   } catch { /* Try the backup below. */ }

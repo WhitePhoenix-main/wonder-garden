@@ -72,12 +72,12 @@ export function profileAllowed(species:Species, profile:Profile):boolean {
     (speciesInfo[species].lifecycle === 'multi' || profile.minus !== 'fragile')
 }
 
-export function inherit(a:Profile,b:Profile,random:()=>number,species?:Species,inheritedPlus=rules.inheritedPlus):Profile {
+export function inherit(a:Profile,b:Profile,random:()=>number,species?:Species,inheritedPlus=rules.inheritedPlus,
+  row=rarityOdds(a.rarity,b.rarity)):Profile {
   const single = species !== undefined && speciesInfo[species].lifecycle === 'single'
   const allowedPluses = species === undefined ? positives : availableTraits(species)
   const allowedFlaws = single ? negatives.filter(trait => trait !== 'fragile') : negatives
-  const row=rarityOdds(a.rarity,b.rarity)
-  const roll=random()*100
+  const roll=random()*row.reduce((sum,weight)=>sum+weight,0)
   let limit=0
   const rank=row.findIndex(weight=>roll < (limit+=weight))
   const plus:Positive[]=[]

@@ -96,7 +96,7 @@ async function menu() {
 }
 async function screenshot(label) {
   const shot=await send('Page.captureScreenshot',{format:'png'})
-  await writeFile(new URL(`alpha06-${scenario}-${label}.png`,resultDir),Buffer.from(shot.data,'base64'))
+  await writeFile(new URL(`alpha07-${scenario}-${label}.png`,resultDir),Buffer.from(shot.data,'base64'))
 }
 async function buy(id,plot) {
   await btn('seed',`[data-seed="${id}"]:not([data-profile])`)
@@ -129,10 +129,10 @@ async function stress(state) {
   await install(state)
   assert.equal((await snap()).basket.length,state.basket.length)
   await btn('inventory');await tab('harvest')
-  assert.equal(await read('document.querySelectorAll(".inventory-card").length'),state.basket.length)
+  assert.equal(await read('document.querySelectorAll(".inventory-card").length'),12)
   await screenshot('harvest-stress')
   await tab('seeds')
-  assert.equal(await read('document.querySelectorAll(".inventory-card").length'),80)
+  assert.equal(await read('document.querySelectorAll(".inventory-card").length'),12)
   await btn('inventory-page','[data-page="1"]')
   assert.ok(await read('document.querySelectorAll(".inventory-card").length')>=8)
   await btn('inventory-page','[data-page="0"]')
@@ -145,7 +145,8 @@ async function stress(state) {
     const el=document.querySelector('[data-inventory-filter]');
     el.value='rare';el.dispatchEvent(new Event('change',{bubbles:true}));
   })()`)
-  assert.equal(await read('document.querySelectorAll(".inventory-card").length'),36)
+  assert.equal(await read('document.querySelectorAll(".inventory-card").length'),12)
+  await read(`(()=>{const el=document.querySelector('[data-inventory-search]');el.value='редис';el.dispatchEvent(new Event('input',{bubbles:true}))})()`)
   const selected='[data-key="sradish-rare-early-null"]'
   await btn('inventory-all',selected)
   const before=(await snap()).coins
@@ -252,6 +253,9 @@ async function advanced() {
   assert.equal((await snap()).plots[policyPlot].policy.mode,'seed')
   await btn('plant-protect',batchAttr(id))
   assert.ok((await snap()).protectedPlants.includes(id))
+  assert.ok((await snap()).plots[policyPlot].policy.replant)
+  await btn('plot-replant')
+  assert.equal((await snap()).plots[policyPlot].policy.replant,null)
   await btn('plot-replant')
   assert.equal((await snap()).plots[policyPlot].policy.replant.species,fixture.plots[policyPlot].plant.species)
   await btn('close')
@@ -400,14 +404,14 @@ async function intro() {
   const legacy=JSON.parse(await readFile(new URL('../tests/fixtures/alpha03.json',import.meta.url),'utf8'))
   await install(legacy)
   const migrated=await snap()
-  assert.equal(migrated.schemaVersion,10)
+  assert.equal(migrated.schemaVersion,11)
   assert.equal(migrated.coins,legacy.coins)
   assert.equal(migrated.basket.reduce((sum,b)=>sum+b.count,0),legacy.basket.length)
   assert.equal(migrated.basket.every(b=>b.profile===null && b.pollination===null),true)
   const alpha04=JSON.parse(await readFile(new URL('../tests/fixtures/alpha04.json',import.meta.url),'utf8'))
   await install(alpha04)
   const restored=await snap()
-  assert.equal(restored.schemaVersion,10)
+  assert.equal(restored.schemaVersion,11)
   assert.equal(restored.coins,alpha04.coins)
   assert.equal(restored.stallLevel,2)
   assert.equal(restored.helperLevel,alpha04.helperLevel)
@@ -421,7 +425,7 @@ async function market() {
   const alpha05=JSON.parse(await readFile(new URL('../tests/fixtures/alpha05.json',import.meta.url),'utf8'))
   await install(alpha05)
   const migrated=await snap()
-  assert.equal(migrated.schemaVersion,10)
+  assert.equal(migrated.schemaVersion,11)
   assert.equal(migrated.coins,alpha05.coins)
   assert.equal(migrated.activeIsland,'valley')
   assert.deepEqual(migrated.orders,alpha05.orders)
