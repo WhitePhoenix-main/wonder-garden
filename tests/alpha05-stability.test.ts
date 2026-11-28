@@ -24,8 +24,9 @@ it('keeps seed production running when excess seed and fruit sales are enabled',
   const first=advance(state,300).filter(event=>event.startsWith('HelperHarvested:')).length
   const coins=state.coins
   const second=advance(state,300).filter(event=>event.startsWith('HelperHarvested:')).length
-  expect(first).toBeGreaterThan(400)
-  expect(second).toBeGreaterThan(400)
+  // Every single-crop replant now consumes three worker actions.
+  expect(first).toBeGreaterThanOrEqual(270)
+  expect(second).toBeGreaterThanOrEqual(270)
   expect(state.coins).toBeGreaterThan(coins)
   expect(state.seeds.radish).toBeGreaterThanOrEqual(8)
 })

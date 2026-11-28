@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { advance, basketCapacity, basketCount, initialState, oldestReadyPlot, saleValue, speciesInfo } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
 import { validState } from '../src/persistence/validation'
-import { addLegacyFruit, commit, earn, legacySix, memoryStorage, plantAt, reject } from './helpers'
+import { addLegacyFruit, cleanBed, commit, earn, legacySix, memoryStorage, plantAt, prepareFirstResearch, reject } from './helpers'
 
 describe('Leafy and the market stall', () => {
   it('AT-01: charges once per level and starts a fresh 5/2/1-second interval', () => {
@@ -13,6 +13,7 @@ describe('Leafy and the market stall', () => {
     reject(state,{type:'upgradeHelper',target:1},'noCoins')
     earn(state,2100)
     for (const [level,interval,price] of [[1,5,150],[2,2,450],[3,1,1200]] as const) {
+      if (state.plots[12].plant?.lives===0) cleanBed(state,12)
       if (!state.plots[12].plant) commit(state,{type:'plant',plot:12,species:'radish'})
       // Keep a ready plant to verify the exact deadline independently of growth.
       Object.assign(plantAt(state,12),{progress:1,mature:true,readySince:state.playTime})
@@ -44,20 +45,24 @@ describe('Leafy and the market stall', () => {
     expect(helperEvents(4.9)).toEqual([])
     expect(advance(state,0.1)).toContain('HelperHarvested:12')
     expect(advance(state,5)).toContain('HelperHarvested:13')
-    expect(helperEvents(15)).toEqual([])
+    expect(helperEvents(10)).toEqual(['PlantCleaned','PlantCleaned:12','PlantCleaned','PlantCleaned:13'])
+    expect(helperEvents(5)).toEqual([])
   })
 
   it('HA-01/AT-05: manual and automatic harvest yield the same crop and cannot both collect it', () => {
     const automatic = initialState(33)
-    earn(automatic,500)
+    earn(automatic,750)
     commit(automatic,{type:'compost',plot:12,expectedId:plantAt(automatic,12).id})
     commit(automatic,{type:'compost',plot:13,expectedId:plantAt(automatic,13).id})
     commit(automatic,{type:'plant',plot:8,species:'strawberry'})
     commit(automatic,{type:'plant',plot:9,species:'sunflower'})
+    prepareFirstResearch(automatic)
+    commit(automatic,{type:'compost',plot:5,expectedId:plantAt(automatic,5).id})
     advance(automatic,speciesInfo.sunflower.cycleSec)
     commit(automatic,{type:'upgradeHelper',target:1})
     advance(automatic,4.9)
     commit(automatic,{type:'harvest',plot:9})
+    cleanBed(automatic,9)
     commit(automatic,{type:'sell'})
     const manual=structuredClone(automatic)
     const manualEvents=commit(manual,{type:'harvest',plot:8})
@@ -75,6 +80,7 @@ describe('Leafy and the market stall', () => {
     earn(state,160)
     advance(state,6)
     commit(state,{type:'harvest',plot:12})
+    cleanBed(state,12)
     commit(state,{type:'plant',plot:12,species:'radish'})
     advance(state,6)
     expect(plantAt(state,13).readySince!).toBeLessThan(plantAt(state,12).readySince!)
@@ -114,6 +120,7 @@ describe('Leafy and the market stall', () => {
     addLegacyFruit(state,1)
     const after=state.coins
     expect(advance(state,9.9)).not.toContain('Sold')
+    state.market.remaining=1
     const readyForSale=saleValue(state)
     expect(advance(state,0.1)).toEqual(['Sold'])
     expect(readyForSale).toBeGreaterThanOrEqual(3)
@@ -126,7 +133,7 @@ describe('Leafy and the market stall', () => {
     advance(state,6)
     commit(state,{type:'upgradeHelper',target:1})
     commit(state,{type:'buyAutoSell'})
-    addLegacyFruit(state,basketCapacity(state)-4)
+    addLegacyFruit(state,basketCapacity(state)-2)
     plantAt(state,12).fruitRoll=0
     state.sellRemaining=state.harvestRemaining
     state.market.remaining=10

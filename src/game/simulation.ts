@@ -4,13 +4,15 @@ import { autoSellGarden, workGarden } from './automation'
 import { cycleSeconds, pollinationFor } from './queries'
 import { refreshOrders } from './orders'
 import { settleMarket } from './market'
+import { advanceProduction } from './nursery'
+import { greenhouseTime } from './greenhouse'
 
 // Only planted instances grow during active game time.
-function grow(state: GameState, seconds: number): void {
-  state.playTime += seconds
+export function growPlots(state: GameState, seconds: number, active:boolean): number {
+  let ready=0
   state.plots.forEach(({plant}, index) => {
-    if (!plant) return
-    if (!plant.pollination) plant.pollination = pollinationFor(state, index)
+    if (!plant?.lives) return
+    if (active && !plant.pollination) plant.pollination = pollinationFor(state, index)
     if (plant.readySince !== null) return
     const rate = 1 / cycleSeconds(state, index)
     const timeToRipe = (1 - plant.progress) / rate
@@ -18,9 +20,11 @@ function grow(state: GameState, seconds: number): void {
     if (plant.progress >= 1 - 1e-10) {
       plant.progress = 1
       plant.mature = true
-      plant.readySince = Math.min(state.playTime, state.playTime - seconds + timeToRipe)
+      plant.readySince = active ? Math.min(state.playTime, state.playTime - seconds + timeToRipe) : state.playTime
+      ready++
     }
   })
+  return ready
 }
 
 // Advance to each deadline in chronological order, also when called with a coarse step.
@@ -32,8 +36,9 @@ export function advance(state: GameState, seconds: number): string[] {
     const marketActive=state.sold
     const dt = Math.min(seconds, orderDeadline, state.helperLevel ? state.harvestRemaining : Infinity,
       state.autoSell ? state.sellRemaining : Infinity, marketActive ? state.market.remaining : Infinity)
-    const before=state.playTime
-    grow(state, dt)
+    const before=greenhouseTime(state)
+    state.playTime+=dt
+    growPlots(state, dt, true)
     seconds -= dt
     if (marketActive) {
       state.market.remaining-=dt
@@ -54,9 +59,12 @@ export function advance(state: GameState, seconds: number): string[] {
       events.push(...autoSellGarden(state))
       state.sellRemaining = autoSellOffer.intervalSec
     }
+    const production=advanceProduction(state,dt)
+    if (production.fruit || production.seeds || production.coins) events.push('ProductionChanged')
     if (refreshOrders(state)) events.push('OrdersUpdated')
-    if (state.crosses.some(c=>!c.collected && c.readyAt>before && c.readyAt<=state.playTime)) events.push('CrossReady')
-    if (state.clones.some(c=>c.readyAt>before && c.readyAt<=state.playTime)) events.push('CloneReady')
+    const after=greenhouseTime(state)
+    if (state.crosses.some(c=>!c.collected && c.readyAt>before && c.readyAt<=after)) events.push('CrossReady')
+    if (state.clones.some(c=>c.readyAt>before && c.readyAt<=after)) events.push('CloneReady')
   }
   return events
 }

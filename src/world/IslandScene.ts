@@ -31,6 +31,7 @@ const policyBadges = {
 }
 
 function plantTexture(plant: Plant): string {
+  if (!plant.lives) return 'stage_withered'
   if (plant.readySince !== null) return `plant_${plant.species}_ripe`
   if (plant.mature) return `plant_${plant.species}_adult`
   return plant.progress < 0.22 ? 'stage_seed' : 'stage_sprout'
@@ -47,6 +48,15 @@ function outline(layer: Phaser.GameObjects.Graphics, point: Point, color: number
 }
 
 export class IslandScene extends Phaser.Scene {
+  hitObject(point:Point):'helper'|'market'|'nursery'|'bridge'|null {
+    if (this.helper?.visible && this.helper.getBounds().contains(point.x,point.y)) return 'helper'
+    const above=(image:Phaser.GameObjects.Image|null,halfWidth:number,height:number)=>
+      image && Math.abs(point.x-image.x)<halfWidth && point.y<image.y && point.y>image.y-height
+    if (above(this.greenhouse,78,110)) return 'nursery'
+    if (above(this.stall,80,105)) return 'market'
+    if (above(this.bridge,32,25)) return 'bridge'
+    return null
+  }
   private islandId:IslandId = 'green'
   private selectedPlot:number|null=null
   private cells: CellArt[] = []
@@ -261,7 +271,9 @@ export class IslandScene extends Phaser.Scene {
       const type = preview ?? item?.type
       image.setVisible(!!type).setAlpha(preview ? .67 : 1)
       if (type) this.art.setTexture(image,'decor_' + type)
-      if (decorEditing) outline(this.highlights,iso(slot.x,slot.y),0xfce5a8,1,preview ? .45 : .2)
+      if (decorEditing || !type && state.planted.some(id=>recipes.some(recipe=>recipe.result===id))) {
+        outline(this.highlights,iso(slot.x,slot.y),0xfce5a8,0.76,preview ? .45 : .14)
+      }
     }
     if (this.greenhouse) this.art.setTexture(this.greenhouse,
       isRecipeRevealed(state) ? 'greenhouse_restored' : 'greenhouse_ruined')
@@ -276,7 +288,7 @@ export class IslandScene extends Phaser.Scene {
       const policy = policyBadges[plot.policy?.mode ?? 'manual']
       cell.policy.setVisible(plot.open && !!policy[state.lang]).setText(policy[state.lang]).setBackgroundColor(policy.color)
       cell.countdown=secondsLeft(state,i)+(state.lang==='ru'?' с':' s')
-      cell.timer.setVisible(!!plot.plant && plot.plant.readySince===null)
+      cell.timer.setVisible(!!plot.plant?.lives && plot.plant.readySince===null)
       if (shovel && plot.plant || !state.tutorialSkipped && !shovel && mode==='garden' && plot.plant?.readySince!=null &&
         (!state.sold || isRecipeActive(state,i,recipes.find(r=>r.result==='solar_strawberry')!))) {
         outline(this.highlights,pos,0xffdf85,1,.34)
@@ -293,10 +305,6 @@ export class IslandScene extends Phaser.Scene {
         cell.rarity.setVisible(false)
       }
 
-      if (mode === 'plant' && plot.open && !plot.plant) {
-        const match=sunflower && adjacent(i).some(j=>state.plots[j].plant?.species==='strawberry')
-        outline(this.highlights,pos,match?0xffbf42:0xe6efb6,1,match?.65:.25)
-      }
       if (mode === 'build' && state.sold && !plot.open && adjacent(i).some(j => state.plots[j].open)) {
         outline(this.highlights,pos,0xf7d79d,0.9,0.20)
       }
@@ -314,11 +322,9 @@ export class IslandScene extends Phaser.Scene {
         outline(this.highlights,pos,mode === 'breed' ? 0xead4fc : 0xffedac,1,0.25,0.985)
       }
       if (plot.plant?.readySince !== null && plot.plant) {
-        this.markers.fillStyle(0xffe8a7,0.95)
-        this.markers.fillPoints([
-          {x:pos.x + 27,y:pos.y - 54},{x:pos.x + 32,y:pos.y - 47},
-          {x:pos.x + 27,y:pos.y - 40},{x:pos.x + 22,y:pos.y - 47},
-        ],true)
+        this.markers.fillStyle(0x385749,0.92).fillCircle(pos.x+27,pos.y-47,12)
+        this.markers.fillStyle(0xffe8a7,0.98).fillCircle(pos.x+27,pos.y-52,1.9)
+        this.markers.fillRoundedRect(pos.x+25.5,pos.y-48,3,8,1.5)
       }
     })
     const plotsObstructed = mode === 'build' || mode === 'breed'

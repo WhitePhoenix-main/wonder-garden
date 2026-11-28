@@ -1,13 +1,14 @@
 import { saveVersion, type GameState, type Plant } from '../game/model'
 import { balance, hybridCounts, isHybrid, recipes } from '../game/config'
-import { inactiveAutomation, initialAmenities } from '../game/state'
+import { inactiveAutomation, initialAmenities, initialPassive } from '../game/state'
 import { record, integer } from './shape'
 import { initialEvolution, initialState, newPlant } from '../game/state'
 import { canonical, maxLives, nextRandom, rules } from '../game/genetics'
 import { milestones, recordPlanting } from '../game/collection'
 import { initialMarket, initialTrading } from '../game/market'
 import type { PollinationSnapshot } from '../game/model'
-import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaSix, validAlphaFive, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
+import { legacyBalanceVersion, type AlphaFourState, type AlphaThreeState, type LegacyState, validAlphaSeven, validAlphaSix, validAlphaFive, validAlphaFour, validAlphaThree, validLegacy, validState } from './validation'
+import { unlockProduction } from '../game/nursery'
 
 // Keep the existing storage key so either snapshot from the first sprint can be recovered.
 function migrateFirstSprint(value: Record<string, unknown>): GameState|null {
@@ -81,7 +82,7 @@ function upgradeAlphaFour(old:AlphaFourState):GameState {
   })
   const plant=(p:Plant):Plant=>({...p,...canonical(p),pollination:snapshot(p.pollination)})
   return backfill({
-    ...old,...initialEvolution(),market:initialMarket(),schemaVersion:saveVersion,balanceVersion:balance.version,stallLevel:old.autoSell ? 2 : 1,
+    ...old,...initialEvolution(),tutorialSeen:[],passive:initialPassive(old.rng),market:initialMarket(),schemaVersion:saveVersion,balanceVersion:balance.version,stallLevel:old.autoSell ? 2 : 1,
     plots:old.plots.map(p=>({...p,plant:p.plant && plant(p.plant)})),
     nursery:old.nursery.map(plant),
     variants:old.variants.map(pack=>({...pack,...canonical(pack)})),
@@ -106,7 +107,7 @@ function upgrade(old:LegacyState):GameState {
     const {id,species,progress,readySince,mature}=p
     return {...newPlant(id,species,undefined,nextRandom(stream)),progress,readySince,mature}
   }
-  const state:GameState={...rest,...initialEvolution(),market:initialMarket(),...convertBasket(old.basket,old.nextId),schemaVersion:saveVersion,balanceVersion:balance.version,
+  const state:GameState={...rest,...initialEvolution(),tutorialSeen:[],passive:initialPassive(fresh.rng),market:initialMarket(),...convertBasket(old.basket,old.nextId),schemaVersion:saveVersion,balanceVersion:balance.version,
     stallLevel:old.autoSell ? 2 : 1,
     revealed:[],tutorialBranch:null,pendingHybrid:null,firstExtraction:old.firstPropagation,firstSeedPlanting:old.planted.some(isHybrid),
     seeds:{...fresh.seeds,...old.seeds},variants:[],failures:hybridCounts(),
@@ -139,10 +140,12 @@ export function parseSave(raw: string | null):GameState|'future'|null {
     if (validLegacy(value)) return upgrade(value)
     if (validAlphaThree(value)) return upgradeAlphaThree(value)
     if (validAlphaFour(value)) return upgradeAlphaFour(value)
-    if (validAlphaFive(value) || validAlphaSix(value)) {
-      return {...value,schemaVersion:saveVersion,balanceVersion:balance.version,
-        market:value.schemaVersion===10 ? value.market : initialMarket(),
-        trading:initialTrading(),clones:[],rarityProgress:{}}
+    if (validAlphaFive(value) || validAlphaSix(value) || validAlphaSeven(value)) {
+      const state:GameState={trading:initialTrading(),clones:[],rarityProgress:{},market:initialMarket(),
+        ...value,schemaVersion:saveVersion,balanceVersion:balance.version,
+        tutorialSeen:[],passive:initialPassive(value.rng),automation:{...value.automation,cleanup:true}}
+      unlockProduction(state)
+      return state
     }
     if (validState(value)) return value
     if (record(value) && (Number(value.schemaVersion) > saveVersion || Number(value.balanceVersion) > balance.version)) return 'future'

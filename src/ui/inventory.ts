@@ -62,7 +62,7 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
     const attrs=`data-key="${key}" data-max="${count}"`
     return `<div class="inventory-quantity">
       ${button('inventory-minus','−',attrs+` aria-label="${w.minus}"`,amount===1)}
-      <span aria-live="polite">${amount} / ${count}</span>
+      <label><span class="sr-only">${s.lang==='ru'?'Количество':'Quantity'}</span><input type="number" inputmode="numeric" min="1" max="${count}" value="${amount}" data-inventory-amount data-key="${key}"></label><span aria-live="polite"> / ${count}</span>
       ${button('inventory-plus','+',attrs+` aria-label="${w.plus}"`,amount===count)}
       ${button('inventory-all',w.all,attrs,amount===count)}
     </div>`
@@ -169,7 +169,7 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
           ${detail===key ? button('profile-reserve',(s.lang==='ru'?'Резерв':'Reserve')+' · '+(s.reserves[profileKey(pack.species,profile)] ?? 0),attrs) : ''}
           ${detail===key ? button('species-reserve',(s.lang==='ru'?'Резерв вида':'Species reserve')+' · '+(s.reserves[pack.species] ?? 0),attrs) : ''}
           ${button('inventory-sell-s',`${w.sell} · ${price*amount} ◈`,`${attrs} data-key="${key}"`)}
-          ${details(key,`<p>${w.fruits} ${stats.fruits.join('–')} · ${w.potential} ${stats.ownSeeds.join('–')} · ${w.lives} ${stats.maxLives}
+          ${details(key,`<p>${w.fruits} ${stats.fruits.join('–')} · ${s.lang==='ru'?'Неурожай':'Crop failure'} ${stats.cropFailure}% · ${w.potential} ${stats.ownSeeds.join('–')} · ${w.lives} ${stats.maxLives}
             ${single?'':' · '+w.regrow+' '+format.format(stats.regrowSec)+' '+(s.lang==='ru'?'с':'s')}</p>
             ${profileAllowed(pack.species,profile)?'':`<p>${w.inactive}</p>`}`)}
         </div>
@@ -182,15 +182,15 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
       .filter(pack=>selected.includes(`s${pack.species}-${pack.rarity}-${pack.plus}-${pack.minus}`))
     if(packs.length===2 && packs[0].species===packs[1].species) {
       const [a,b]=packs.map(p=>plantStats(p.species,p))
-      const labels=s.lang==='ru' ? ['Первый рост, с','Повторный рост, с','Макс. плодов, %','Макс. семян, %','Жизни','Качество ×','Копирование, %','Аура ×'] :
-        ['First growth, s','Regrowth, s','Max fruit, %','Max seeds, %','Lives','Quality ×','Copy chance, %','Aura ×']
+      const labels=s.lang==='ru' ? ['Первый рост, с','Повторный рост, с','Мин. плодов','Макс. плодов','Неурожай, %','Шанс макс. плодов, %','Макс. семян, %','Жизни','Качество ×','Копирование, %','Аура ×'] :
+        ['First growth, s','Regrowth, s','Min fruit','Max fruit','Crop failure, %','Max fruit chance, %','Max seeds, %','Lives','Quality ×','Copy chance, %','Aura ×']
       const maxChance=(range:number[],adjustment:number)=>range[0]===range[1] ? 100 :
         Math.max(0,Math.min(1,1/(range[1]-range[0]+1)+adjustment))*100
-      const values=(stats:typeof a)=>[stats.growthSec,stats.regrowSec,maxChance(stats.fruits,stats.fruitYieldModifier),
+      const values=(stats:typeof a)=>[stats.growthSec,stats.regrowSec,stats.fruits[0],stats.fruits[1],stats.cropFailure,stats.fruitOdds.at(-1)!,
         maxChance(stats.ownSeeds,stats.seedYieldModifier),stats.maxLives,stats.fruitPriceMultiplier,stats.copyChance*100,stats.auraMultiplier]
       const av=values(a),bv=values(b)
       comparison=`<h3>${bulkLabels.compare}</h3><p>${describe(s.lang,packs[0])} / ${describe(s.lang,packs[1])}</p><div class="collection-matrix"><table><tbody>${labels.map((label,i)=>{
-        const direction=(i<2?-1:1)*Math.sign(bv[i]-av[i])
+        const direction=(i<2 || i===4?-1:1)*Math.sign(bv[i]-av[i])
         return `<tr><th>${label}</th><td>${format.format(av[i])}</td><td>${format.format(bv[i])} ${direction>0?'↑':direction<0?'↓':'='}</td></tr>`
       }).join('')}</tbody></table></div>`
     }

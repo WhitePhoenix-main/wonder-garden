@@ -22,7 +22,10 @@ export function statisticsPanel(s:GameState,window:60|300,byVolume:boolean) {
     [t('Строительство и развитие','Development and construction'),total.construction],
     [t('Плодов / семян получено','Fruit / seeds produced'),total.fruit+' / '+total.seeds],
     [t('Занято грядок','Occupied beds'),s.plots.filter(p=>p.plant).length+' / '+s.plots.filter(p=>p.open).length],
-    [t('Загрузка Листика при сборе','Helper harvest capacity used'),total.helperCapacity?Math.round(100*total.helperUsed/total.helperCapacity)+'%':'—'],
+    [t('Загрузка Листика','Helper capacity used'),total.helperCapacity?Math.round(100*total.helperUsed/total.helperCapacity)+'%':'—'],
+    [t('Сборы Листика','Helper harvests'),total.helperHarvests],
+    [t('Уборка Листика','Helper clearings'),total.helperCleanups],
+    [t('Пересадки Листика','Helper replants'),total.helperReplants],
     [t('Корзина','Basket'),basketCount(s)+' / '+basketCapacity(s)],
     [t('Оценка запасов по текущей цене','Inventory at current prices'),stock+' ◈']
   ]

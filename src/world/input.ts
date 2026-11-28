@@ -2,7 +2,7 @@ import { isValuablePlant } from '../game/stock-policy'
 import Phaser from 'phaser'
 import type { IslandId } from '../game/model'
 import type { WorldView } from '../runtime/presentation'
-import { gridAt, halfHeight, halfWidth, islandFromView, iso, mapFor, plotAt, type Point } from './geometry'
+import { gridAt, halfHeight, halfWidth, islandForPlot, islandFromView, iso, mapFor, plotAt, plotPosition, type Point } from './geometry'
 
 interface IslandInput {
   size(): {width:number; height:number}
@@ -11,6 +11,11 @@ interface IslandInput {
   zoom(factor:number,from:Point,to?:Point):void
   pan(delta:Point):void
   nursery():void
+  market():void
+  helper():void
+  objectAt(point:Point):'helper'|'market'|'nursery'|'bridge'|null
+  bridge():void
+  inspect(plot:number):void
   pick(plot:number):void
   pickDecor(slot:string):void
 }
@@ -40,7 +45,6 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     }
   }
   function decorSlot(point:Point):string|null {
-    if (!input.view()?.decorEditing) return null
     return mapFor(islandFromView(input.view())).decorSlots.find(slot => {
       const center = iso(slot.x,slot.y)
       return Math.abs(point.x-center.x)/halfWidth + Math.abs(point.y-center.y)/halfHeight <= 1
@@ -88,7 +92,8 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     const world = input.toWorld(p)
     startSlot = decorSlot(world)
     startIndex = input.view()?.decorEditing ? null : plotAt(world,startIsland)
-    canSweep = !input.view()?.shovel && startIndex !== null && input.view()?.mode === 'garden'
+    canSweep = !input.view()?.shovel && startIndex !== null && input.view()?.mode === 'garden' &&
+      input.view()?.state.plots[startIndex]?.plant?.readySince!=null
   }, {signal})
   canvas.addEventListener('pointermove',event => {
     const prior = points.get(event.pointerId)
@@ -110,7 +115,7 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
     const from = wasMoved ? prior : start
     if (canSweep && input.view()?.mode === 'garden') {
       sweep(from,point)
-    } else if (startIndex === null || input.view()?.shovel) {
+    } else {
       dragging = true
       input.pan({x:point.x-from.x,y:point.y-from.y})
     }
@@ -123,15 +128,31 @@ export function bindInput(canvas: HTMLCanvasElement, input:IslandInput): () => v
       Math.hypot(point.x-start.x,point.y-start.y) < 6) {
       const world = input.toWorld(point)
       const {x,y} = gridAt(world)
-      const greenhouse = mapFor(startIsland).structures.find(v=>v.id==='greenhouse')
-      if (!input.view()?.decorEditing && greenhouse && x >= greenhouse.x && x < greenhouse.x + greenhouse.width &&
-        y >= greenhouse.y && y < greenhouse.y + greenhouse.height) input.nursery()
-      if (startSlot !== null && startSlot === decorSlot(world)) input.pickDecor(startSlot)
-      if (startIndex !== null && startIndex === plotAt(world,startIsland)) input.pick(startIndex)
+      const map=mapFor(startIsland)
+      const building=map.structures.find(v=>x>=v.x && x<v.x+v.width && y>=v.y && y<v.y+v.height)
+      const plots=input.view()?.state.plots
+      const info=plots?.findIndex((p,i)=>{
+        if (p.plant?.readySince==null || islandForPlot(i)!==startIsland) return false
+        const pos=plotPosition(i)
+        return Math.abs(world.x-pos.x-27)<=13 && Math.abs(world.y-pos.y+47)<=13
+      })??-1
+      const object=input.objectAt(world)
+      if (info>=0 && input.view()?.mode==='garden') input.inspect(info)
+      else if (startSlot!==null && startSlot===decorSlot(world)) input.pickDecor(startSlot)
+      else if (startIndex!==null && startIndex===plotAt(world,startIsland)) input.pick(startIndex)
+      else if (object) input[object]()
+      else if (building?.id==='greenhouse') input.nursery()
+      else if (building?.id==='stall') input.market()
+      else if (x===map.bridge.x && y===map.bridge.y) input.bridge()
     }
     clear()
   }, {signal})
   canvas.addEventListener('pointercancel',clear,{signal})
+  canvas.addEventListener('contextmenu',event=>{
+    event.preventDefault()
+    const plot=plotAt(input.toWorld(position(event)),islandFromView(input.view()))
+    if (plot!==null) input.inspect(plot)
+  },{signal})
   canvas.addEventListener('lostpointercapture',event => {
     if (points.has(event.pointerId)) clear()
   }, {signal})

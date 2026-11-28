@@ -2,6 +2,7 @@ import balance from '../../config/balance.json'
 import island from '../../config/island.json'
 import valley from '../../config/valley.json'
 import market from '../../config/market.json'
+import nurseryProduction from '../../config/nursery.json'
 import { baseIds, hybridIds, decorIds, rarities, type DecorType, type BedLevel, type Hybrid, type IslandId, type Recipe, type Species } from './model'
 
 export const speciesIds = [...baseIds, ...hybridIds] as const
@@ -175,7 +176,7 @@ requireConfig([genetics.rarityFruitPrice,genetics.raritySeedPrice].every(ranks=>
   ranks.every(n=>Number.isFinite(n) && n>0)) && genetics.raritySeedYield.length===rarities.length &&
   genetics.raritySeedYield.every(probability) && probability(genetics.seedTraitPrice.plus) &&
   probability(genetics.seedTraitPrice.minus) && genetics.seedTraitPrice.minus < 1,'rarity economy')
-requireConfig(balance.version === 4, 'balance.version')
+requireConfig(balance.version === 5, 'balance.version')
 requireConfig(nonnegativeInteger(balance.startCoins), 'balance.startCoins')
 requireConfig(balance.expansionCosts.length === plotCount - island.startOpen.length
   && balance.expansionCosts.every(nonnegativeInteger), 'balance.expansionCosts')
@@ -218,6 +219,22 @@ for (const aura of auras) {
 }
 
 export const evolution = balance.evolution
+requireConfig(Object.values(genetics.fruitDistributions).every(group=>
+  Object.values(group).every(({min,weights})=>nonnegativeInteger(min) && min+weights.length-1<=4 &&
+    weights.length>0 && weights.every(positiveInteger) && weights.reduce((sum,w)=>sum+w,0)===100)), 'harvest distributions')
+requireConfig(evolution.tierRequirements.length===4 && evolution.tierRequirements.every(({species,plots,greenhouse})=>
+  nonnegativeInteger(species) && species<=speciesIds.length && nonnegativeInteger(plots) && plots<=plotCount &&
+  positiveInteger(greenhouse) && greenhouse<=5) && positiveInteger(evolution.helperReplantLevel) &&
+  evolution.helperReplantLevel<=5, 'tier requirements and helper replanting')
+requireConfig(nurseryProduction.levels.length===5 && nurseryProduction.levels.every((level,i,list)=>
+  Object.values(level).every(nonnegativeInteger) && (i===0 ? !level.beds && !level.hours && !level.capacity :
+    level.beds>list[i-1].beds && level.hours>list[i-1].hours && level.capacity>list[i-1].capacity)) &&
+  nurseryProduction.cycleMultiplier>=2 && Number.isFinite(nurseryProduction.cycleMultiplier) &&
+  probability(nurseryProduction.wholesaleRate) && probability(nurseryProduction.seedCapacityShare) &&
+  nurseryProduction.seedCapacityShare>0 && positiveInteger(nurseryProduction.awayLimitHours) &&
+  [nurseryProduction.seedModeLevel,nurseryProduction.wholesaleModeLevel].every(level=>positiveInteger(level) && level<=5),
+  'nursery production')
+export { nurseryProduction }
 requireConfig([evolution.greenhouseCosts,evolution.stallCosts,evolution.crossSlots,evolution.orderSlots]
   .every(list=> list.length===5 && list.every(nonnegativeInteger)), 'building levels')
 requireConfig(evolution.stallCosts[1]===autoSellOffer.cost && evolution.experiments.length===4 &&

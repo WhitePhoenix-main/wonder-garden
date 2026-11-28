@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { basketCapacity, canReplace, expansionCost, growthMultiplier, initialState, saleValue, speciesInfo } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
 import { common } from '../src/game/genetics'
-import { addLegacyFruit, cross, commit, earn, memoryStorage, plantAt, reject, wait } from './helpers'
+import { addLegacyFruit, cross, commit, earn, memoryStorage, plantAt, prepareFirstResearch, reject, wait } from './helpers'
 
 describe('Sprint 01 gameplay', () => {
   it('ST-01, GR-01, GR-03, HA-05: starts with two radishes, each ready for one crop', () => {
@@ -21,8 +21,8 @@ describe('Sprint 01 gameplay', () => {
     wait(state, 60)
     commit(state, { type: 'harvest', plot: 12 })
     expect(state.basket[0]).toMatchObject({species:'radish',valueUnits:40000})
-    expect(state.basket[0].count).toBeGreaterThanOrEqual(4)
-    expect(state.plots[12].plant).toBeNull()
+    expect(state.basket[0].count).toBeGreaterThanOrEqual(2)
+    expect(state.plots[12].plant?.lives).toBe(0)
     expect(state.coins).toBe(20)
     reject(state, { type: 'harvest', plot: 12 }, 'notReady')
     wait(state, 6)
@@ -96,14 +96,16 @@ describe('Sprint 01 gameplay', () => {
     commit(state, { type: 'plant', plot: 8, species: 'strawberry' })
     earn(state, 90)
     commit(state, { type: 'plant', plot: 9, species: 'sunflower' })
+    earn(state,240)
+    prepareFirstResearch(state)
     wait(state,12);cross(state,8,'solar_strawberry')
     expect(state.seeds.solar_strawberry).toBe(1)
-    expect(state.planted).toHaveLength(3)
+    expect(state.planted).toHaveLength(4)
 
-    earn(state, 60)
+    earn(state, 120)
     commit(state, { type: 'clear', plot: 10 })
     commit(state, { type: 'plant', plot: 10, species: 'solar_strawberry' })
-    expect(state.planted).toHaveLength(4)
+    expect(state.planted).toHaveLength(5)
     expect(state.seeds.solar_strawberry).toBe(0)
     wait(state, 12)
     expect(commit(state, { type: 'harvest', plot: 8 })).toContain('Harvested')
@@ -142,16 +144,18 @@ describe('Sprint 01 gameplay', () => {
 
   it('SL-01, EX-03, BR-05: restores progression after filling the island with radishes and reloading', () => {
     let state = initialState(33)
+    const radishPrice=speciesInfo.radish.seedPrice!
+    const strawberryPrice=speciesInfo.strawberry.seedPrice!
     for (const plot of [8, 9]) commit(state, { type: 'plant', plot, species: 'radish' })
     let totalClearCost = 0
     for (const plot of [4, 5, 0, 1, 2, 3, 6, 7, 10, 11, 14, 15]) {
       const cost = expansionCost(state)
       if (cost === null) throw new Error('Expected a locked plot')
-      earn(state, cost + 10)
+      earn(state, cost + radishPrice)
       const coins = state.coins
       commit(state, { type: 'clear', plot })
       commit(state, { type: 'plant', plot, species: 'radish' })
-      expect(state.coins).toBe(coins - cost - 10)
+      expect(state.coins).toBe(coins - cost - radishPrice)
       totalClearCost += cost
     }
     expect(totalClearCost).toBe(6800)
@@ -170,19 +174,24 @@ describe('Sprint 01 gameplay', () => {
     const replacement = { type: 'plant', plot: 8, species: 'strawberry' } as const
     reject(state, replacement, 'occupied')
     reject(state, { ...replacement, replaceId: plantAt(state, 9).id }, 'stalePlant')
+    const cash=state.coins
+    state.coins=strawberryPrice-1
     reject(state, { ...replacement, replaceId: plantAt(state, 8).id }, 'noCoins')
+    state.coins=cash
 
-    earn(state, 150)
+    earn(state, 220)
     const oldFirst = structuredClone(plantAt(state, 8))
     const oldSecond = structuredClone(plantAt(state, 9))
     const coins = state.coins
     expect(commit(state, { ...replacement, replaceId: oldFirst.id })).toEqual(['PlantStored', 'Planted'])
-    expect(state.coins).toBe(coins - 60)
+    expect(state.coins).toBe(coins - strawberryPrice)
     reject(state, { ...replacement, replaceId: oldFirst.id }, 'stalePlant')
     commit(state, { type: 'plant', plot: 9, species: 'sunflower', replaceId: oldSecond.id })
-    expect(state.coins).toBe(coins - 60 - speciesInfo.sunflower.seedPrice!)
+    expect(state.coins).toBe(coins - strawberryPrice - speciesInfo.sunflower.seedPrice!)
     expect(state.nursery).toEqual([oldFirst, oldSecond])
 
+    const oldThird=structuredClone(plantAt(state,5))
+    commit(state,{type:'plant',plot:5,species:'blueberry',replaceId:oldThird.id})
     for (let count = 0; count < 2; count++) {
       wait(state, 12)
       commit(state, { type: 'harvest', plot: 8 })
@@ -200,7 +209,7 @@ describe('Sprint 01 gameplay', () => {
     wait(state, 12)
     expect(cross(state,8,'solar_strawberry')).toContain('RecipeRevealed:solar_strawberry')
     expect(state.seeds.solar_strawberry).toBeGreaterThanOrEqual(1)
-    expect(state.nursery).toEqual([oldFirst, oldSecond])
+    expect(state.nursery).toEqual([oldFirst, oldSecond,oldThird])
     createPersistence(() => storage).save(state)
     state = createPersistence(() => storage).load()
     expect(state.revealed.includes('solar_strawberry')).toBe(true)
@@ -210,7 +219,7 @@ describe('Sprint 01 gameplay', () => {
     commit(state, { type: 'plant', plot: 12, species: 'solar_strawberry', replaceId: plantAt(state, 12).id })
     expect(state.seeds.solar_strawberry).toBe(seedCount-1)
     expect(state.coins).toBe(beforeHybrid)
-    expect(state.planted).toHaveLength(4)
+    expect(state.planted).toHaveLength(5)
     expect(state.plots.every(p => p.open && p.plant)).toBe(true)
     while (state.seeds.solar_strawberry) {
       commit(state, {type:'sellSeeds',species:'solar_strawberry',profile:common,count:state.seeds.solar_strawberry})

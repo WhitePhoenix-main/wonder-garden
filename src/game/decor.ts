@@ -12,7 +12,10 @@ export function decorUnlocked(state:GameState): boolean {
 export function harmony(state:GameState,id?:IslandId): number {
   if (!id) return harmony(state,'green')+harmony(state,'valley')
   if (id==='valley' && state.plots.length<=plotCount) return 0
-  const plants = new Set(plotIndices(id).flatMap(i => state.plots[i]?.plant?.species ?? []))
+  const plants = new Set(plotIndices(id).flatMap(i => {
+    const plant=state.plots[i]?.plant
+    return plant && plant.lives>0 ? [plant.species] : []
+  }))
   const decorations = new Set(state.decorations.flatMap(d => d.slot !== null && decorIsland(d.slot)===id ? [d.type] : []))
   let total = id==='green' ? balance.buildingHarmony * (Number(state.revealed.length>0) + Number(state.autoSell)) : evolution.independenceHarmony
   for (const species of plants) total += speciesInfo[species].harmony

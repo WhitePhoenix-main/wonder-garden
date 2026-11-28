@@ -20,10 +20,11 @@ it('records committed batches once, disregards a rolled-back bulk sale and start
   commit(s,{type:'bulk',commands:[item,item]})
   const quote=marketQuote(s,'radish','fruit').pricePercent
   expect(sessionStats(s,60).total).toMatchObject({harvests:1,fruitRevenue:s.coins-coins,soldUnits:2,quoteUnits:2*quote})
+  commit(s,{type:'cleanup',plot:12,expectedId:s.plots[12].plant!.id})
   commit(s,{type:'plant',species:'radish',plot:12})
   s.seeds.radish++
   commit(s,{type:'plant',species:'radish',plot:8,stock:common})
-  expect(sessionStats(s,60).total).toMatchObject({planted:2,seedCost:10})
+  expect(sessionStats(s,60).total).toMatchObject({planted:2,seedCost:5})
   const restored=parseSave(JSON.stringify(s))
   if (!restored || restored==='future') throw Error('Invalid garden')
   beginObservation(restored)
@@ -36,9 +37,12 @@ it('records committed batches once, disregards a rolled-back bulk sale and start
 it('preserves the Alpha 06 market, paid experiments, RNG and every inventory lot through migration',()=>{
   const loaded=parseSave(JSON.stringify(alpha06))
   if (!loaded || loaded==='future') throw Error('Migration failed')
-  const {schemaVersion,trading,rarityProgress,clones,...existing}=loaded
-  const {schemaVersion:old,...previous}=alpha06
-  expect([old,schemaVersion]).toEqual([10,11])
+  const {schemaVersion,balanceVersion,trading,rarityProgress,clones,passive,automation,tutorialSeen,...existing}=loaded
+  const {schemaVersion:old,balanceVersion:oldBalance,automation:oldAutomation,...previous}=alpha06
+  expect([old,schemaVersion,oldBalance,balanceVersion]).toEqual([10,12,4,5])
+  expect(automation).toEqual({...oldAutomation,cleanup:true})
+  expect(passive.checkpoint).toBeNull()
+  expect(tutorialSeen).toEqual([])
   expect(existing).toEqual(previous)
   expect([trading.strategy,rarityProgress,clones]).toEqual(['quick',{},[]])
   expect(parseSave(JSON.stringify(loaded))).toEqual(loaded)

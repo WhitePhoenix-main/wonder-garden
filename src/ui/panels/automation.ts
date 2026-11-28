@@ -18,8 +18,8 @@ export const templateDetails={
 }
 
 export const productionLabels={
-  ru:{manual:'Ручное управление',protected:'Растение сохраняется',growing:'Ожидает роста',awaitingSale:'Ждёт выгодной продажи',full:'В корзине мало места',busy:'Ожидает Листика',profile:'Выберите профиль пересадки',noSeeds:'Нет семян профиля',reserve:'Достигнут резерв семян'},
-  en:{manual:'Manual operation',protected:'Plant is being preserved',growing:'Waiting for growth',awaitingSale:'Waiting for a favorable sale',full:'Not enough basket space',busy:'Waiting for Leafy',profile:'Choose a replanting profile',noSeeds:'No seeds of this profile',reserve:'Seed reserve reached'}
+  ru:{manual:'Ручное управление',protected:'Растение сохраняется',growing:'Ожидает роста',awaitingSale:'Ждёт выгодной продажи',full:'В корзине мало места',busy:'Ожидает Листика',profile:'Выберите профиль пересадки',noSeeds:'Нет семян профиля',reserve:'Достигнут резерв семян',cleanup:'Ожидает уборки',helperLevel:'Нужен Листик III уровня'},
+  en:{manual:'Manual operation',protected:'Plant is being preserved',growing:'Waiting for growth',awaitingSale:'Waiting for a favorable sale',full:'Not enough basket space',busy:'Waiting for Leafy',profile:'Choose a replanting profile',noSeeds:'No seeds of this profile',reserve:'Seed reserve reached',cleanup:'Waiting for cleanup',helperLevel:'Requires Leafy level III'}
 }
 
 const saleLabels={

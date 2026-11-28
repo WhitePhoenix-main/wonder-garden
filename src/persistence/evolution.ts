@@ -3,6 +3,7 @@ import { validAutomation, validPlotPolicy } from '../game/evolution'
 import { profileKey, rarityOdds, sameProfile, validGenome } from '../game/genetics'
 import { buyers, negatives, plotModes, positives, rarities, type GameState, type Plant, type Profile } from '../game/model'
 import { finite, integer, record } from './shape'
+import { greenhouseTime } from '../game/greenhouse'
 
 function genome(species:Plant['species'],profile:Profile,legacy=false) {
   return !!profile && Array.isArray(profile.plus) && validGenome(species,profile,legacy) &&
@@ -35,6 +36,7 @@ function validRarityProgress(state:GameState):boolean {
 }
 
 export function validateEvolution(state:GameState,seen:Set<number>,plants:Plant[]):boolean {
+  const labTime=greenhouseTime(state)
   if (state.activeIsland!=='green' && (state.activeIsland!=='valley' || state.plots.length<=plotCount)) return false
   if (!level(state.greenhouseLevel) || !level(state.stallLevel) || state.autoSell!==(state.stallLevel>=2) ||
     state.greenhouseLevel>1 && !state.revealed.length) return false
@@ -71,12 +73,12 @@ export function validateEvolution(state:GameState,seen:Set<number>,plants:Plant[
       !isSpecies(cross.species) || !state.planted.includes(cross.species) || !genome(cross.species,cross.profile) ||
       !Array.isArray(cross.parentProfiles) || cross.parentProfiles.length!==2 ||
       !cross.parentProfiles.every(profile=>genome(cross.species,profile,true)) ||
-      !finite(cross.startsAt) || !finite(cross.readyAt) || cross.startsAt>state.playTime ||
+      !finite(cross.startsAt) || !finite(cross.readyAt) || cross.startsAt>labTime ||
       cross.readyAt!==cross.startsAt+evolution.experiments[speciesInfo[cross.species].generation].seconds ||
-      typeof cross.collected!=='boolean' || cross.collected && cross.readyAt>state.playTime) return false
+      typeof cross.collected!=='boolean' || cross.collected && cross.readyAt>labTime) return false
     seen.add(cross.id)
     if (!cross.collected) occupied++
-    if (cross.readyAt>state.playTime) for (const parent of cross.parents) {
+    if (cross.readyAt>labTime) for (const parent of cross.parents) {
       if (busy.has(parent) || !state.nursery.some(p=>p.id===parent && p.species===cross.species)) return false
       busy.add(parent)
     }
@@ -89,9 +91,9 @@ export function validateEvolution(state:GameState,seen:Set<number>,plants:Plant[
         clone.parent===0 || clone.parent>=clone.id || !isSpecies(clone.species) ||
         !state.planted.includes(clone.species) || !genome(clone.species,clone.profile,true) ||
         rarities.indexOf(clone.profile.rarity)<2 ||
-        !finite(clone.startsAt) || clone.startsAt>state.playTime ||
+        !finite(clone.startsAt) || clone.startsAt>labTime ||
         clone.readyAt!==clone.startsAt+evolution.cloning[speciesInfo[clone.species].generation].seconds) return false
-      if (clone.readyAt>state.playTime) {
+      if (clone.readyAt>labTime) {
         const parent=state.nursery.find(p=>p.id===clone.parent)
         if (!parent || busy.has(clone.parent) || parent.species!==clone.species ||
           !sameProfile(parent,clone.profile)) return false

@@ -37,6 +37,7 @@ export function buildArt(scene: Phaser.Scene) {
   }
   texture('stage_seed',[-39,-23,78,47],ctx => plant(ctx,'seed',false))
   texture('stage_sprout',[-39,-43,78,67],ctx => plant(ctx,'sprout',false))
+  texture('stage_withered',[-40,-49,80,73],ctx => plant(ctx,'withered',false))
   for (const species of speciesIds) {
     for (const phase of ['adult','ripe']) {
       texture(`plant_${species}_${phase}`,[-43,-103,86,127],ctx => plant(ctx,species,phase === 'ripe'))

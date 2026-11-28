@@ -18,5 +18,6 @@ export interface UIActions {
   changeView(view:Partial<Pick<WorldView,'sunflower'|'mode'|'moveFrom'|'selected'|'shovel'>>):void
 }
 export interface UI {
+  market():void; bridge():void; helper():void; inspect(index:number):void
   nursery():void; notify(events:string[]):void; render(view:WorldView,storageWarning:string|null):void; pick(index:number):void; pickDecor(slot:string):void
 }

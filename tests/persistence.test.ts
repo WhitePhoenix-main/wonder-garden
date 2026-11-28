@@ -3,7 +3,8 @@ import { initialState, saleValue } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
 import { validState } from '../src/persistence/validation'
 import { common } from '../src/game/genetics'
-import { cross, commit, earn, legacySix, memoryStorage, plantAt, wait } from './helpers'
+import { saveVersion } from '../src/game/model'
+import { cross, commit, earn, legacySix, memoryStorage, plantAt, prepareFirstResearch, wait } from './helpers'
 
 const primary = 'wonder-garden.save.v1'
 const backup = primary + '.backup'
@@ -17,7 +18,7 @@ describe('Sprint 01 persistence', () => {
     commit(state, { type: 'language', lang: 'en' })
     createPersistence(() => storage).save(state)
     expect(createPersistence(() => storage).load()).toEqual(state)
-    expect(state.plots[12].plant).toBeNull()
+    expect(state.plots[12].plant?.lives).toBe(0)
   })
 
   it('SV-02: recovers last valid backup when primary is malformed or references unknown plants', () => {
@@ -43,9 +44,10 @@ describe('Sprint 01 persistence', () => {
 
   it('migrates first-sprint snapshots and their backups without replaying discoveries', () => {
     const state = initialState(33)
-    earn(state,150)
+    earn(state,400)
     commit(state,{type:'plant',species:'strawberry',plot:8})
     commit(state,{type:'plant',species:'sunflower',plot:9})
+    prepareFirstResearch(state)
     function checkLegacy(fromBackup: boolean) {
       const storage = memoryStorage()
       const {seeds,...rest} = legacySix(state)
@@ -70,7 +72,8 @@ describe('Sprint 01 persistence', () => {
       type:'sellSeeds',species:'solar_strawberry',profile:common,count:state.seeds.solar_strawberry-1
     })
     checkLegacy(true)
-    commit(state,{type:'plant',plot:12,species:'solar_strawberry',replaceId:state.plots[12].plant!.id})
+    if (state.plots[12].plant?.lives===0) commit(state,{type:'cleanup',plot:12,expectedId:state.plots[12].plant!.id})
+    commit(state,{type:'plant',plot:12,species:'solar_strawberry',replaceId:state.plots[12].plant?.id})
     commit(state,{type:'store',plot:12,expectedId:state.plots[12].plant!.id})
     checkLegacy(false)
   })
@@ -85,7 +88,7 @@ describe('Sprint 01 persistence', () => {
       storage.setItem(primary, raw)
       const persistence = createPersistence(() => storage)
       const session = persistence.load()
-      expect(session).toMatchObject({coins:20,schemaVersion:11})
+      expect(session).toMatchObject({coins:20,schemaVersion:saveVersion})
       expect(persistence.warning).toBe(warning)
       commit(session, { type: 'plant', plot: 8, species: 'radish' })
       persistence.save(session)

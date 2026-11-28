@@ -3,7 +3,7 @@ import { evolution, plotCount, speciesInfo } from '../../game/config'
 import { harmony, harmonyGrowth } from '../../game/decor'
 import { bridgeIssue, isBusy, orderQuote } from '../../game/evolution'
 import { availableTraits, plantStats, traits } from '../../game/genetics'
-import { canClone, crossingQuote, freeGreenhouseSlots } from '../../game/greenhouse'
+import { canClone, crossingQuote, freeGreenhouseSlots, greenhouseTime } from '../../game/greenhouse'
 import { negatives, rarities } from '../../game/model'
 import { describe, field } from '../specimens'
 import { plantName } from '../strings'
@@ -43,11 +43,12 @@ function crossResult(state:GameState, cross:GameState['crosses'][number]) {
     <p>${ru?'Мутации':'Mutations'} · ${mutations.join(', ')||'—'}</p>`
 }
 
-export function evolutionPanel(state:GameState, parents:number[]) {
+export function evolutionPanel(state:GameState, parents:number[], section:'greenhouse'|'bridge'|'orders'|'stall'='greenhouse') {
   const w=words[state.lang]
   const name=(id:Species)=>plantName(state.lang,id)
-  let html=`<h2>${w.title}</h2><h3>${w.island}</h3>`
-  html+=button('market',marketWords[state.lang].title)
+  let html=''
+  if (section==='bridge') {
+  html=`<h2>${w.island}</h2>`
   html+=button('travel-green',w.green, `aria-pressed="${state.activeIsland==='green'}"`)
   html+=state.plots.length>plotCount ? button('travel-valley',w.valley,`aria-pressed="${state.activeIsland==='valley'}"`) : button('restore-bridge',w.bridge+' · '+evolution.bridge.cost+' ◈', '', !!bridgeIssue(state))
   if(state.plots.length<=plotCount) {
@@ -57,6 +58,9 @@ export function evolutionPanel(state:GameState, parents:number[]) {
   html+=`<p>${state.lang==='ru'?'Гармония сада':'Garden harmony'} ${harmony(state)} · ${state.lang==='ru'?'Зелёный остров':'Green Island'} ${harmony(state,'green')}${state.plots.length>plotCount ? ' · '+w.valley+' '+harmony(state,'valley') : ''}</p>`
   const growth=Math.round((harmonyGrowth(state,state.activeIsland)-1)*100)
   if (growth) html+=`<p>${state.lang==='ru'?'Рост от гармонии':'Harmony growth bonus'} +${growth}%</p>`
+  return html
+  }
+  if (section==='greenhouse') {
   html+=`<h3>${w.greenhouse} · ${w.level} ${state.greenhouseLevel}</h3>`
   if(!state.tutorialSkipped && state.revealed.length && state.greenhouseLevel===1) html+=`<p class="hint">${state.lang==='ru'?'Улучшите теплицу, чтобы скрестить два растения одного вида из питомника.':'Upgrade the greenhouse to cross two nursery plants of the same species.'}</p>`
   if(state.greenhouseLevel<5) html+=button('greenhouse-upgrade',w.improve+' · '+evolution.greenhouseCosts[state.greenhouseLevel]+' ◈',
@@ -72,7 +76,7 @@ export function evolutionPanel(state:GameState, parents:number[]) {
     const [first,second]=selected
     const experiment=first && second && first.species===second.species ? crossingQuote(state,first,second) : null
     if(experiment) {
-      const pending=state.crosses.some(c=>c.species===first.species && c.readyAt>state.playTime)
+      const pending=state.crosses.some(c=>c.species===first.species && c.readyAt>greenhouseTime(state))
       const odds=pending ? experiment.base : experiment.weights
       const total=odds.reduce((sum,weight)=>sum+weight,0)
       html+=`<p>${experiment.cost} ◈ · ${experiment.seconds} ${w.seconds}</p>
@@ -100,15 +104,15 @@ export function evolutionPanel(state:GameState, parents:number[]) {
     }
     for(const cross of state.crosses.filter(c=>!c.collected)){
       html+=`<article class="inventory-card"><p>${name(cross.species)} · #${cross.id}</p>`
-      html+=cross.readyAt>state.playTime
-        ? `<p>${w.waiting} ${Math.ceil(cross.readyAt-state.playTime)} ${w.seconds}</p>`
+      html+=cross.readyAt>greenhouseTime(state)
+        ? `<p>${w.waiting} ${Math.ceil(cross.readyAt-greenhouseTime(state))} ${w.seconds}</p>`
         : `<div class="breeding-result breeding-${cross.profile.rarity}">${crossResult(state,cross)}${button('cross-collect',w.collect,`data-id="${cross.id}"`)}</div>`
       html+='</article>'
     }
     for (const clone of state.clones) {
       html+=`<article class="inventory-card"><p>${cloneLabel} · ${name(clone.species)} · ${describe(state.lang,clone.profile)}</p>`
-      html+=clone.readyAt>state.playTime
-        ? `<p>${w.waiting} ${Math.ceil(clone.readyAt-state.playTime)} ${w.seconds}</p>`
+      html+=clone.readyAt>greenhouseTime(state)
+        ? `<p>${w.waiting} ${Math.ceil(clone.readyAt-greenhouseTime(state))} ${w.seconds}</p>`
         : button('clone-collect',w.collect,`data-id="${clone.id}"`)
       html+='</article>'
     }
@@ -119,9 +123,14 @@ export function evolutionPanel(state:GameState, parents:number[]) {
       html+='</details>'
     }
   }
-  html+=`<h3>${state.lang==='ru'?'Торговая лавка':'Market stall'} · ${w.level} ${state.stallLevel}</h3>`
+  return html
+  }
+  if (section==='stall') {
+  html+=`<h3>${marketWords[state.lang].title} · ${w.level} ${state.stallLevel}</h3>`
   if (state.sold) html+=button('helper',state.lang==='ru'?'Листик и автоматизация':'Leafy and automation')
   if(state.stallLevel<5) html+=button('stall-upgrade',w.improve+' · '+evolution.stallCosts[state.stallLevel]+' ◈',`data-level="${state.stallLevel+1}"`)
+  return html
+  }
   html+=`<h3>${w.orders}</h3>`
   if (state.autoSell && state.orders.length && !state.trading.reserveOrders) {
     const hint=state.lang==='ru'

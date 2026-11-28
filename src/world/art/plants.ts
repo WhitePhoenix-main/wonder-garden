@@ -1,7 +1,17 @@
 import type { Species } from '../../game/model'
 import { at, polygon, line, ellipse, gradient, shadow, leaf, sun, green, type Canvas, type Leaves } from './drawing'
 
-export function plant(ctx: Canvas, species: Species | 'seed' | 'sprout', ripe: boolean): void {
+export function plant(ctx: Canvas, species: Species | 'seed' | 'sprout' | 'withered', ripe: boolean): void {
+  if (species==='withered') {
+    shadow(ctx,0,-4,27,12)
+    line(ctx,[at(2,-6),at(-6,-25),at(0,-40),at(12,-37),at(21,-29)],'#765441',4)
+    const dry:Leaves=['#b59662','#987245','#74543b']
+    leaf(ctx,at(-5,-26),at(-29,-18),7,dry)
+    leaf(ctx,at(-3,-20),at(22,-11),6,dry)
+    leaf(ctx,at(17,-33),at(28,-23),6,dry)
+    ellipse(ctx,-17,-7,6,2,'#b59662',0.4)
+    return
+  }
   if (species === 'seed') {
     ellipse(ctx, 0, -8, 10, 4, '#593d33')
     ellipse(ctx, -1, -10, 5, 3, '#cbab70', -0.32)

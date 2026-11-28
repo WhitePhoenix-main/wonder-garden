@@ -44,12 +44,13 @@ export function gardenAudio() {
   }
   const cues:Record<string,number[]> = {Planted:[330,494],Harvested:[440,660],Sold:[523,659,784],
     SeedsExtracted:[370,494,740],RareSeed:[440,554,740,988],Composted:[220,147],BedUpgraded:[196,294,392],
+    PlantCleaned:[327,262],CropFailed:[290,224],
     EpicSeed:[392,523,659,784,1047],LegendarySeed:[392,523,659,784,1047,1319],
     Discovery:[523,659,880,1047]}
   function play(events:string[],muted:boolean,automatic=false) {
     if (!ctx || muted || document.hidden) return
     const key=events.some(e=>e.startsWith('RecipeRevealed:')) ? 'Discovery' :
-      !automatic && events.find(e=>e in cues)
+      !automatic && (events.includes('CropFailed') ? 'CropFailed' : events.find(e=>e in cues))
     if (!key) return
     cues[key].forEach((freq,i)=>{
       const time=ctx!.currentTime+i*.075, tone=ctx!.createOscillator(), volume=ctx!.createGain()
