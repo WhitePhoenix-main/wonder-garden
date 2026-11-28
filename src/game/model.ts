@@ -7,7 +7,17 @@ export type Lang = 'ru' | 'en'
 export type HelperLevel = 0 | BedLevel
 export const decorIds = ['bench','lantern','flower_arch','sakura','fountain','apiary','magic_lantern','statue'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 9
+export const saveVersion = 10
+export type MarketKind = 'fruit' | 'seed'
+export interface MarketSupply {
+  saturated: number
+  delivered: number
+}
+export interface MarketState {
+  tick: number
+  remaining: number
+  goods: Record<Species, Record<MarketKind, MarketSupply>>
+}
 
 export interface Recipe {
   result: Hybrid
@@ -125,6 +135,7 @@ export interface Decoration {
 
 export interface GameState {
   schemaVersion: typeof saveVersion
+  market: MarketState
   balanceVersion: number
   playTime: number
   nextId: number

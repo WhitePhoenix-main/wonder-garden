@@ -1,6 +1,7 @@
 import { canonical, common, plantStats, rules, stockCount, validGenome } from './genetics'
 import type { Experiment, Plant, PollinationSnapshot, Profile, GameState, Recipe, Species } from './model'
-import { adjacent, auras, balance, basketLevels, bedLevels, evolution, island, isHybrid, isSpecies, plotIndices, plotIsland, recipes, speciesInfo, valley, valueScale } from './config'
+import { adjacent, auras, balance, basketLevels, bedLevels, evolution, island, isHybrid, isSpecies, plotIndices, plotIsland, recipes, speciesInfo, valley } from './config'
+import { harvestSaleValue } from './pricing'
 import { harmonyGrowth } from './decor'
 import { protectedProfile } from './stock-policy'
 
@@ -42,7 +43,7 @@ export function expansionCost(state: GameState, plot?:number): number | null {
 }
 
 export function saleValue(state: GameState): number {
-  return state.basket.reduce((sum,batch)=>sum+Math.round(batch.valueUnits*batch.count/valueScale),0)
+  return state.basket.reduce((sum,batch)=>sum+harvestSaleValue(batch,batch.count,state),0)
 }
 
 function neighborSpecies(state: GameState, index: number): Set<Species> {

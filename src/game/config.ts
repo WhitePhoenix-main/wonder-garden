@@ -1,6 +1,7 @@
 import balance from '../../config/balance.json'
 import island from '../../config/island.json'
 import valley from '../../config/valley.json'
+import market from '../../config/market.json'
 import { baseIds, hybridIds, decorIds, rarities, type DecorType, type BedLevel, type Hybrid, type IslandId, type Recipe, type Species } from './model'
 
 export const speciesIds = [...baseIds, ...hybridIds] as const
@@ -174,7 +175,7 @@ requireConfig([genetics.rarityFruitPrice,genetics.raritySeedPrice].every(ranks=>
   ranks.every(n=>Number.isFinite(n) && n>0)) && genetics.raritySeedYield.length===rarities.length &&
   genetics.raritySeedYield.every(probability) && probability(genetics.seedTraitPrice.plus) &&
   probability(genetics.seedTraitPrice.minus) && genetics.seedTraitPrice.minus < 1,'rarity economy')
-requireConfig(balance.version === 3, 'balance.version')
+requireConfig(balance.version === 4, 'balance.version')
 requireConfig(nonnegativeInteger(balance.startCoins), 'balance.startCoins')
 requireConfig(balance.expansionCosts.length === plotCount - island.startOpen.length
   && balance.expansionCosts.every(nonnegativeInteger), 'balance.expansionCosts')
@@ -233,4 +234,14 @@ requireConfig(evolution.orderCooldown>0 && Number.isFinite(evolution.orderBonus)
 requireConfig(evolution.rankRequirements.length===8 && evolution.rankRequirements.every(row=>Object.entries(row)
   .every(([key,value])=> key==='bridge' ? value===true : positiveInteger(Number(value)))), 'ranks')
 
-export { balance, island, valley }
+requireConfig(positiveInteger(market.tickSeconds) && positiveInteger(market.demandPeriodTicks) &&
+  market.demandPercent.length===speciesIds.length &&
+  market.demandPercent.every(n=>positiveInteger(n) && n>=market.minimumPricePercent && n<=market.maximumPricePercent) &&
+  positiveInteger(market.minimumPricePercent) && market.minimumPricePercent<=100 &&
+  positiveInteger(market.maximumPricePercent) && market.maximumPricePercent>=100 &&
+  positiveInteger(market.saturationPenalty) && market.saturationPenalty<=100 &&
+  positiveInteger(market.recoveryPercentPerTick) && market.recoveryPercentPerTick<=100 &&
+  Object.keys(market.capacity).length===speciesIds.length &&
+  speciesIds.every(id=>positiveInteger(market.capacity[id]?.fruit) && positiveInteger(market.capacity[id]?.seed)), 'market')
+
+export { balance, island, market, valley }

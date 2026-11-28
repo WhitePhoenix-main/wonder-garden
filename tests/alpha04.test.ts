@@ -171,7 +171,7 @@ describe('Alpha-4 harvest and inventory',()=>{
   it('migrates validated d4b0232 data once and keeps progress, lifetimes, prices and genetics',()=>{
     const result=parseSave(JSON.stringify(alpha03))
     if(!result || result==='future') throw Error('Expected migration of Alpha-3 fixture')
-    expect(result).toMatchObject({schemaVersion:9,coins:alpha03.coins,
+    expect(result).toMatchObject({schemaVersion:10,coins:alpha03.coins,
       variants:alpha03.variants.map(pack=>({...pack,plus:pack.plus===null ? [] : [pack.plus]})),
       revealed:alpha03.revealed,seeds:alpha03.seeds,lang:alpha03.lang,rng:alpha03.rng,
       musicMuted:alpha03.musicMuted,tutorialSkipped:alpha03.tutorialSkipped})

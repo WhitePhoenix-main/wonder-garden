@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { initialState, basketCapacity, basketCount, saleValue } from '../src/game'
+import { initialMarket } from '../src/game/market'
 import { decorationAt, harmony } from '../src/game/decor'
 import { journal } from '../src/game/journal'
 import { createPersistence } from '../src/persistence/storage'
@@ -121,7 +122,7 @@ describe('Garden building and progress', () => {
     const migrated=persistence.load()
     expect(migrated.coins).toBe(state.coins)
     expect(basketCount(migrated)).toBe(basketCount(state))
-    expect(saleValue(migrated)).toBe(saleValue(state))
+    expect(saleValue(migrated)).toBe(saleValue({...state,market:initialMarket()}))
     expect(migrated.basket[0].profile).toBeNull()
     const coins = state.coins
     for (const [target,capacity] of [[1,240],[2,720],[3,2400]]) {

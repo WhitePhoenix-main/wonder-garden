@@ -3,6 +3,7 @@ import { balance, island, plotCount, hybridCounts, isSpecies } from './config'
 
 import { canonical, common, maxLives, nextRandom } from './genetics'
 import { recordPlanting } from './collection'
+import { initialMarket } from './market'
 import { speciesIds } from './config'
 import type { Profile } from './model'
 
@@ -30,6 +31,7 @@ export const initialAmenities = {
 export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameState {
   const state: GameState = {
     schemaVersion: saveVersion,
+    market: initialMarket(),
     ...initialAmenities,
     ...initialEvolution(),
     decorations: [],

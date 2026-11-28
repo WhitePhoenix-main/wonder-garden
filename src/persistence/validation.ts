@@ -1,5 +1,6 @@
 import { common, compatible, maxLives, profileKey, rules, sameProfile, traits, validGenome } from '../game/genetics'
-import { decorIsland, speciesIds, valley, valleyPlotCount } from '../game/config'
+import { decorIsland, market, speciesIds, valley, valleyPlotCount } from '../game/config'
+import { marketKinds } from '../game/market'
 import { positives, negatives, rarities, type Hybrid, type Profile, type Species, saveVersion, type GameState, type Plant } from '../game/model'
 import { adjacent, balance, island, isSpecies, plotCount, recipes, isHybrid, speciesInfo, helperLevels, autoSellOffer, basketLevels, isDecorType, isDecorSlot } from '../game/config'
 import { record, integer, finite } from './shape'
@@ -20,13 +21,15 @@ const previousLives: Record<Species, number> = {
 type OldFruit = {species:Species; valueUnits:number}
 type EvolutionKeys='activeIsland'|'greenhouseLevel'|'stallLevel'|'crosses'|'orders'|'orderRefreshAt'|'ordersCompleted'|
   'collection'|'achievements'|'rank'|'protectedPlants'|'protectedProfiles'|'favorites'|'reserves'|'automation'
-export type AlphaFourState=Omit<GameState,'schemaVersion'|EvolutionKeys>&{schemaVersion:8}
+export type AlphaFiveState=Omit<GameState,'schemaVersion'|'market'>&{schemaVersion:9}
+export type AlphaFourState=Omit<AlphaFiveState,'schemaVersion'|EvolutionKeys>&{schemaVersion:8}
 type AlphaThreePlant = Omit<Plant,'pollination'>
 type AlphaThreePlot = Omit<GameState['plots'][number],'plant'> & {plant:AlphaThreePlant|null}
 export type AlphaThreeState = Omit<AlphaFourState,'schemaVersion'|'firstExtraction'|'firstSeedPlanting'|'plots'|'nursery'|'basket'> & {
   schemaVersion:7; plots:AlphaThreePlot[]; nursery:AlphaThreePlant[]; basket:OldFruit[]
 }
 export function validState(v:unknown):v is GameState {return validate(v,saveVersion)}
+export function validAlphaFive(v:unknown):v is AlphaFiveState {return validate(v,9)}
 export function validAlphaFour(v:unknown):v is AlphaFourState {return validate(v,8)}
 export function validAlphaThree(v:unknown):v is AlphaThreeState {return validate(v,7)}
 export type LegacyPlant=Pick<Plant,'id'|'species'|'progress'|'mature'|'readySince'> & {propagation:number}
@@ -69,11 +72,27 @@ function validHarvest(value:unknown, seen:Set<number>, nextId:number, known:Set<
   return true
 }
 
-function validate(v: unknown,version:6|7|8|typeof saveVersion): boolean {
-  const current = version === saveVersion
+function validateMarket(value:unknown):boolean {
+  if (!record(value) || !integer(value.tick) || !finite(value.remaining) || value.remaining<=0 ||
+    value.remaining>market.tickSeconds || !record(value.goods)) return false
+  const goods=value.goods
+  return Object.keys(goods).length===speciesIds.length && speciesIds.every(id=>{
+    const channels=goods[id]
+    return record(channels) && Object.keys(channels).length===marketKinds.length && marketKinds.every(kind=>{
+      const supply=channels[kind]
+      const cap=market.capacity[id][kind]
+      return record(supply) && integer(supply.saturated) && supply.saturated<=cap &&
+        integer(supply.delivered) && supply.delivered<=cap
+    })
+  })
+}
+
+function validate(v: unknown,version:6|7|8|9|typeof saveVersion): boolean {
+  const current = version >= 9
   const inventory = version >= 8
   const legacy = version === 6
-  if (!record(v) || v.schemaVersion !== version || v.balanceVersion !== (current ? balance.version : inventory ? 2 : legacyBalanceVersion) ||
+  const balanceVersion=version===saveVersion ? balance.version : version===9 ? 3 : inventory ? 2 : legacyBalanceVersion
+  if (!record(v) || v.schemaVersion !== version || v.balanceVersion !== balanceVersion ||
       !finite(v.playTime) || !integer(v.nextId) || !integer(v.coins) || typeof v.sold !== 'boolean' ||
       (v.lang !== 'ru' && v.lang !== 'en') || !Array.isArray(v.planted) || !v.planted.every(isSpecies) ||
       !v.planted.includes('radish') || new Set(v.planted).size !== v.planted.length) return false
@@ -157,6 +176,7 @@ function validate(v: unknown,version:6|7|8|typeof saveVersion): boolean {
   if (inventory && (!v.basket.every(f => validHarvest(f,seen,nextId,known,current)) ||
       v.basket.reduce((sum, f) => sum + f.count, 0) > capacity)) return false
   if (current && !validateEvolution(v as unknown as GameState,seen,instances)) return false
+  if (version===saveVersion && !validateMarket(v.market)) return false
   return recipes.every(({ result, primary, neighbors, harvests }) => {
     const count = progress[result], stock = seeds[result]
     if (!integer(count) || count > (legacy?harvests:rules.pity) || !integer(stock)) return false

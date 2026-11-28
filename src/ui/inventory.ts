@@ -1,6 +1,9 @@
 import { protectedProfile, profileKey } from '../game/evolution'
 import { common, plantStats, profileAllowed } from '../game/genetics'
-import { speciesIds, speciesInfo, valueScale } from '../game/config'
+import { speciesIds, speciesInfo } from '../game/config'
+import { marketQuote } from '../game/market'
+import { harvestUnitValue } from '../game/pricing'
+import { marketWords } from './panels/market'
 import { extractionYield, harvestSaleValue, quickSaleValue, seedSaleValue } from '../game/trade'
 import type { GameState, Profile, Species } from '../game/model'
 import { describe, field, portrait } from './specimens'
@@ -108,9 +111,9 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
 
   let cards:string[]
   if (tab==='harvest') {
-    const batches=s.basket.filter(b=>matches(b.species,b.profile,!!b.pollination,b.valueUnits/valueScale,b.count))
+    const batches=s.basket.filter(b=>matches(b.species,b.profile,!!b.pollination,harvestUnitValue(b,s),b.count))
     batches.sort((a,b)=>sort==='tier'?speciesInfo[a.species].generation-speciesInfo[b.species].generation:
-      sort==='rarity'?rank(b.profile)-rank(a.profile):sort==='value'?b.valueUnits-a.valueUnits:
+      sort==='rarity'?rank(b.profile)-rank(a.profile):sort==='value'?harvestUnitValue(b,s)-harvestUnitValue(a,s):
       sort==='pollination'?Number(!!b.pollination)-Number(!!a.pollination):
       sort==='quantity'?b.count-a.count:name(a.species).localeCompare(name(b.species),s.lang))
     cards=currentPage(batches).map(batch=>{
@@ -128,10 +131,10 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
       return `<article class="inventory-card">${header(batch.species)}
         ${button('inventory-select',bulkLabels.select,`data-key="${key}" aria-pressed="${selected.includes(key)}"`)}
         <p>${origin} · ${pollination}</p>
-        <p>${format.format(batch.valueUnits/valueScale)} ◈ ${w.per}</p>
+        <p>${format.format(harvestUnitValue(batch,s))} ◈ ${w.per} · ${marketWords[s.lang].title} ${marketQuote(s,batch.species,'fruit').pricePercent}%</p>
         ${controls(key,batch.count)}
         ${batch.profile ? `<p>${w.potential} ${yieldInfo.seeds}${yieldInfo.attempts ? ' · '+yieldInfo.attempts+' '+w.attempts : ''}</p>` : ''}
-        <div class="inventory-actions">${button('inventory-sell-h',`${w.sell} · ${harvestSaleValue(batch,amount)} ◈`,attrs)}
+        <div class="inventory-actions">${button('inventory-sell-h',`${w.sell} · ${harvestSaleValue(batch,amount,s)} ◈`,attrs)}
           ${batch.profile ? button('inventory-extract',w.extract,attrs,!yieldInfo.seeds&&!yieldInfo.attempts) : ''}
           ${protection}
           ${details(key,`<p>${w.parents} · ${name(batch.species)} (${origin})${parents.map(p=>' · '+name(p.species)+' ('+describe(s.lang,p)+')').join('')}</p>`)}
@@ -140,10 +143,10 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
     })
   } else {
     const packs=speciesIds.flatMap(species=>[{species,...common,count:s.seeds[species]},...s.variants.filter(v=>v.species===species)])
-      .filter(p=>p.count>0 && matches(p.species,p,false,seedSaleValue(p.species,p),p.count) &&
+      .filter(p=>p.count>0 && matches(p.species,p,false,seedSaleValue(p.species,p,s),p.count) &&
         (!favoriteOnly || s.favorites.includes(profileKey(p.species,p))))
     packs.sort((a,b)=>sort==='tier'?speciesInfo[a.species].generation-speciesInfo[b.species].generation:
-      sort==='rarity'?rank(b)-rank(a):sort==='value'?seedSaleValue(b.species,b)-seedSaleValue(a.species,a):
+      sort==='rarity'?rank(b)-rank(a):sort==='value'?seedSaleValue(b.species,b,s)-seedSaleValue(a.species,a,s):
       sort==='quantity'?b.count-a.count:name(a.species).localeCompare(name(b.species),s.lang))
     cards=currentPage(packs).map(pack=>{
       const profile={rarity:pack.rarity,plus:pack.plus,minus:pack.minus}
@@ -152,11 +155,11 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
       const single=speciesInfo[pack.species].lifecycle==='single'
       const stats=plantStats(pack.species,profile)
       const attrs=`data-seed="${pack.species}" data-profile='${JSON.stringify(profile)}'`
-      const price=seedSaleValue(pack.species,profile)
+      const price=seedSaleValue(pack.species,profile,s)
       return `<article class="inventory-card">${header(pack.species)}
         ${button('inventory-select',bulkLabels.select,`data-key="${key}" aria-pressed="${selected.includes(key)}"`)}
         <p>${describe(s.lang,profile)} · ${single?w.single:w.multi}</p>
-        <p>${w.growth} ${format.format(stats.growthSec)} ${s.lang==='ru'?'с':'s'} · ${price} ◈ ${w.per}</p>
+        <p>${w.growth} ${format.format(stats.growthSec)} ${s.lang==='ru'?'с':'s'} · ${price} ◈ ${w.per} · ${marketWords[s.lang].title} ${marketQuote(s,pack.species,'seed').pricePercent}%</p>
         ${controls(key,pack.count)}
         <div class="inventory-actions">${button('inventory-plant',w.plant,attrs)}
           ${button('profile-protect', protectedProfile(s,pack.species,profile) ? (s.lang==='ru'?'Снять защиту':'Unprotect') : (s.lang==='ru'?'Защитить':'Protect'),attrs)}
@@ -190,7 +193,7 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
       }).join('')}</tbody></table></div>`
     }
   }
-  return `<h2>${w.title}</h2><div class="book-filters">${tabs}</div>${tools}
+  return `<h2>${w.title}</h2><div class="book-filters">${tabs}${button('market',marketWords[s.lang].title)}</div>${tools}
     ${!s.tutorialSkipped && tab==='seeds' && s.variants.length ? `<p class="hint">${s.lang==='ru'?'Выберите два профиля одного вида для сравнения. Защита и резерв помогают сохранить ценные семена.':'Select two profiles of the same species to compare them. Protection and reserves keep valuable seeds safe.'}</p>`:''}
     ${tab==='seeds'?button('favorite-filter',bulkLabels.favorite,`aria-pressed="${favoriteOnly}"`):''}
     ${button('bulk-sell',bulkLabels.sell+' · '+selected.length,'',!selected.length)}
