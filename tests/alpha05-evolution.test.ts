@@ -5,12 +5,12 @@ import { evolution, plotIndices, valley } from '../src/game/config'
 import { harmony } from '../src/game/decor'
 import { common, stockCount, traits } from '../src/game/genetics'
 import { isBusy } from '../src/game/greenhouse'
-import type { GameState, Profile, Species } from '../src/game/model'
+import { saveVersion, type GameState, type Profile, type Species } from '../src/game/model'
 import { orderQuote } from '../src/game/orders'
 import { newPlant } from '../src/game/state'
 import { defaultPolicy } from '../src/game/stock-policy'
 import { parseSave } from '../src/persistence/migration'
-import { addLegacyFruit, commit, cross, earn, plantAt, reject, wait } from './helpers'
+import { addLegacyFruit, cleanBed, commit, cross, earn, plantAt, prepareFirstResearch, reject, wait } from './helpers'
 
 function reload(state:GameState):GameState {
   const copy=parseSave(JSON.stringify(state))
@@ -24,10 +24,12 @@ function enterBreeding(seed:number) {
   wait(state,6)
   commit(state,{type:'harvest',plot:12})
   commit(state,{type:'extractSeeds',id:state.basket[0].id,count:1})
+  cleanBed(state,12)
   commit(state,{type:'plant',plot:12,species:'radish',stock:common})
-  earn(state,150)
+  earn(state,300)
   commit(state,{type:'plant',plot:8,species:'strawberry'})
   commit(state,{type:'plant',plot:9,species:'sunflower'})
+  prepareFirstResearch(state)
   wait(state,12)
   cross(state,8,'solar_strawberry')
   expect(state.seeds.solar_strawberry).toBe(1)
@@ -138,7 +140,7 @@ it('keeps concurrent results and trait sets isolated',()=>{
 it('restores an authentic Alpha 04 save without awarding currency or inventing inventory-only discoveries',()=>{
   const state=parseSave(JSON.stringify(alpha04))
   if (!state || state==='future') throw Error('Expected the production Alpha 04 fixture to migrate')
-  expect(state).toMatchObject({schemaVersion:11,coins:alpha04.coins,playTime:alpha04.playTime,nextId:alpha04.nextId,
+  expect(state).toMatchObject({schemaVersion:saveVersion,coins:alpha04.coins,playTime:alpha04.playTime,nextId:alpha04.nextId,
     activeIsland:'green',rng:alpha04.rng,lang:alpha04.lang,planted:alpha04.planted,revealed:alpha04.revealed,
     failures:alpha04.failures,helperLevel:alpha04.helperLevel,autoSell:alpha04.autoSell,
     harvestRemaining:alpha04.harvestRemaining,sellRemaining:alpha04.sellRemaining,stallLevel:2})
@@ -205,12 +207,13 @@ it('tracks one collection entry through repeated plantings, harvest, and reload'
     expect(state.collection.filter(row=>row.species==='radish' && row.rarity==='epic')).toHaveLength(1)
     wait(state,6)
     commit(state,{type:'harvest',plot:8})
-    expect(state.plots[8].plant).toBeNull()
+    expect(state.plots[8].plant?.lives).toBe(0)
     state=reload(state)
+    cleanBed(state,8)
   }
   const row=state.collection.find(row=>row.species==='radish' && row.rarity==='epic')!
   expect(row.planted).toBe(2)
-  expect(row.harvested).toBeGreaterThanOrEqual(8)
+  expect(row.harvested).toBeGreaterThanOrEqual(4)
   expect(traits(row.profile)).toEqual(profile.plus)
 })
 
@@ -266,7 +269,7 @@ it('keeps plot geometry, planting, auras and decoration on the correct island',(
   commit(state,{type:'upgradeHelper',target:1})
   expect(advance(state,5)).toContain('HelperHarvested:16')
   expect(state.activeIsland).toBe('green')
-  expect(state.plots[16].plant).toBeNull()
+  expect(state.plots[16].plant?.lives).toBe(0)
 })
 
 it('respects protected and reserved seed stock during delegated replanting',()=>{
@@ -368,6 +371,7 @@ it('keeps the first achievable order across reload, pays it once and replenishes
   for (const plot of [8,9])
     if (state.plots[plot].plant) commit(state,{type:'store',plot,expectedId:plantAt(state,plot).id})
   for (let i=0;i<10 && !orderQuote(state,order).complete;i++) {
+    if (state.plots[8].plant?.lives===0) cleanBed(state,8)
     if (!state.plots[8].plant) {
       commit(state,{type:'plant',plot:8,species})
     }

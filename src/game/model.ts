@@ -7,7 +7,7 @@ export type Lang = 'ru' | 'en'
 export type HelperLevel = 0 | BedLevel
 export const decorIds = ['bench','lantern','flower_arch','sakura','fountain','apiary','magic_lantern','statue'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 11
+export const saveVersion = 12
 export type MarketKind = 'fruit' | 'seed'
 export interface MarketSupply {
   previousPrice?: number
@@ -30,7 +30,7 @@ export interface Recipe {
 
 export const rarities = ['common','uncommon','rare','epic','legendary'] as const
 export const positives = ['hardy','early','fruitful','seedy','quality','stable','aura'] as const
-export const negatives = ['fragile','slow','small','sparse'] as const
+export const negatives = ['fragile','slow','small','sparse','unfruitful'] as const
 export type Rarity = typeof rarities[number]
 export type Positive = typeof positives[number]
 export type IslandId = 'green'|'valley'
@@ -82,6 +82,25 @@ export interface Plot {
   level: BedLevel
   plant: Plant | null
   policy?: PlotPolicy
+}
+
+export const productionModes = ['fruit','seed','wholesale'] as const
+export interface ProductionAssignment {
+  species:Species
+  profile:Profile
+  mode:typeof productionModes[number]
+}
+export interface ProductionBed {
+  assignment:ProductionAssignment|null
+  plant:Plant|null
+}
+export interface PassiveState {
+  beds:ProductionBed[]
+  basket:HarvestBatch[]
+  seeds:SeedPack[]
+  rng:number
+  checkpoint:number|null
+  labSeconds:number
 }
 
 export const plotModes = ['manual','commercial','seed','breeding','support'] as const
@@ -151,6 +170,7 @@ export interface TradingPolicy {
 }
 
 export interface GameState {
+  passive:PassiveState
   trading:TradingPolicy
   schemaVersion: typeof saveVersion
   market: MarketState
@@ -184,6 +204,7 @@ export interface GameState {
   tutorialBranch: 'experiment'|'corner'|null
   pendingHybrid:Hybrid|null
   tutorialSkipped: boolean
+  tutorialSeen: string[]
   muted: boolean
   activeIsland: IslandId
   greenhouseLevel: number
@@ -203,7 +224,7 @@ export interface GameState {
   reserves: Record<string,number>
   automation: {
     enabled:boolean; replant:boolean; extractPollinated:boolean; sellSeeds:boolean; preferred:PlotMode|null
-    sellFruit:boolean; saleRarity:Rarity|null
+    sellFruit:boolean; saleRarity:Rarity|null; cleanup:boolean
   }
 }
 export type BulkItem =
@@ -212,6 +233,9 @@ export type BulkItem =
   | {type:'sellSeeds';species:Species;profile:Profile;count:number}
   | {type:'plant';plot:number;species:Species;replaceId?:number;stock?:Profile}
 export type EvolutionCommand =
+  | {type:'assignProduction';slot:number;assignment:ProductionAssignment|null}
+  | {type:'moveProduction';slot:number;id:number;direction:'in'|'out'}
+  | {type:'collectProduction'}
   | {type:'upgradeGreenhouse'|'upgradeStall';target:number}
   | {type:'startCross';parents:[number,number]}
   | {type:'startClone'|'collectClone';id:number}
@@ -231,9 +255,11 @@ export type Command =
   | BulkItem
   | {type:'clear'|'upgrade';plot:number}
   | {type:'harvest';plot:number;expectedId:number;cycle:number}
+  | {type:'cleanup';plot:number;expectedId:number}
   | {type:'store'|'compost';plot:number;expectedId:number}
   | {type:'dismissHybrid'} | {type:'tutorialBranch';branch:'experiment'|'corner'}
-  | {type:'music';muted:boolean} | {type:'skipTutorial'|'showOccupiedHint'}
+  | {type:'music';muted:boolean} | {type:'skipTutorial'|'showOccupiedHint'|'restartTutorial'}
+  | {type:'tutorialSeen';id:string}
   | {type:'return';plot:number;id:number}
   | {type:'move';from:number;to:number}
   | {type:'upgradeHelper'; target:Exclude<HelperLevel,0>} | {type:'buyAutoSell'}

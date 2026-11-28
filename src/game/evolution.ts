@@ -6,6 +6,7 @@ import { plotModes, rarities, type EvolutionCommand, type GameState, type PlotPo
 import { fulfillOrder } from './orders'
 import { plotTemplate } from './automation'
 import { validTrading } from './market'
+import { produce, unlockProduction } from './nursery'
 
 export { isBusy } from './greenhouse'
 export { profileKey, rarityOdds } from './genetics'
@@ -30,7 +31,7 @@ export function validPlotPolicy(policy:PlotPolicy):boolean {
       validGenome(policy.replant.species,policy.replant.profile,true))
 }
 
-export function validAutomation(settings:GameState['automation']):boolean {
+export function validAutomation(settings:Omit<GameState['automation'],'cleanup'>):boolean {
   return !!settings && [settings.enabled,settings.replant,settings.extractPollinated,settings.sellSeeds,settings.sellFruit].every(v=>typeof v==='boolean') &&
     (settings.preferred===null || plotModes.includes(settings.preferred)) &&
     (settings.saleRarity===null || rarities.includes(settings.saleRarity))
@@ -42,6 +43,9 @@ function setFlag<T>(list:T[],value:T,enabled:boolean):T[] {
 
 export function evolve(state:GameState,command:Exclude<EvolutionCommand,{type:'bulk'}>):Result {
   switch (command.type) {
+    case 'assignProduction':
+    case 'moveProduction':
+    case 'collectProduction': return produce(state,command)
     case 'upgradeGreenhouse':
     case 'upgradeStall': {
       const greenhouse=command.type==='upgradeGreenhouse'
@@ -53,7 +57,10 @@ export function evolve(state:GameState,command:Exclude<EvolutionCommand,{type:'b
       const cost=(greenhouse ? evolution.greenhouseCosts : evolution.stallCosts)[command.target-1]
       if (state.coins<cost) return fail('noCoins')
       state.coins-=cost
-      if (greenhouse) state.greenhouseLevel=command.target
+      if (greenhouse) {
+        state.greenhouseLevel=command.target
+        unlockProduction(state)
+      }
       else {
         state.stallLevel=command.target
         if (command.target===2) {
@@ -87,7 +94,9 @@ export function evolve(state:GameState,command:Exclude<EvolutionCommand,{type:'b
       state.activeIsland=command.island
       return ok('IslandChanged')
     case 'protectPlant':
-      if (!state.nursery.some(p=>p.id===command.id) && !state.plots.some(p=>p.plant?.id===command.id)) return fail('stalePlant')
+      if (!state.nursery.some(p=>p.id===command.id) &&
+          !state.plots.some(p=>p.plant?.id===command.id && p.plant.lives>0) &&
+          !state.passive.beds.some(b=>b.plant?.id===command.id)) return fail('stalePlant')
       state.protectedPlants=setFlag(state.protectedPlants,command.id,command.enabled)
       for (const batch of state.basket) for (const lot of batch.lots) {
         if (lot.origin?.specimen===command.id) lot.origin.protected=command.enabled
@@ -132,7 +141,7 @@ export function evolve(state:GameState,command:Exclude<EvolutionCommand,{type:'b
       state.trading={...command.settings}
       return ok('AutomationChanged')
     case 'setAutomation':
-      if (!validAutomation(command.settings) || !state.helperLevel) return fail('invalidPolicy')
+      if (!validAutomation(command.settings) || typeof command.settings.cleanup!=='boolean' || !state.helperLevel) return fail('invalidPolicy')
       if (state.stallLevel<3 && (command.settings.extractPollinated || command.settings.sellSeeds)) return fail('stallLocked')
       if (state.stallLevel<4 && command.settings.saleRarity!==null) return fail('stallLocked')
       state.automation={...command.settings}

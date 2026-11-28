@@ -5,6 +5,7 @@ import { sameProfile, stockCount } from '../src/game/genetics'
 import { crossingQuote, isBusy } from '../src/game/greenhouse'
 import type { GameState, Profile } from '../src/game/model'
 import { newPlant } from '../src/game/state'
+import { unlockProduction } from '../src/game/nursery'
 import { parseSave } from '../src/persistence/migration'
 import { evolutionPanel } from '../src/ui/panels/evolution'
 import { commit, reject } from './helpers'
@@ -19,6 +20,7 @@ function breedingGarden(level:number,profiles:Profile[]):GameState {
   state.revealed=['solar_strawberry']
   state.planted.push('strawberry','sunflower')
   state.greenhouseLevel=level
+  unlockProduction(state)
   state.nursery=profiles.map(profile=>newPlant(state.nextId++,'radish',profile))
   return state
 }

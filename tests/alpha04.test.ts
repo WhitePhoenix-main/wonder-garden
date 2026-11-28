@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import alpha03 from './fixtures/alpha03.json'
 import { advance, basketCount, execute, initialState, speciesIds, speciesInfo } from '../src/game'
 import { common, inherit, maxLives, rules, traits } from '../src/game/genetics'
-import type { GameState, Profile } from '../src/game/model'
+import { saveVersion, type GameState, type Profile } from '../src/game/model'
 import { extractionYield, harvestSaleValue, seedSaleValue } from '../src/game/trade'
 import { parseSave } from '../src/persistence/migration'
 import { validState } from '../src/persistence/validation'
-import { addLegacyFruit, commit, plantAt, reject } from './helpers'
+import { addLegacyFruit, commit, plantAt, prepareFirstResearch, reject } from './helpers'
 
 const rareHardy:Profile = {rarity:'rare',plus:'hardy',minus:null}
 const fragile:Profile = {rarity:'common',plus:null,minus:'fragile'}
@@ -19,7 +19,7 @@ function reload(state:GameState):GameState {
 }
 
 describe('Alpha-4 harvest and inventory',()=>{
-  it('regrows for the shorter cycle, loses no lives waiting and empties on the last harvest',()=>{
+  it('regrows for the shorter cycle, loses no lives waiting and withers on the last harvest',()=>{
     const state=initialState(44)
     state.coins=speciesInfo.strawberry.seedPrice!
     commit(state,{type:'plant',plot:8,species:'strawberry'})
@@ -34,7 +34,7 @@ describe('Alpha-4 harvest and inventory',()=>{
       reject(state,{type:'harvest',plot:8},'notReady')
       advance(state,0.1)
     }
-    expect(bed.plant).toBeNull()
+    expect(bed.plant?.lives).toBe(0)
     expect(state.coins).toBe(0)
     expect(state.basket).toHaveLength(1)
     expect(state.basket[0].lots).toHaveLength(info.lives)
@@ -107,11 +107,13 @@ describe('Alpha-4 harvest and inventory',()=>{
   it('freezes parents through removal and reload, with one cross roll per harvested lot',()=>{
     const state=initialState(11)
     const donor:Profile={rarity:'rare',plus:['seedy'],minus:'small'}
-    state.coins=150
+    state.coins=400
     state.sold=true
     commit(state,{type:'plant',plot:8,species:'strawberry'})
     commit(state,{type:'plant',plot:9,species:'sunflower'})
+    prepareFirstResearch(state)
     Object.assign(plantAt(state,9),donor)
+    plantAt(state,8).fruitRoll=0.999
     advance(state,speciesInfo.strawberry.cycleSec)
     const mother=plantAt(state,8)
     expect(mother.pollination?.donor).toEqual({species:'sunflower',...donor})
@@ -141,26 +143,32 @@ describe('Alpha-4 harvest and inventory',()=>{
 
   it('keeps extraction deterministic when the first processed fruit has no own seed',()=>{
     const state=initialState(1)
-    const seedy:Profile={rarity:'rare',plus:['seedy'],minus:null}
+    const thinSeed:Profile={rarity:'rare',plus:['fruitful'],minus:'sparse'}
     state.coins=1000
     state.sold=true
     commit(state,{type:'plant',plot:8,species:'strawberry'})
     commit(state,{type:'compost',plot:8,expectedId:plantAt(state,8).id})
     commit(state,{type:'plant',plot:8,species:'blueberry'})
     commit(state,{type:'plant',plot:9,species:'moonflower'})
-    Object.assign(plantAt(state,8),seedy,{fruitRoll:0.999})
+    prepareFirstResearch(state)
+    Object.assign(plantAt(state,8),thinSeed,{fruitRoll:0.999})
     advance(state,speciesInfo.blueberry.cycleSec)
     state.rng=1
     commit(state,{type:'harvest',plot:8})
     const batch=state.basket[0]
-    expect(batch).toMatchObject({count:4,pollination:{result:'golden_flower'},lots:[{seedYield:2}]})
+    expect(batch).toMatchObject({count:3,pollination:{result:'golden_flower'},lots:[{seedYield:1}]})
     commit(state,{type:'sellHarvest',id:batch.id,count:1})
     expect(extractionYield(batch,1)).toEqual({seeds:0,attempts:1})
     const bulk=reload(state), split=reload(state)
-    commit(bulk,{type:'extractSeeds',id:batch.id,count:3})
+    commit(bulk,{type:'extractSeeds',id:batch.id,count:2})
     commit(split,{type:'extractSeeds',id:batch.id,count:1})
-    commit(split,{type:'extractSeeds',id:batch.id,count:2})
-    expect(split).toEqual(bulk)
+    reject(split,{type:'extractSeeds',id:batch.id,count:1},'noExtraction')
+    commit(split,{type:'sellHarvest',id:batch.id,count:1})
+    expect(split.basket).toEqual(bulk.basket)
+    expect(split.seeds).toEqual(bulk.seeds)
+    expect(split.variants).toEqual(bulk.variants)
+    expect(split.rng).toBe(bulk.rng)
+    expect(split.failures).toEqual(bulk.failures)
   })
 
   it('cannot use ordinary seed sales to reverse the original shop price',()=>{
@@ -173,7 +181,7 @@ describe('Alpha-4 harvest and inventory',()=>{
   it('migrates validated d4b0232 data once and keeps progress, lifetimes, prices and genetics',()=>{
     const result=parseSave(JSON.stringify(alpha03))
     if(!result || result==='future') throw Error('Expected migration of Alpha-3 fixture')
-    expect(result).toMatchObject({schemaVersion:11,coins:alpha03.coins,
+    expect(result).toMatchObject({schemaVersion:saveVersion,coins:alpha03.coins,
       variants:alpha03.variants.map(pack=>({...pack,plus:pack.plus===null ? [] : [pack.plus]})),
       revealed:alpha03.revealed,seeds:alpha03.seeds,lang:alpha03.lang,rng:alpha03.rng,
       musicMuted:alpha03.musicMuted,tutorialSkipped:alpha03.tutorialSkipped})

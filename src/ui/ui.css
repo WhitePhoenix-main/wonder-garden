@@ -3,6 +3,32 @@
 [data-guide-seed="strawberry"] [data-seed="strawberry"],[data-guide-seed="sunflower"] [data-seed="sunflower"],[data-guide-seed="solar_strawberry"] [data-seed="solar_strawberry"] {outline:2px solid #bd9144;outline-offset:1px}
 .keyboard-beds button:not(:focus){clip-path:inset(100%);width:1px;height:1px;min-height:0;position:absolute;overflow:hidden;padding:0}
 .keyboard-beds button:focus{position:absolute;bottom:8rem;left:1rem;z-index:8}
+.ready-inspect { position:absolute; right:12px; bottom:100px; z-index:5; max-height:45vh; overflow:auto; background:#f9f7e9; border:1px solid #c8ccb6; border-radius:10px; padding:4px; }
+.ready-inspect summary { min-height:44px; display:flex; align-items:center; padding:0 10px; cursor:pointer; }
+.ready-inspect button { display:block; width:100%; }
+.pollination-diagram { display:grid; grid-template-columns:1fr 1fr; gap:5px 12px; margin:12px 0; }
+.pollination-diagram figcaption { grid-column:1/-1; }
+.pollination-grid { display:grid; grid-template-columns:repeat(2,26px); gap:3px; margin:4px 0; }
+.pollination-grid i { width:26px; height:22px; border-radius:5px; background:#e8dfca; }
+.pollination-grid .mother { background:#c96f65; }
+.pollination-grid .donor { background:#dcb65b; }
+.garden-ui:has(.tutorial-card[data-tutorial-target="market"]) nav [data-action="market"],
+.garden-ui:has(.tutorial-card[data-tutorial-target="inventory"]) nav [data-action="inventory"],
+.garden-ui:has(.tutorial-card[data-tutorial-target="collection"]) nav [data-action="collection"],
+.garden-ui:has(.tutorial-card[data-tutorial-target="evolution"]) nav [data-action="evolution"],
+.garden-ui:has(.tutorial-card[data-tutorial-target="helper"]) .topbar [data-action="helper"] {
+  outline: 2px solid #b28943;
+  outline-offset: -3px;
+}
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.inventory-quantity input { width:5rem; min-height:44px; text-align:center; }
+.tutorial-card { position:absolute; z-index:6; left:12px; bottom:100px; width:min(340px,calc(100% - 24px)); padding:12px; background:#fff5dc; border:2px solid #b38a60; border-radius:15px; box-shadow:0 7px 28px #426f5933; }
+.tutorial-card p { margin:6px 0 10px; line-height:1.3; }
+.tutorial-card button { margin-right:4px; }
+@media (max-width:460px) {
+  .garden-ui:has(.tutorial-card) .ready-inspect { bottom:290px; }
+}
+@media(max-width:800px){.modes button{font-size:11px; overflow-wrap:anywhere}}
 .menu-screen {position:absolute;inset:0;pointer-events:auto;display:grid;align-items:center;padding:clamp(16px,6vw,100px);background:linear-gradient(90deg,#edf2e7e6,transparent 76%);overflow:auto}
 .menu-card {width:min(390px,100%);padding:clamp(22px,3vw,42px);background:#fffbeeef;border:1px solid white;border-radius:24px;box-shadow:0 18px 65px #31594c30}
 .menu-leaf {display:grid;place-items:center;width:48px;height:48px;border:1px solid #a8b49a;border-radius:50%;color:#547657}
@@ -83,6 +109,7 @@ button:disabled {
 #ui button,#ui aside,#ui nav,#ui header,#ui .camera {
   pointer-events: auto;
 }
+#ui .ready-inspect,#ui .tutorial-card { pointer-events:auto; }
 
 .topbar {
   height: 76px;
@@ -561,8 +588,15 @@ svg {
     min-height: 64px;
     padding: 7px 9px;
     gap: 7px;
-    flex-wrap: wrap;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"brand actions" "stats stats";
+    align-items:center;
   }
+
+  .brand { grid-area:brand; }
+  .top-actions { grid-area:actions; }
+  .stats { grid-area:stats; min-width:0; }
 
   .brand {
     min-width: 0;

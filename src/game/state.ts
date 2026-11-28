@@ -1,4 +1,4 @@
-import { saveVersion, type GameState, type Plant, type Species } from './model'
+import { saveVersion, type GameState, type PassiveState, type Plant, type Species } from './model'
 import { balance, island, plotCount, hybridCounts, isSpecies } from './config'
 
 import { canonical, common, maxLives, nextRandom } from './genetics'
@@ -6,6 +6,10 @@ import { recordPlanting } from './collection'
 import { initialMarket, initialTrading } from './market'
 import { speciesIds } from './config'
 import type { Profile } from './model'
+
+export function initialPassive(rng:number):PassiveState {
+  return {beds:[],basket:[],seeds:[],checkpoint:null,labSeconds:0,rng:(rng^0x67ad40ef)>>>0}
+}
 
 export function newPlant(id: number, species: Species, profile:Profile=common, fruitRoll=0): Plant {
   const lives=maxLives(species,profile)
@@ -16,7 +20,7 @@ export function initialEvolution(): Pick<GameState,'activeIsland'|'greenhouseLev
   'orderRefreshAt'|'ordersCompleted'|'collection'|'achievements'|'rank'|'protectedPlants'|'protectedProfiles'|'favorites'|'reserves'|'automation'|'trading'> {
   return {activeIsland:'green',greenhouseLevel:1,stallLevel:1,crosses:[],clones:[],rarityProgress:{},orders:[],orderRefreshAt:0,ordersCompleted:0,
     collection:[],achievements:[],rank:0,protectedPlants:[],protectedProfiles:[],favorites:[],reserves:{},
-    trading:initialTrading(),automation:{enabled:true,replant:false,extractPollinated:false,sellSeeds:false,preferred:null,sellFruit:true,saleRarity:null}}
+    trading:initialTrading(),automation:{enabled:true,replant:false,extractPollinated:false,sellSeeds:false,preferred:null,sellFruit:true,saleRarity:null,cleanup:true}}
 }
 export const inactiveAutomation = {
   helperLevel: 0, autoSell: false, harvestRemaining: 0, sellRemaining: 0
@@ -30,6 +34,8 @@ export const initialAmenities = {
 
 export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameState {
   const state: GameState = {
+    passive:initialPassive(seed),
+    tutorialSeen:[],
     schemaVersion: saveVersion,
     market: initialMarket(),
     ...initialAmenities,

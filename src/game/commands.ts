@@ -72,6 +72,7 @@ function apply(state:GameState,command:Command):Result {
     case 'startCross': case 'collectCross': case 'startClone': case 'collectClone': case 'fulfillOrder': case 'declineOrder':
     case 'restoreBridge': case 'travel': case 'protectPlant': case 'protectProfile': case 'favoriteProfile':
     case 'setReserve': case 'plotPolicy': case 'plotTemplate': case 'setTrading': case 'setAutomation': return evolve(state,command)
+    case 'assignProduction': case 'moveProduction': case 'collectProduction': return evolve(state,command)
     case 'dismissHybrid': state.pendingHybrid=null;return success('HintDismissed')
     case 'tutorialBranch': state.tutorialBranch=command.branch;return success('BranchChosen')
     case 'sell': return success(...sellBasket(state))
@@ -117,6 +118,16 @@ function apply(state:GameState,command:Command):Result {
     case 'skipTutorial':
       state.tutorialSkipped = true
       return success('TutorialSkipped')
+    case 'tutorialSeen':
+      if (typeof command.id!=='string' || !/^[a-z][a-z0-9-]{0,39}$/.test(command.id)) return failure('invalidPolicy')
+      if (state.tutorialSeen.includes(command.id)) return success()
+      if (state.tutorialSeen.length>=64) return failure('invalidPolicy')
+      state.tutorialSeen.push(command.id)
+      return success('TutorialUpdated')
+    case 'restartTutorial':
+      state.tutorialSeen = []
+      state.tutorialSkipped = false
+      return success('TutorialUpdated')
     case 'music':
       state.musicMuted = command.muted
       return success('SoundChanged')
@@ -133,6 +144,7 @@ function apply(state:GameState,command:Command):Result {
       if (!source.open || !target.open) return failure('plotClosed')
       const plant = source.plant
       if (!plant) return failure('empty')
+      if (!plant.lives || target.plant?.lives===0) return failure('deadPlant')
       if (source === target) return failure('samePlot')
       source.plant = target.plant
       target.plant = plant
@@ -158,11 +170,16 @@ function apply(state:GameState,command:Command):Result {
 
   switch (command.type) {
     case 'emergencyRadish':
-      if (!canRecoverGarden(state)) return failure('recoveryUnavailable')
+      if (plot.plant || !canRecoverGarden(state)) return failure('recoveryUnavailable')
       plot.plant = newPlant(state.nextId++,'radish',common,nextRandom(state))
       recordPlanting(state,plot.plant)
       return success('Planted')
     case 'harvest': return harvest(state,command)
+    case 'cleanup':
+      if (!plot.plant || plot.plant.id!==command.expectedId) return failure('stalePlant')
+      if (plot.plant.lives!==0) return failure('notDead')
+      plot.plant = null
+      return success('PlantCleaned','PlantCleaned:'+command.plot)
     case 'upgrade': {
       if (!state.sold) return failure('firstSale')
       if (plot.level === 5) return failure('maxLevel')

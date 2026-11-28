@@ -5,13 +5,14 @@ import { decorationAt, harmony } from '../src/game/decor'
 import { journal } from '../src/game/journal'
 import { createPersistence } from '../src/persistence/storage'
 import { validState } from '../src/persistence/validation'
-import { cross, legacySix, commit, earn, memoryStorage, reject, wait } from './helpers'
+import { cross, legacySix, commit, earn, memoryStorage, prepareFirstResearch, reject, wait } from './helpers'
 
 function gardenWithHybrid() {
   const state = initialState(33)
-  earn(state,600)
+  earn(state,800)
   commit(state,{type:'plant',plot:8,species:'strawberry'})
   commit(state,{type:'plant',plot:9,species:'sunflower'})
+  prepareFirstResearch(state)
   wait(state,12);cross(state,8,'solar_strawberry')
   commit(state,{type:'plant',plot:12,species:'solar_strawberry',replaceId:state.plots[12].plant!.id})
   return state
@@ -22,35 +23,36 @@ describe('Garden building and progress', () => {
     const buy = {type:'buyDecor',decor:'bench',slot:'northwest',replaceId:null} as const
     reject(initialState(33),buy,'decorLocked')
     const state = gardenWithHybrid()
-    expect(harmony(state)).toBe(75)
+    const harmonyBefore=harmony(state)
+    expect(harmonyBefore).toBe(85)
     const coins = state.coins
     reject(state,{...buy,slot:'unknown'},'invalidSlot')
     commit(state,buy)
     const first = decorationAt(state,'northwest')!
-    expect(harmony(state)).toBe(80)
+    expect(harmony(state)).toBe(harmonyBefore+5)
     expect(state.coins).toBe(coins-80)
     reject(state,buy,'decorChanged')
     commit(state,{...buy,slot:'southeast'})
-    expect(harmony(state)).toBe(80)
+    expect(harmony(state)).toBe(harmonyBefore+5)
     commit(state,{type:'buyDecor',decor:'lantern',slot:'northeast',replaceId:null})
     const lantern = decorationAt(state,'northeast')!
-    expect(harmony(state)).toBe(85)
+    expect(harmony(state)).toBe(harmonyBefore+10)
     commit(state,{type:'placeDecor',id:first.id,slot:'northeast',replaceId:lantern.id})
     expect(first.slot).toBe('northeast')
     expect(lantern.slot).toBe('northwest')
     expect(state.coins).toBe(coins-80-80-120)
     const second = decorationAt(state,'southeast')!
     commit(state,{type:'storeDecor',id:first.id})
-    expect(harmony(state)).toBe(85)
+    expect(harmony(state)).toBe(harmonyBefore+10)
     commit(state,{type:'buyDecor',decor:'lantern',slot:'southeast',replaceId:second.id})
     expect(second.slot).toBeNull()
-    expect(harmony(state)).toBe(80)
+    expect(harmony(state)).toBe(harmonyBefore+5)
     expect(state.coins).toBe(coins-80-80-120-120)
     commit(state,{type:'placeDecor',id:first.id,slot:'southwest',replaceId:null})
-    expect(harmony(state)).toBe(85)
+    expect(harmony(state)).toBe(harmonyBefore+10)
     commit(state,{type:'store',plot:12,expectedId:state.plots[12].plant!.id})
-    expect(harmony(state)).toBe(65)
-    expect(journal(state).studied).toBe(4)
+    expect(harmony(state)).toBe(harmonyBefore-10)
+    expect(journal(state).studied).toBe(5)
     const storage = createPersistence(memoryStorage)
     const data = memoryStorage()
     const durable = createPersistence(()=>data)

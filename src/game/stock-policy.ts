@@ -39,9 +39,12 @@ export function lotSeedYield(lot:HarvestLot,count:number):number {
 
 export function hasOtherSource(state:GameState,species:Species,profile?:Profile,exceptPlant?:number,exceptBatch?:number):boolean {
   const matches=(p:Profile)=>!profile || sameProfile(p,profile)
-  return state.plots.some(p=>p.plant?.species===species && p.plant.id!==exceptPlant && matches(p.plant)) ||
-    state.nursery.some(p=>p.species===species && p.id!==exceptPlant && matches(p)) ||
-    state.basket.some(b=>b.id!==exceptBatch && b.species===species && b.profile &&
+  const source=(p:Plant|null)=>p?.lives && p.species===species && p.id!==exceptPlant && matches(p)
+  return state.plots.some(p=>source(p.plant)) ||
+    state.nursery.some(source) ||
+    state.passive.beds.some(bed=>source(bed.plant)) ||
+    state.passive.seeds.some(pack=>pack.species===species && pack.count>0 && matches(pack)) ||
+    [...state.basket,...state.passive.basket].some(b=>b.id!==exceptBatch && b.species===species && b.profile &&
       b.lots.some(l=>lotSeedYield(l,l.remaining)>0 &&
         (!profile || sameProfile(profile,common) && (!l.copyPending || lotSeedYield(l,l.remaining)>1))))
 }

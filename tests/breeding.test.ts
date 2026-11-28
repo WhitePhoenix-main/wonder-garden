@@ -15,6 +15,7 @@ it.each([17,42,2026])('completes all 12 species and 16 beds through public comma
   const firstHarvest=s.playTime
   const firstBatch=s.basket[0]
   commit(s,{type:'extractSeeds',id:firstBatch.id,count:1})
+  commit(s,{type:'cleanup',plot:12,expectedId:s.plots[12].plant!.id})
   commit(s,{type:'plant',species:'radish',plot:12,stock:common})
   commit(s,{type:'sell'})
   function pay(command:Command,cost:number){earn(s,cost);commit(s,command)}
@@ -38,21 +39,28 @@ it.each([17,42,2026])('completes all 12 species and 16 beds through public comma
       const p=s.plots[plot].plant!
       advance(s,secondsLeft(s,plot))
       cross(s,plot,result)
-      if(!s.plots[plot].plant)plant(plot,p.species)
+      if(!p.lives){
+        commit(s,{type:'cleanup',plot,expectedId:p.id})
+        plant(plot,p.species)
+      }
     }
     expect(stock(result)).toBeDefined()
   }
   plant(8,'strawberry');plant(9,'sunflower')
+  plant(5,'blueberry');open(4)
   discover(8,'solar_strawberry')
   const first=s.playTime
-  plant(14,'solar_strawberry');plant(5,'blueberry');plant(4,'moonflower');plant(10,'clover')
+  plant(14,'solar_strawberry');plant(4,'moonflower');plant(10,'clover')
   discover(8,'moonberry');discover(5,'golden_flower');discover(10,'honey_clover')
   plant(6,'moonberry');plant(7,'golden_flower');plant(11,'honey_clover')
   expect(experiments(s,6)).toEqual([])
-  pay({type:'upgrade',plot:6},250);discover(6,'crystal_flower')
-  plant(15,'crystal_flower');pay({type:'upgrade',plot:15},250)
+  pay({type:'upgradeGreenhouse',target:2},evolution.greenhouseCosts[1])
+  pay({type:'upgrade',plot:6},balance.bedLevels[1].upgradeCost);discover(6,'crystal_flower')
+  plant(15,'crystal_flower');pay({type:'upgrade',plot:15},balance.bedLevels[1].upgradeCost)
   expect(experiments(s,15)).toEqual([])
-  pay({type:'upgrade',plot:15},750)
+  pay({type:'upgrade',plot:15},balance.bedLevels[2].upgradeCost)
+  open(0);open(1)
+  pay({type:'upgradeGreenhouse',target:3},evolution.greenhouseCosts[2])
   const [a,b]=experiments(s,15)
   expect(a.donorId).not.toBe(b.donorId)
   commit(s,{type:'move',from:14,to:12})
@@ -88,7 +96,11 @@ it.each([17,42,2026])('completes all 12 species and 16 beds through public comma
 
 it('keeps failures across reload and relocation and guarantees the fifth extraction attempt',()=>{
   const s=initialState(1);s.coins=2000
+  s.sold=true
+  commit(s,{type:'clear',plot:4})
+  commit(s,{type:'clear',plot:5})
   for(const [plot,species] of [[8,'strawberry'],[9,'sunflower']] as const)commit(s,{type:'plant',plot,species})
+  commit(s,{type:'plant',plot:4,species:'blueberry'})
   advance(s,12);cross(s,8,'solar_strawberry')
   for(let i=0;i<rules.pity;i++){
     advance(s,12);commit(s,{type:'harvest',plot:8})
@@ -98,6 +110,7 @@ it('keeps failures across reload and relocation and guarantees the fifth extract
     expect(commit(s,{type:'extractSeeds',id:batch.id,count:batch.count})).toContain('ExperimentFailed')
     expect(s.failures.solar_strawberry).toBe(i+1)
   }
+  commit(s,{type:'cleanup',plot:8,expectedId:s.plots[8].plant!.id})
   commit(s,{type:'plant',plot:8,species:'strawberry',stock:common})
   commit(s,{type:'move',from:8,to:9})
   const copy=parseSave(JSON.stringify(s)) as typeof s

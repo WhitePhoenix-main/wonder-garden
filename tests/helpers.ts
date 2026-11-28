@@ -33,6 +33,16 @@ export function plantAt(state: GameState, plot: number): Plant {
   return plant
 }
 
+export function cleanBed(state:GameState,plot:number) {
+  commit(state,{type:'cleanup',plot,expectedId:plantAt(state,plot).id})
+}
+
+export function prepareFirstResearch(state:GameState) {
+  if (!state.plots[4].open) commit(state,{type:'clear',plot:4})
+  if (!state.plots[5].open) commit(state,{type:'clear',plot:5})
+  if (!state.planted.includes('blueberry')) commit(state,{type:'plant',plot:5,species:'blueberry'})
+}
+
 export function cross(state:GameState,plot:number,result:Hybrid) {
   commit(state,{type:'harvest',plot})
   const batch=state.basket.find(b=>b.pollination?.result===result)
@@ -48,17 +58,23 @@ export function legacySix(state:GameState) {
 }
 
 export function earn(state: GameState, target: number): void {
-  for (let cycle = 0; cycle < 400 && state.coins < target; cycle++) {
-    let plots=state.plots.flatMap((p,plot)=>p.plant?.species==='radish' ? [plot] : [])
+  for (let cycle = 0; cycle < 1400 && state.coins < target; cycle++) {
+    for (const [plot,{plant}] of state.plots.entries()) {
+      if (plant?.species==='radish' && !plant.lives) commit(state,{type:'cleanup',plot,expectedId:plant.id})
+    }
+    let plots=state.plots.flatMap((p,plot)=>p.plant?.species==='radish' && p.plant.lives ? [plot] : [])
     if (!plots.length) {
       const plot=state.plots.findIndex(b=>b.open && !b.plant)
       if (plot<0) throw Error('No space for a radish')
       commit(state,{type:'plant',plot,species:'radish'})
       plots=[plot]
     }
-    wait(state,speciesInfo.radish.cycleSec)
+    advance(state,speciesInfo.radish.cycleSec)
     for (const plot of plots) {
+      const plant=state.plots[plot].plant
+      if (!plant?.lives || plant.readySince===null) continue
       commit(state,{type:'harvest',plot})
+      commit(state,{type:'cleanup',plot,expectedId:plant.id})
       commit(state,{type:'sell'})
       commit(state,{type:'plant',plot,species:'radish'})
     }

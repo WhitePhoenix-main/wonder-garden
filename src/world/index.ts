@@ -6,6 +6,7 @@ import { halfHeight, halfWidth, islandFromView, mapFor, type Point } from './geo
 import { IslandScene } from './IslandScene'
 import { bindInput } from './input'
 
+type Targets=Pick<import('../runtime/presentation').UI,'pick'|'pickDecor'|'nursery'|'market'|'bridge'|'helper'|'inspect'>
 function frameFor(id:IslandId) {
   const map = mapFor(id)
   const groundHeight = (map.width + map.height) * halfHeight
@@ -16,7 +17,7 @@ function frameFor(id:IslandId) {
   }
 }
 
-export function createWorld(host: HTMLElement, onPick: (index: number) => void, onDecor:(slot:string)=>void,onNursery:()=>void): World {
+export function createWorld(host: HTMLElement, targets:Targets): World {
   let view: WorldView | null = null
   let current: IslandScene | null = null
   let removeInput: (() => void) | undefined
@@ -83,9 +84,8 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
           focus.y -= delta.y / zoom
           updateCamera()
         },
-        pick: onPick,
-        nursery:onNursery,
-        pickDecor: onDecor
+        ...targets,
+        objectAt:point=>this.hitObject(point)
       })
       if (view) this.paint(view)
     }
@@ -120,11 +120,12 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
       if (events.some(e=>e.startsWith('RecipeRevealed:'))) current?.celebrate()
       for (const event of events) {
         const [type, plot, species, count] = event.split(':')
-        if (type === 'HelperHarvested') current?.flyToPlot(Number(plot))
+        if (type === 'HelperHarvested' || type==='HelperCleaned' || type==='HelperReplanted') current?.flyToPlot(Number(plot))
+        if (type==='PlantCleaned' && plot!==undefined) current?.collectEffect(Number(plot), view?.state.lang==='en' ? 'Bed cleared' : 'Грядка очищена')
         if (type === 'Harvested' && isSpecies(species)) {
           const info = speciesInfo[species]
           const name = view?.state.lang === 'en' ? info.nameEn : info.nameRu
-          current?.collectEffect(Number(plot), `+${count} ${name}`)
+          current?.collectEffect(Number(plot), Number(count)===0 ? (view?.state.lang==='en' ? 'Crop failed' : 'Неурожай') : `+${count} ${name}`)
         }
       }
     },

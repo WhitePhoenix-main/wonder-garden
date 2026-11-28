@@ -136,7 +136,7 @@ function extract(state:GameState, batch:HarvestBatch, count:number):Result {
     add(result, genome, 1)
     breeding.failures[result] = 0
     if (first) {
-      if (breeding.revealed.length === 0) pendingHybrid = result
+      pendingHybrid ??= result
       breeding.revealed.push(result)
     }
     events.push((first ? 'RecipeRevealed:' : 'SeedPropagated:') + result)

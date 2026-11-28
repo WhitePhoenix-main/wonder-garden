@@ -1,11 +1,11 @@
 import { expect,it } from 'vitest'
 import fixture from './fixtures/alpha02.json'
 import { advance,basketCapacity,initialState,saleValue,speciesInfo } from '../src/game'
-import { common,compatible,inherit,nextRandom,quantity,rules } from '../src/game/genetics'
-import { positives,negatives,type GameState,type Profile } from '../src/game/model'
+import { common,compatible,fruitCount,inherit,nextRandom,plantStats,quantity } from '../src/game/genetics'
+import { positives,negatives,saveVersion,type GameState,type Profile } from '../src/game/model'
 import { parseSave } from '../src/persistence/migration'
 import { experiments } from '../src/game/queries'
-import { addLegacyFruit,commit,cross,reject } from './helpers'
+import { addLegacyFruit,cleanBed,commit,cross,reject } from './helpers'
 
 function sequence(...values:number[]){return ()=>values.shift()??0.999}
 const rare:Profile={...common,rarity:'rare',plus:'early'}
@@ -36,27 +36,30 @@ it('inherits pluses and flaws, including collisions and mutation',()=>{
     expect(child.minus).not.toBe(minus)
     expect(compatible(child)).toBe(true)
   }
-  expect(positives.flatMap(plus=>negatives.filter(minus=>compatible({...rare,plus,minus})))).toHaveLength(26)
+  expect(positives.flatMap(plus=>negatives.filter(minus=>compatible({...rare,plus,minus})))).toHaveLength(32)
 })
 it('matches the expected output distributions and income per minute',()=>{
   const mean=(range:number[],delta:number)=>Array.from({length:6000},(_,i)=>quantity(range,delta,(i+.5)/6000)).reduce((a,b)=>a+b)/6000
   expect(mean([1,2],-.1)).toBe(1.4)
-  for(const [id,bonus,income] of [['strawberry',0,100],['solar_strawberry',0,150],['solar_strawberry',rules.fruitful[1],162],['star_orchid',0,229.5]] as const){
+  for(const [id,profile,income] of [['strawberry',common,60],['solar_strawberry',common,120],
+    ['solar_strawberry',{...rare,plus:'fruitful'},138],['star_orchid',common,127.5]] as const){
     const info=speciesInfo[id]
-    expect(mean(info.fruits,bonus)*info.fruitValue*60/info.cycleSec).toBeCloseTo(income)
+    const stats=plantStats(id,profile)
+    const average=Array.from({length:6000},(_,i)=>fruitCount(stats,(i+.5)/6000)).reduce((a,b)=>a+b)/6000
+    expect(average*info.fruitValue*60/info.cycleSec).toBeCloseTo(income)
   }
 })
 it('retains an oversized crop and copies exactly one seed on the final life',()=>{
   const s=initialState(3),b=s.plots[12],p=b.plant!
   Object.assign(p,{...rare,plus:'seedy',minus:'sparse',lives:1,fruitRoll:.999})
   b.level=2
-  addLegacyFruit(s,basketCapacity(s)-4)
+  addLegacyFruit(s,basketCapacity(s)-2)
   advance(s,6)
   reject(s,{type:'harvest',plot:12},'basketFull')
   commit(s,{type:'sell'})
   const c={type:'harvest',plot:12,expectedId:p.id,cycle:1} as const
   expect(commit(s,c)).toContain('Withered')
-  expect(b.plant).toBeNull();expect(b.level).toBe(2)
+  expect(b.plant?.lives).toBe(0);expect(b.level).toBe(2)
   s.rng=1
   const batch=s.basket[0]
   commit(s,{type:'extractSeeds',id:batch.id,count:batch.count})
@@ -64,6 +67,7 @@ it('retains an oversized crop and copies exactly one seed on the final life',()=
   expect(s.basket).toHaveLength(0)
   reject(s,c,'notReady')
   const stock=s.variants[0],coins=s.coins
+  cleanBed(s,12)
   commit(s,{type:'plant',plot:12,species:'radish',stock})
   expect(s.coins).toBe(coins);expect(s.variants).toEqual([])
   expect(s.plots[12].plant).toMatchObject({...rare,plus:['seedy'],minus:'sparse',lives:1})
@@ -71,7 +75,7 @@ it('retains an oversized crop and copies exactly one seed on the final life',()=
 })
 it('upgrades a snapshot generated and validated by 1465cf9; rejects invalid legacy inventory',()=>{
   const s=parseSave(JSON.stringify(fixture)) as GameState
-  expect(s).toMatchObject({schemaVersion:11,coins:fixture.coins,planted:fixture.planted,
+  expect(s).toMatchObject({schemaVersion:saveVersion,coins:fixture.coins,planted:fixture.planted,
     seeds:{solar_strawberry:1},failures:{solar_strawberry:0,moonberry:1},musicMuted:true,lang:'en'})
   expect(saleValue(s)).toBe(60)
   expect(s.basket).toMatchObject([{species:'strawberry',count:4,valueUnits:150000,profile:null,pollination:null}])
@@ -95,6 +99,7 @@ it('captures the configured recipe and the first eligible donor even when donors
   commit(s,{type:'harvest',plot:9})
   const donor=s.basket.find(batch=>batch.species==='sunflower')!
   commit(s,{type:'extractSeeds',id:donor.id,count:donor.count})
+  cleanBed(s,9)
   commit(s,{type:'plant',species:'sunflower',plot:9,stock:common})
   const rareDonor={rarity:'rare',plus:'fruitful',minus:'small'} as const
   s.variants.push({species:'sunflower',count:1,...rareDonor})
@@ -135,18 +140,19 @@ it('preserves profiles and partial growth in nursery, replacement and next draw'
 it('retains the roll on the bed if another harvest advances the generator',()=>{
   const s=initialState(7),p=s.plots[12].plant!
   p.fruitRoll=.999;advance(s,6)
-  addLegacyFruit(s,basketCapacity(s)-4)
+  addLegacyFruit(s,basketCapacity(s)-2)
   reject(s,{type:'harvest',plot:12},'basketFull')
   commit(s,{type:'sell'})
   commit(s,{type:'harvest',plot:13})
   const copy=parseSave(JSON.stringify(s)) as GameState
   commit(copy,{type:'sell'});commit(copy,{type:'harvest',plot:12})
-  expect(copy.basket[0].count).toBe(5)
+  expect(copy.basket[0].count).toBe(3)
+  cleanBed(copy,12)
   commit(copy,{type:'plant',species:'radish',plot:12})
   advance(copy,6);copy.plots[12].plant!.fruitRoll=0
   commit(copy,{type:'harvest',plot:12})
   expect(copy.basket).toHaveLength(1)
-  expect(copy.basket[0].count).toBe(9)
+  expect(copy.basket[0].count).toBe(5)
 })
 
 it('rebreeds an expired hybrid, retains its last harvest and never repeats the introductory guarantee',()=>{

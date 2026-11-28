@@ -4,10 +4,11 @@ import type { GameState, Species } from './model'
 export interface Metrics {
   fruitRevenue:number; seedRevenue:number; orders:number; seedCost:number; breedingCost:number; construction:number
   planted:number; harvests:number; fruit:number; seeds:number; quoteUnits:number; soldUnits:number
-  helperUsed:number; helperCapacity:number
+  helperUsed:number; helperCapacity:number; helperHarvests:number; helperCleanups:number; helperReplants:number
 }
 const empty = ():Metrics => ({fruitRevenue:0,seedRevenue:0,orders:0,seedCost:0,breedingCost:0,construction:0,
-  planted:0,harvests:0,fruit:0,seeds:0,quoteUnits:0,soldUnits:0,helperUsed:0,helperCapacity:0})
+  planted:0,harvests:0,fruit:0,seeds:0,quoteUnits:0,soldUnits:0,helperUsed:0,helperCapacity:0,
+  helperHarvests:0,helperCleanups:0,helperReplants:0})
 type Channel = Species|'garden'
 type Bucket = Map<Channel,Metrics>
 const sessions = new WeakMap<GameState,{start:number; buckets:Map<number,Bucket>}>()

@@ -10,7 +10,8 @@ export const profileKey=(species:Species,p:Profile)=>[species,p.rarity,canonical
 export const sameProfile=(a:Profile,b:Profile)=>a.rarity===b.rarity && a.minus===b.minus &&
   traits(a).length===traits(b).length && traits(a).every(t=>traits(b).includes(t))
 export const compatible=(p:Profile)=>!(traits(p).includes('hardy') && p.minus==='fragile' ||
-  traits(p).includes('early') && p.minus==='slow')
+  traits(p).includes('early') && p.minus==='slow' ||
+  traits(p).includes('fruitful') && p.minus==='unfruitful')
 export const availableTraits=(species:Species)=>positives.filter(t=>
   (t!=='hardy' || speciesInfo[species].lifecycle==='multi') && (t!=='aura' || auras.some(a=>a.source===species)))
 export const rarityOdds=(a:Profile['rarity'],b:Profile['rarity']):readonly number[]=>
@@ -42,10 +43,15 @@ export function plantStats(species:Species, profile:Profile) {
   const quality = plus.includes('quality') ? 1 + rules.quality[power] : 1
   const copyChance = Math.min(rules.copyCap, (plus.includes('seedy') ? rules.seedCopy[power] : rules.copy)
     + (plus.includes('stable') ? rules.stable[power] : 0))
+  const fruitRange = data.fruits[0] === 2 ? 'twoToThree' : data.fruits[1] === 3 ? 'oneToThree' : 'oneToTwo'
+  const fruitProfile = plus.includes('fruitful') ? 'fruitful' : profile.minus === 'unfruitful' ? 'unfruitful' : 'ordinary'
+  const distribution = rules.fruitDistributions[fruitRange][fruitProfile]
   return {
     growthSec: data.cycleSec * duration,
     regrowSec: data.regrowSec * duration,
-    fruits: data.fruits,
+    fruits: [distribution.min, distribution.min + distribution.weights.length - 1],
+    fruitOdds: distribution.weights,
+    cropFailure: distribution.min === 0 ? distribution.weights[0] : 0,
     ownSeeds: data.ownSeeds,
     maxLives: maxLives(species, profile),
     copyChance,
@@ -55,6 +61,12 @@ export function plantStats(species:Species, profile:Profile) {
       - (profile.minus === 'sparse' ? rules.sparse : 0),
     fruitPriceMultiplier: rules.rarityFruitPrice[rank] * quality * (profile.minus === 'small' ? 1 - rules.small : 1)
   }
+}
+
+export function fruitCount(stats:Pick<ReturnType<typeof plantStats>,'fruits'|'fruitOdds'>,roll:number):number {
+  let threshold = 0
+  const index = stats.fruitOdds.findIndex(weight => roll < (threshold += weight) / 100)
+  return index < 0 ? stats.fruits[1] : stats.fruits[0] + index
 }
 
 export function nextRandom(s:Pick<GameState,'rng'>) {

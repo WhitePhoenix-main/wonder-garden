@@ -3,7 +3,7 @@ import { initialState, speciesInfo } from '../src/game'
 import { recoveryHint } from '../src/ui/onboarding'
 import { canRecoverGarden, plantingIssue, removalIssue, secondsLeft } from '../src/game/queries'
 import { parseSave } from '../src/persistence/migration'
-import { addLegacyFruit, cross, legacySix, commit, earn, reject, wait } from './helpers'
+import { addLegacyFruit, cleanBed, cross, legacySix, commit, earn, prepareFirstResearch, reject, wait } from './helpers'
 
 it('migrates Alpha 02 v5 and remembers the occupied-bed hint across reload',()=>{
   const state=initialState(33)
@@ -52,6 +52,7 @@ it.each(['none','other species','seed','nursery','island'])('checks the exact sp
   earn(s,650)
   commit(s,{type:'plant',plot:8,species:'strawberry'})
   commit(s,{type:'plant',plot:9,species:'sunflower'})
+  prepareFirstResearch(s)
   wait(s,12);cross(s,8,'solar_strawberry')
   const replace={type:'plant',plot:12,species:'solar_strawberry',replaceId:s.plots[12].plant!.id} as const
   commit(s,replace)
@@ -133,6 +134,7 @@ it('restarts the countdown after a helper harvest and rejects an outdated nurser
   expect(picked.lives).toBe(picked.maxLives-1)
   s.revealed.push('solar_strawberry')
   const id=s.plots[12].plant!.id
+  cleanBed(s,13)
   commit(s,{type:'move',from:12,to:13})
   reject(s,{type:'store',plot:12,expectedId:id},'stalePlant')
 })

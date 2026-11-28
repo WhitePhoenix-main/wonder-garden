@@ -13,7 +13,7 @@ import { alpha } from './alpha'
 import { plantingIssue } from '../game/queries'
 import { bedLevels, speciesInfo } from '../game/config'
 import { canRecoverGarden, canReplace, expansionCost } from '../game/queries'
-import { extractionYield, harvestSaleIssue, quickSaleEligible, quickSaleValue, seedSaleIssue, trade } from '../game/trade'
+import { basketSalePlan, extractionYield, harvestSaleIssue, quickSaleEligible, quickSaleValue, seedSaleIssue, trade } from '../game/trade'
 import type { DecorChoice } from './panels/garden'
 import { uiMarkup, type RepeatChoice, type CollectionFilter, type Overlay } from './render'
 import { plantName, words } from './strings'
@@ -21,6 +21,7 @@ import { evolutionErrors } from './panels/evolution'
 import type { MarketSort } from './panels/market'
 import { templateDetails } from './panels/automation'
 import { plotModes } from '../game/model'
+import { productionAction } from './panels/production'
 import './ui.css'
 
 export function createUI(host: HTMLElement, actions: UIActions): UI {
@@ -40,7 +41,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   let pressing = false
   let returnId: number | null = null
   let overlay: Overlay|null = null
-  let marketKind:MarketKind='fruit'
+  let marketKind:MarketKind|'orders'|'stall'='fruit'
   let marketSort:MarketSort='price'
   let crossParents:number[]=[]
   let inventorySelected:string[]=[]
@@ -69,9 +70,11 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     actions.decorPreview(overlay === 'decor', slot && type ? {slot,type} : null)
   }
   function pickDecor(id:string) {
-    if (overlay !== 'decor') return
+    if (view.menu) return
+    if (overlay !== 'decor') { closePanels(); overlay='decor' }
     slot = id
     updateDecor()
+    draw()
   }
   function closePanels() {
     overlay = null
@@ -92,6 +95,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (rewards.length) notice = rewards.map((e,i) => t().earned + ' · ' + name(e.split(':')[1] as Species)+(i===0 && count?' ×'+count:'')).join(' / ')
     if(events.includes('ExperimentFailed'))notice+=' · '+field[view.state.lang].miss
     if(events.includes('Withered'))notice+=' · '+field[view.state.lang].wilt
+    if(events.includes('CropFailed'))notice=view.state.lang==='ru'?'Неурожай':'Crop failed'
+    if(events.includes('PlantCleaned'))notice=view.state.lang==='ru'?'Грядка очищена':'Bed cleared'
     if(events.includes('CrossReady') || events.includes('CloneReady')) {
       notice=view.state.lang==='ru'?'В теплице можно получить семя.':'A seed is ready to collect in the greenhouse.'
     }
@@ -141,8 +146,17 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     const focusData=active ? JSON.stringify({...active.dataset}) : ''
     const context = overlay ?? view.mode
     const scroll = panelKey === context ? host.querySelector('.context-inner')?.scrollTop ?? 0 : 0
+    const productionSelections = [...host.querySelectorAll<HTMLSelectElement>('[data-production-slot] select')].map(select=>({
+      slot:select.closest<HTMLElement>('[data-production-slot]')?.dataset.productionSlot,
+      key:select.hasAttribute('data-production-seed')?'seed':select.hasAttribute('data-production-mode')?'mode':'plant',
+      value:select.value
+    }))
     panelKey = context
     host.innerHTML = html
+    for (const selection of productionSelections) {
+      const select=host.querySelector<HTMLSelectElement>(`[data-production-slot="${selection.slot}"] [data-production-${selection.key}]`)
+      if (select && [...select.options].some(option=>option.value===selection.value)) select.value=selection.value
+    }
     const inner = host.querySelector<HTMLElement>('.context-inner')
     if (inner) inner.scrollTop = scroll
     if (active && focusData!=='{}' && !document.body.contains(active)) {
@@ -169,6 +183,11 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   })
   host.addEventListener('change', event => {
     const target=event.target as HTMLSelectElement|HTMLInputElement
+    if (target.matches('[data-inventory-amount]')) {
+      const input=target as HTMLInputElement
+      inventoryAmounts[input.dataset.key!]=Math.max(1,Math.min(Number(input.max),Math.floor(Number(input.value)||1)))
+      draw();return
+    }
     if (target.matches('[data-sale-strategy],[data-sale-minimum]')) {
       const settings={...view.state.trading}
       if (target.matches('[data-sale-strategy]')) settings.strategy=target.value as typeof settings.strategy
@@ -198,7 +217,16 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   })
   host.addEventListener('click', event => {
     const target = (event.target as Element).closest<HTMLButtonElement>('button[data-action]')
-    if (!target || !view) return
+    if (!view) return
+    if (!target) {
+      const result=productionAction(event,actions,view.state)
+      if (result) {
+        if (result.ok) { notice=''; showRewards(result.events) }
+        else notice=(t() as Record<string,string>)[result.reason] ?? evolutionErrors[view.state.lang][result.reason] ?? t().error
+        draw()
+      }
+      return
+    }
     const action = target.dataset.action, selected = view.selected, plot = selected === null ? null : view.state.plots[selected]
     const mode=(next:Mode, shovel=false, index:number|null=null)=>{
       closePanels(); stock=undefined; chosen=null; returnId=null; confirmId=null; notice=''
@@ -215,9 +243,41 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action==='stats-window') {statsWindow=target.dataset.window==='300'?300:60;draw();return}
     if (action==='stats-sort') {statsByVolume=!statsByVolume;draw();return}
     if(action==='evolution') {overlay=overlay==='evolution'?null:'evolution';draw();return}
+    if(action==='storage') {overlay='nursery';draw();return}
     if(action==='market') {overlay=overlay==='market'?null:'market';draw();return}
-    if(action==='market-product') {marketKind=target.dataset.kind==='seed'?'seed':'fruit';draw();return}
+    if(action==='market-product') {marketKind=target.dataset.kind as typeof marketKind;draw();return}
     if(action==='market-sort') {marketSort=target.dataset.sort==='value'?'value':'price';draw();return}
+    if(action==='market-sell-species' || action==='market-sell-all') {
+      const selectedSpecies=target.dataset.species as Species|undefined
+      const speciesList:readonly Species[]=selectedSpecies ? [selectedSpecies] : speciesIds
+      const draft=structuredClone(view.state)
+      const commands:BulkItem[]=[]
+      if (target.dataset.kind==='fruit') {
+        for (const item of basketSalePlan(draft).filter(item=>!selectedSpecies || item.batch.species===selectedSpecies)) {
+          const command={type:'sellHarvest',id:item.batch.id,count:item.count} as const
+          if (trade(draft,command).ok) commands.push(command)
+        }
+      } else {
+        for (const species of speciesList) {
+        const packs=[{species,...common,count:draft.seeds[species]},...draft.variants.filter(pack=>pack.species===species)]
+        for (const pack of packs) {
+          let count=availableStock(draft,species,pack)
+          if (count && seedSaleIssue(draft,species,pack,count)==='lastProfile') count--
+          if (!count) continue
+          const command={type:'sellSeeds',species,profile:canonical(pack),count} as const
+          if (trade(draft,command).ok) commands.push(command)
+        }
+        }
+      }
+      if (!commands.length) return
+      const value=draft.coins-view.state.coins
+      const relevant=target.dataset.kind==='fruit' ? view.state.basket.filter(batch=>!selectedSpecies || batch.species===selectedSpecies).length :
+        speciesList.reduce<number>((sum,species)=>sum+(view.state.seeds[species]>0?1:0)+view.state.variants.filter(pack=>pack.species===species && pack.count>0).length,0)
+      const excluded=Math.max(0,relevant-commands.length)
+      const prompt=view.state.lang==='ru' ? `Продать доступные товары за ${value} ◈? Операций: ${commands.length}. Исключено партий: ${excluded}.` : `Sell available goods for ${value} ◈? Operations: ${commands.length}. Excluded batches: ${excluded}.`
+      if (window.confirm(prompt)) return run({type:'bulk',commands})
+      return
+    }
     if(action==='trading-toggle') {
       const key=target.dataset.setting==='overflow'?'overflow':'reserveOrders'
       return run({type:'setTrading',settings:{...view.state.trading,[key]:!view.state.trading[key]}})
@@ -254,6 +314,13 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       return run({type:action==='order-complete'?'fulfillOrder':'declineOrder',id:Number(target.dataset.id)})
     }
     if(action==='inventory') {overlay=overlay==='inventory'?null:'inventory';draw();return}
+    if(action==='research-batch') {
+      const id=Number(target.dataset.id), batch=view.state.basket.find(item=>item.id===id)
+      if (!batch) return
+      overlay='inventory';inventoryTab='harvest';inventoryFilter=batch.species;inventorySearch='';inventorySort='species'
+      inventoryPage=Math.floor(view.state.basket.filter(item=>item.species===batch.species).findIndex(item=>item.id===id)/12)
+      inventoryDetail='h'+id;draw();return
+    }
     if(action==='favorite-filter') {favoriteOnly=!favoriteOnly;inventoryPage=0;draw();return}
     if(action==='inventory-page') {inventoryPage=Number(target.dataset.page);draw();return}
     if(action==='inventory-select') {
@@ -265,15 +332,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       const packs=speciesIds.flatMap(species=>[{species,...common,count:view.state.seeds[species]},...view.state.variants.filter(p=>p.species===species)])
       const pack=packs.find(p=>inventorySelected.includes(`s${p.species}-${p.rarity}-${p.plus}-${p.minus}`) && p.count>0)
       if(!pack) return
-      const plots=plotIndices(view.state.activeIsland).filter(i=>view.state.plots[i]?.open && !view.state.plots[i].plant && !plantingIssue(view.state,i,pack.species,undefined,pack))
-      const key=`s${pack.species}-${pack.rarity}-${pack.plus}-${pack.minus}`
-      const affected=plots.slice(0,Math.min(inventoryAmounts[key]??1,availableStock(view.state,pack.species,pack)))
-      if(!affected.length) return
-      const message=view.state.lang==='ru' ? `Посадить ${name(pack.species)} на ${affected.length} грядок? Пропущено ${plots.length-affected.length}.` :
-        `Plant ${name(pack.species)} in ${affected.length} beds? Skipped ${plots.length-affected.length}.`
-      if(!window.confirm(message)) return
       inventorySelected=[]
-      return run({type:'bulk',commands:affected.map(plot=>({type:'plant',plot,species:pack.species,stock:pack}))})
+      mode('plant');chosen=pack.species;stock=canonical(pack);draw();return
     }
     if(action==='bulk-sell'||action==='bulk-extract') {
       const commands:BulkItem[]=[]
@@ -391,6 +451,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
     if(action==='nursery-return'){mode('plant');returnId=Number(target.dataset.id);draw();return}
     if (action==='pick-bed') {controller.pick(Number(target.dataset.id));return}
+    if (action==='inspect-bed') {controller.inspect(Number(target.dataset.id));return}
     if (action==='enter') return actions.enter()
     if (action==='menu') {mode('garden');actions.menu();return}
     if (action==='new-game' || action==='reset') {
@@ -411,6 +472,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       confirmId=null;actions.select(null);return
     }
     if (action==='skip') return run({type:'skipTutorial'})
+    if (action==='tutorial-next') return run({type:'tutorialSeen',id:target.dataset.id!})
+    if (action==='restart-tutorial') return run({type:'restartTutorial'})
     if (action==='music') return run({type:'music',muted:!view.state.musicMuted})
     if (action==='cancel-seed') {chosen=null;stock=undefined;actions.changeView({sunflower:false});return}
     if (action==='later' || action==='plant-reward') {
@@ -465,7 +528,19 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
     if (action === 'buy-auto-sell') return run({type:'buyAutoSell'})
     if (action === 'mode') { mode(target.dataset.mode as Mode); return }
-    if (action === 'seed') { stock=target.dataset.profile?JSON.parse(target.dataset.profile):undefined; chosen = target.dataset.seed as Species; returnId = null; actions.changeView({sunflower:chosen==='sunflower'});draw(); return }
+    if (action === 'seed') {
+      stock=target.dataset.profile?JSON.parse(target.dataset.profile):undefined
+      chosen=target.dataset.seed as Species; returnId=null
+      if (selected!==null && plot?.open && !plot.plant) {
+        const result=actions.command({type:'plant',plot:selected,species:chosen,stock})
+        if (result.ok) {
+          showRewards(result.events); chosen=null; stock=undefined
+          actions.changeView({mode:'garden',selected:null,sunflower:false})
+        } else notice=(t() as Record<string,string>)[result.reason] ?? t().error
+        draw();return
+      }
+      actions.changeView({sunflower:chosen==='sunflower'});draw();return
+    }
     if (action === 'cancel-return') { returnId = null; draw(); return }
     if (action === 'return') { returnId = Number(target.dataset.id); draw(); return }
     if (action === 'sell') return run({type:'sell'})
@@ -473,8 +548,10 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action === 'center') return actions.center()
     if (action === 'zoomIn') return actions.zoom(1)
     if (action === 'zoomOut') return actions.zoom(-1)
-    if (action === 'close' || action === 'cancel') { actions.changeView({mode:view.mode,selected:null,moveFrom:null}); return }
-    if (action === 'move' && selected !== null) { actions.changeView({mode:view.mode,selected,moveFrom:selected}); return }
+    if (action === 'close' || action === 'cancel') { chosen=null; stock=undefined; actions.changeView({mode:'garden',selected:null,moveFrom:null,shovel:false}); return }
+    if (action === 'move' && selected !== null) { actions.changeView({mode:'build',selected,moveFrom:selected}); return }
+    if (action === 'bed-settings' && selected !== null) { actions.changeView({mode:'build',selected}); return }
+    if (action === 'dig' && selected !== null) { actions.changeView({mode:'garden',selected,shovel:true}); return }
     if (selected === null || !plot) return
     if(action==='plant-protect' && plot.plant) return run({type:'protectPlant',id:plot.plant.id,enabled:!view.state.protectedPlants.includes(plot.plant.id)})
     if(action==='plot-mode') return run({type:'plotTemplate',plots:[selected],mode:target.dataset.mode as PlotMode})
@@ -488,10 +565,18 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action === 'emergencyRadish') return run({type:'emergencyRadish',plot:selected})
     if (action === 'clear' && !window.confirm(`${t().confirmClear} ${expansionCost(view.state)} ◈`)) return
     if(action==='harvest') return run({type:'harvest',plot:selected,expectedId:Number(target.dataset.id),cycle:Number(target.dataset.cycle)})
-    if (action === 'clear' || action === 'upgrade') return run({type:action,plot:selected})
+    if (action === 'clear' || action === 'upgrade') {
+      run({type:action,plot:selected})
+      if (action==='clear') actions.changeView({mode:'garden',selected:null})
+      return
+    }
   })
   const controller:UI = {
-    nursery(){if(view.menu || !view.state.revealed.length)return;firstSeeds=[];if(view.state.pendingHybrid)actions.command({type:'dismissHybrid'});closePanels();overlay='nursery';updateDecor()},
+    market(){if(view.menu)return;closePanels();overlay='market';draw()},
+    bridge(){if(view.menu)return;closePanels();overlay='bridge';draw()},
+    helper(){if(view.menu)return;closePanels();overlay='helper';draw()},
+    inspect(index){if(view.menu)return;closePanels();actions.changeView({mode:'garden',selected:index,shovel:false})},
+    nursery(){if(view.menu)return;firstSeeds=[];if(view.state.pendingHybrid)actions.command({type:'dismissHybrid'});closePanels();overlay='evolution';updateDecor()},
     notify: showRewards,
     pickDecor,
     render(next, storageWarning) { view=next; firstSeeds=next.state.pendingHybrid?[next.state.pendingHybrid]:[];branch=next.state.tutorialBranch;warning=storageWarning; draw() },
@@ -501,6 +586,14 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       if (view.shovel) { actions.select(index); return }
       const plot = view.state.plots[index]
 
+      if (view.mode==='garden' && plot.plant?.lives===0) {
+        run({type:'cleanup',plot:index,expectedId:plot.plant.id})
+        return
+      }
+
+      if (view.mode === 'garden' && !plot.plant) {
+        actions.changeView({mode:plot.open?'plant':'build',selected:index}); return
+      }
       if (view.mode === 'garden' && plot.plant?.readySince != null) {
         run({type:'harvest',plot:index,expectedId:plot.plant.id,cycle:plot.plant.lives})
         return
@@ -520,21 +613,17 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
         }
         if (!chosen || canRecoverGarden(view.state)) { actions.select(index); return }
         if (plot.plant) {
-          if (!canReplace(view.state)) {
-            if (view.state.sold && !view.state.occupiedHintShown && !view.state.tutorialSkipped) {
-              actions.command({type:'showOccupiedHint'})
-              notice=alpha[view.state.lang].occupied
-            }
-            actions.select(index)
+          notice=t().occupied
+          draw()
+          return
+        } else {
+          run({type:'plant',plot:index,species:chosen,stock})
+          if (stock && availableStock(view.state,chosen,stock)===0) {
+            chosen=null; stock=undefined
+            actions.changeView({mode:'garden',selected:null,sunflower:false})
             return
           }
-          const replaceId = plot.plant.id
-          if (plantingIssue(view.state,index,chosen,replaceId,stock)) { run({type:'plant',plot:index,species:chosen,stock,replaceId}); return }
-          const price = speciesInfo[chosen].seedPrice
-          const amount = stock || price === null ? `1 ${t().seedUnit}` : `${price} ${t().cost}`
-          if (!window.confirm(`${t().confirmOld}: ${name(plot.plant.species)} #${replaceId}\n${t().confirmNew}: ${name(chosen)} — ${amount}`)) return
-          run({type:'plant',plot:index,species:chosen,stock,replaceId})
-        } else run({type:'plant',plot:index,species:chosen,stock})
+        }
       }
       actions.select(index)
     }
