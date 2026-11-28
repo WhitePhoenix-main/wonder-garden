@@ -3,7 +3,7 @@ import island from '../../config/island.json'
 import valley from '../../config/valley.json'
 import market from '../../config/market.json'
 import nurseryProduction from '../../config/nursery.json'
-import { baseIds, hybridIds, decorIds, rarities, type DecorType, type BedLevel, type Hybrid, type IslandId, type Recipe, type Species } from './model'
+import { baseIds, hybridIds, decorIds, rarities, type BreedingRecipe, type DecorType, type BedLevel, type Hybrid, type IslandId, type Recipe, type Species } from './model'
 
 export const speciesIds = [...baseIds, ...hybridIds] as const
 export const plotCount = island.plotWidth * island.plotHeight
@@ -105,12 +105,10 @@ function validateIsland(id:IslandId): void {
     }
   }
   requireConfig(reachable.size === start.size, 'connected starting plots')
-  const planted = new Set<number>()
-  requireConfig(id === 'valley' || island.startPlants.length > 0, 'startPlants count')
-  for (const {plot, species} of island.startPlants) {
-    requireConfig(start.has(plot) && !planted.has(plot), 'startPlants plots')
-    requireConfig(isSpecies(species), 'startPlants species')
-    planted.add(plot)
+  const startingSeeds = Object.entries(island.startSeeds)
+  requireConfig(id === 'valley' ? startingSeeds.length === 0 : startingSeeds.length > 0, 'startSeeds count')
+  for (const [species, count] of startingSeeds) {
+    requireConfig(isSpecies(species) && !isHybrid(species) && positiveInteger(count), 'startSeeds')
   }
 }
 
@@ -165,6 +163,12 @@ const probability=(n:number)=>Number.isFinite(n) && n>=0 && n<=1
 requireConfig(genetics.rarity.length===rarities.length && genetics.rarity.every((rows,a)=>rows.length===rarities.length &&
   rows.every((row,b)=>row.length===rarities.length && row.every((n,i)=>nonnegativeInteger(n) &&
     n===genetics.rarity[b]?.[a]?.[i]) && row.reduce((sum,n)=>sum+n,0)===100)), 'rarity matrix')
+requireConfig(genetics.hybridRarity.length===rarities.length &&
+  genetics.hybridRarity.every(weight=>Number.isFinite(weight) && weight>=0) &&
+  genetics.hybridRarity.reduce((sum,weight)=>sum+weight,0)===100 &&
+  probability(genetics.hybridParentWeight) &&
+  genetics.rarityGuarantees.length===rarities.length && genetics.rarityGuarantees[0]===0 &&
+  genetics.rarityGuarantees.slice(1).every((value,i)=>positiveInteger(value) && value>genetics.rarityGuarantees[i]), 'breeding rarity')
 requireConfig(genetics.slots.join() === '0,1,1,2,3' && probability(genetics.copyCap), 'profile slots and copy cap')
 requireConfig([genetics.success,genetics.inheritedPlus,genetics.newFlaw,genetics.oneFlaw,genetics.twoFlaws,
   genetics.copy,genetics.sparse,genetics.small,genetics.slow].every(probability) &&
@@ -210,6 +214,35 @@ requireConfig(balance.recipes.length === hybridIds.length && balance.plants.leng
 export const recipes = hybridIds.map(readRecipe)
 export const bedLevels = {1: readBed(1), 2: readBed(2), 3: readBed(3), 4: readBed(4), 5: readBed(5)} as const
 export const speciesInfo = Object.fromEntries(speciesIds.map(id => [id,readSpecies(id)])) as Record<Species,ReturnType<typeof readSpecies>>
+const {tiers,alternatives}=balance.breeding
+requireConfig(tiers.length===3 && tiers.every(tier=>probability(tier.base) && tier.base>0 &&
+  probability(tier.increment) && tier.increment>0 && positiveInteger(tier.softStart) &&
+  positiveInteger(tier.hardPity) && tier.hardPity>tier.softStart), 'breeding tiers')
+requireConfig(alternatives.length===hybridIds.length, 'alternative recipes')
+export const breedingTier=(result:Hybrid)=>tiers[speciesInfo[result].generation-1]
+export const breedingRecipes:BreedingRecipe[]=recipes.flatMap(main=>{
+  const matching=alternatives.filter(recipe=>recipe.result===main.result)
+  requireConfig(matching.length===1, `alternative recipe ${main.result}`)
+  const alternate=matching[0]
+  const {result}=main
+  const order=speciesIds.indexOf(result)
+  function earlier(parent:unknown):parent is Species {
+    return isSpecies(parent) && speciesIds.indexOf(parent)<order &&
+      speciesInfo[parent].generation<=speciesInfo[result].generation
+  }
+  const base=breedingTier(result).base
+  requireConfig([main.primary,...main.neighbors].every(earlier) && earlier(alternate.primary) &&
+    alternate.neighbors.length>0 && alternate.neighbors.length<=4 &&
+    new Set(alternate.neighbors).size===alternate.neighbors.length &&
+    alternate.neighbors.every(parent=>earlier(parent) && parent!==alternate.primary) &&
+    alternate.chance>0 && alternate.chance<base, `breeding parents and chance ${result}`)
+  return [
+    {...main,id:`${result}:main`,alternate:false,baseChance:base},
+    {...main,id:`${result}:alternate`,alternate:true,baseChance:alternate.chance,
+      primary:alternate.primary,neighbors:alternate.neighbors.filter(isSpecies)}
+  ]
+})
+export const breedingRecipe=(id:string)=>breedingRecipes.find(recipe=>recipe.id===id)
 export const auras = balance.auras
 for (const aura of auras) {
   requireConfig(isSpecies(aura.source) && ['growth','price','propagation'].includes(aura.kind), `aura ${aura.source} kind`)

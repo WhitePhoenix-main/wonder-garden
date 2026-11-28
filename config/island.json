@@ -17,16 +17,7 @@
     12,
     13
   ],
-  "startPlants": [
-    {
-      "plot": 12,
-      "species": "radish"
-    },
-    {
-      "plot": 13,
-      "species": "radish"
-    }
-  ],
+  "startSeeds": { "radish": 2 },
   "structures": [
     {
       "id": "greenhouse",

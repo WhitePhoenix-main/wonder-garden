@@ -30,8 +30,8 @@ export const inventoryWords = {
     minValue:'Цена от',minQuantity:'Количество от',plus:'Увеличить количество',minus:'Уменьшить количество',
     all:'Все',sell:'Продать',extract:'Извлечь семена',plant:'Посадить',unknown:'Происхождение неизвестно',
     pollinated:'Опылено',plain:'Без опыления',potential:'Семян',attempts:'попыток скрещивания',
-    single:'Одноразовое',multi:'Многоразовое',growth:'Рост',regrow:'Повторный рост',fruits:'Урожай',lives:'Жизни',
-    per:'за единицу',details:'Подробности',parents:'Родители',inactive:'Признак жизней не действует у одноразовых растений.',
+    single:'Одноразовое',multi:'Многоразовое',growth:'Рост',regrow:'Повторный рост',fruits:'Урожай',lives:'Запас сборов',
+    per:'за единицу',details:'Подробности',parents:'Родители',inactive:'Признак запаса сборов не действует у одноразовых растений.',
     confirmHarvest:'Продать урожай с семенным потенциалом?',confirmSeed:'Продать последние семена этого вида?',
     obtained:'Получено'
   },
@@ -41,8 +41,8 @@ export const inventoryWords = {
     minValue:'Minimum price',minQuantity:'Minimum quantity',plus:'Increase quantity',minus:'Decrease quantity',
     all:'All',sell:'Sell',extract:'Extract seeds',plant:'Plant',unknown:'Origin unknown',
     pollinated:'Pollinated',plain:'Not pollinated',potential:'Seeds',attempts:'cross attempts',
-    single:'Single harvest',multi:'Multi harvest',growth:'Growth',regrow:'Regrowth',fruits:'Yield',lives:'Lives',
-    per:'each',details:'Details',parents:'Parents',inactive:'Life traits have no effect on single-harvest plants.',
+    single:'Single harvest',multi:'Multi harvest',growth:'Growth',regrow:'Regrowth',fruits:'Yield',lives:'Harvest capacity',
+    per:'each',details:'Details',parents:'Parents',inactive:'Harvest capacity traits have no effect on single-harvest plants.',
     confirmHarvest:'Sell harvest that could yield seeds?',confirmSeed:'Sell the last seeds of this species?',
     obtained:'Received'
   }
@@ -182,8 +182,8 @@ export function inventoryPanel(s:GameState, {tab, sort, amounts, filter, minimum
       .filter(pack=>selected.includes(`s${pack.species}-${pack.rarity}-${pack.plus}-${pack.minus}`))
     if(packs.length===2 && packs[0].species===packs[1].species) {
       const [a,b]=packs.map(p=>plantStats(p.species,p))
-      const labels=s.lang==='ru' ? ['Первый рост, с','Повторный рост, с','Мин. плодов','Макс. плодов','Неурожай, %','Шанс макс. плодов, %','Макс. семян, %','Жизни','Качество ×','Копирование, %','Аура ×'] :
-        ['First growth, s','Regrowth, s','Min fruit','Max fruit','Crop failure, %','Max fruit chance, %','Max seeds, %','Lives','Quality ×','Copy chance, %','Aura ×']
+      const labels=s.lang==='ru' ? ['Первый рост, с','Повторный рост, с','Мин. плодов','Макс. плодов','Неурожай, %','Шанс макс. плодов, %','Макс. семян, %','Запас сборов','Качество ×','Копирование, %','Аура ×'] :
+        ['First growth, s','Regrowth, s','Min fruit','Max fruit','Crop failure, %','Max fruit chance, %','Max seeds, %','Harvest capacity','Quality ×','Copy chance, %','Aura ×']
       const maxChance=(range:number[],adjustment:number)=>range[0]===range[1] ? 100 :
         Math.max(0,Math.min(1,1/(range[1]-range[0]+1)+adjustment))*100
       const values=(stats:typeof a)=>[stats.growthSec,stats.regrowSec,stats.fruits[0],stats.fruits[1],stats.cropFailure,stats.fruitOdds.at(-1)!,

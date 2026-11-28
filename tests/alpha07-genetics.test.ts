@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { advance, execute, initialState } from '../src/game'
 import { evolution } from '../src/game/config'
-import { sameProfile, stockCount } from '../src/game/genetics'
+import { rarityGuarantee, sameProfile, stockCount } from '../src/game/genetics'
 import { crossingQuote, isBusy } from '../src/game/greenhouse'
 import type { GameState, Profile } from '../src/game/model'
 import { newPlant } from '../src/game/state'
@@ -18,7 +18,7 @@ function breedingGarden(level:number,profiles:Profile[]):GameState {
   state.sold=true
   state.coins=20_000
   state.revealed=['solar_strawberry']
-  state.planted.push('strawberry','sunflower')
+  state.planted.push('radish','strawberry','sunflower')
   state.greenhouseLevel=level
   unlockProduction(state)
   state.nursery=profiles.map(profile=>newPlant(state.nextId++,'radish',profile))
@@ -35,7 +35,7 @@ function resume(state:GameState):GameState {
 it('spends a shared Legendary guarantee at payment and conceals it while the experiment runs',()=>{
   let state=breedingGarden(5,[rare,epic,epic,epic])
   const key='radish/legendary'
-  state.rarityProgress[key]=evolution.rarityGuarantee-1
+  state.rarityProgress[key]=rarityGuarantee('legendary')-1
   const [a,b,c,d]=state.nursery
   expect(crossingQuote(state,a,b).key).toBe(crossingQuote(state,c,d).key)
   expect(crossingQuote(state,a,b).weights).toEqual([0,0,0,0,2])
@@ -47,7 +47,7 @@ it('spends a shared Legendary guarantee at payment and conceals it while the exp
   expect(beforeReady).toContain('Легендарный 5%')
   expect(beforeReady).not.toContain('Легендарный 100%')
   state=resume(state)
-  expect(crossingQuote(state,c,d).weights).toEqual([10,20,35,30,5])
+  expect(crossingQuote(state,c,d).weights).toEqual([0,0,25,70,5])
   commit(state,{type:'startCross',parents:[c.id,d.id]})
   expect(state.rarityProgress[key]??0).toBe(state.crosses[1].profile.rarity==='legendary' ? 0 : 1)
   const stateAfterPayment=resume(state)
@@ -93,7 +93,7 @@ it('rejects invalid counters and a clone with an altered profile',()=>{
   const altered=structuredClone(state)
   altered.clones[0].profile.minus=null
   expect(parseSave(JSON.stringify(altered))).toBeNull()
-  state.rarityProgress['radish/legendary']=evolution.rarityGuarantee
+  state.rarityProgress['radish/legendary']=rarityGuarantee('legendary')
   expect(parseSave(JSON.stringify(state))).toBeNull()
 })
 

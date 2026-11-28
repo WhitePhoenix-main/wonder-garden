@@ -1,10 +1,9 @@
 import { saveVersion, type GameState, type PassiveState, type Plant, type Species } from './model'
-import { balance, island, plotCount, hybridCounts, isSpecies } from './config'
+import { balance, island, plotCount, hybridCounts, speciesIds } from './config'
 
-import { canonical, common, maxLives, nextRandom } from './genetics'
-import { recordPlanting } from './collection'
+import { canonical, common, maxLives } from './genetics'
 import { initialMarket, initialTrading } from './market'
-import { speciesIds } from './config'
+import { initialResearch } from './queries'
 import type { Profile } from './model'
 
 export function initialPassive(rng:number):PassiveState {
@@ -33,8 +32,10 @@ export const initialAmenities = {
 } as const
 
 export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameState {
-  const state: GameState = {
+  const startingSeeds: Readonly<Partial<Record<Species,number>>> = island.startSeeds
+  return {
     passive:initialPassive(seed),
+    research:initialResearch(),
     tutorialSeen:[],
     schemaVersion: saveVersion,
     market: initialMarket(),
@@ -56,16 +57,8 @@ export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameSt
     sold: false,
     planted: [],
     revealed: [],
-    seeds: Object.fromEntries(speciesIds.map(id=>[id,0])) as GameState['seeds'],
+    seeds: Object.fromEntries(speciesIds.map(id=>[id,startingSeeds[id]??0])) as GameState['seeds'],
     variants:[], failures:hybridCounts(), rng:seed,
     lang: 'ru'
   }
-  for (const {plot, species} of island.startPlants) {
-    if (!isSpecies(species)) throw new Error(`Unknown starting species: ${species}`)
-    const plant=newPlant(state.nextId++, species,common,nextRandom(state))
-    state.plots[plot].plant = plant
-    recordPlanting(state,plant)
-    if (!state.planted.includes(species)) state.planted.push(species)
-  }
-  return state
 }

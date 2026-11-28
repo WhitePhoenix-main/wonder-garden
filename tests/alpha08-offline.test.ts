@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import alpha07 from './fixtures/alpha07.json'
-import { advance, execute, initialState } from '../src/game'
+import { advance, execute } from '../src/game'
 import { common } from '../src/game/genetics'
 import { greenhouseTime } from '../src/game/greenhouse'
 import { catchUp } from '../src/game/offline'
@@ -8,10 +8,10 @@ import { advanceProduction, seedProductionCapacity, seedProductionCount, unlockP
 import { newPlant } from '../src/game/state'
 import { parseSave } from '../src/persistence/migration'
 import { createPersistence } from '../src/persistence/storage'
-import { commit, memoryStorage } from './helpers'
+import { gardenWithStarterPlants, commit, memoryStorage } from './helpers'
 
 function prepared(level=2) {
-  const s=initialState(17)
+  const s=gardenWithStarterPlants(17)
   s.greenhouseLevel=level
   s.revealed.push('solar_strawberry')
   // The migration validator expects the known recipe parents.
@@ -27,9 +27,10 @@ function prepared(level=2) {
 it('migrates a snapshot written by the original Alpha 07 code without replaying its timers',()=>{
   const s=parseSave(JSON.stringify(alpha07))
   if (!s || s==='future') throw Error('Alpha 07 snapshot was rejected')
-  const {schemaVersion,balanceVersion,automation,passive,tutorialSeen,...existing}=s
+  const {schemaVersion,balanceVersion,automation,passive,tutorialSeen,research,...existing}=s
   const {schemaVersion:oldSchema,balanceVersion:oldBalance,automation:oldAutomation,...previous}=alpha07
-  expect([oldSchema,oldBalance,schemaVersion,balanceVersion]).toEqual([11,4,12,5])
+  expect([oldSchema,oldBalance,schemaVersion,balanceVersion]).toEqual([11,4,13,5])
+  expect(Object.keys(research.recipes)).toEqual(alpha07.revealed.map(id=>id+':main'))
   expect(existing).toEqual(previous)
   expect(automation).toEqual({...oldAutomation,cleanup:true})
   expect(passive.checkpoint).toBeNull()

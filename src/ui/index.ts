@@ -22,14 +22,18 @@ import type { MarketSort } from './panels/market'
 import { templateDetails } from './panels/automation'
 import { plotModes } from '../game/model'
 import { productionAction } from './panels/production'
+import { createTutorialOverlay } from './tutorial'
 import './ui.css'
 
 export function createUI(host: HTMLElement, actions: UIActions): UI {
   let view: WorldView
+  const tutorialOverlay = createTutorialOverlay(host,actions)
   let warning: string | null = null
   let chosen: Species|null = null
   let stock:Profile|undefined
   let firstSeeds:Species[]=[]
+  let discoveryRarity:Rarity|null=null
+  let discoverySpecies:Species|null=null
   let cornerPlanted=false
   let branch:'experiment'|'corner'|null=null
   let confirmId:number|null=null
@@ -85,6 +89,8 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   function showRewards(events:string[]) {
     const harvest=events.find(e=>e.startsWith('Harvested:'))?.split(':')
     if(harvest) notice='+'+harvest[3]+' '+name(harvest[2] as Species)
+    const discovered=events.find(event=>event.startsWith('HybridDiscovered:'))?.split(':')
+    if (discovered) { discoverySpecies=discovered[1] as Species; discoveryRarity=discovered[2] as Rarity }
     const discoveries=events.filter(event=>event.startsWith('RecipeRevealed:'))
     if (discoveries.length && discoveries.length===view.state.revealed.length) {
       firstSeeds=discoveries.map(event=>event.split(':')[1] as Species)
@@ -95,7 +101,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (rewards.length) notice = rewards.map((e,i) => t().earned + ' · ' + name(e.split(':')[1] as Species)+(i===0 && count?' ×'+count:'')).join(' / ')
     if(events.includes('ExperimentFailed'))notice+=' · '+field[view.state.lang].miss
     if(events.includes('Withered'))notice+=' · '+field[view.state.lang].wilt
-    if(events.includes('CropFailed'))notice=view.state.lang==='ru'?'Неурожай':'Crop failed'
+    if(events.includes('CropFailed'))notice=view.state.lang==='ru'?'Неурожай. Один сбор из запаса израсходован.':'Crop failed. One harvest from the capacity was used.'
     if(events.includes('PlantCleaned'))notice=view.state.lang==='ru'?'Грядка очищена':'Bed cleared'
     if(events.includes('CrossReady') || events.includes('CloneReady')) {
       notice=view.state.lang==='ru'?'В теплице можно получить семя.':'A seed is ready to collect in the greenhouse.'
@@ -104,7 +110,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
   function run(command: Command) {
     const plant=command.type==='harvest' ? view.state.plots[command.plot]?.plant : null
     if (plant?.lives===1 && isValuablePlant(view.state,plant) &&
-      !window.confirm(view.state.lang==='ru'?'Последняя жизнь. Собрать урожай и потерять этот экземпляр?':'Last life. Harvest and lose this specimen?')) return
+      !window.confirm(view.state.lang==='ru'?'Последний сбор. Собрать урожай и потерять этот экземпляр?':'Final harvest. Harvest and lose this specimen?')) return
     const coins=view.state.coins
     const result = actions.command(command)
     if (result.ok && result.events.length) {
@@ -124,6 +130,11 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
         notice = inventoryWords[lang].obtained+' · ' + result.obtained
           .map(p=>name(p.species)+' · '+field[lang][p.rarity]+' ×'+p.count).join(' / ')
         if (result.events.includes('ExperimentFailed')) notice += ' · '+field[lang].miss
+        const rarity=result.obtained.find(p=>p.rarity!=='common' && !view.state.tutorialSeen.includes('notice-rarity-'+p.rarity))?.rarity
+        if (rarity) {
+          actions.command({type:'tutorialSeen',id:'notice-rarity-'+rarity})
+          notice += ' · '+(lang==='ru'?'Новая редкость':'New rarity')+' '+field[lang][rarity]
+        }
       }
     }
     draw()
@@ -138,7 +149,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
     const html = uiMarkup(view,{repeat,statsWindow,statsByVolume,
       inventoryFilter,inventoryTab,inventorySort,inventoryAmounts,inventoryMinimum,inventoryDetail,crossParents,inventorySelected,favoriteOnly,inventorySearch,inventoryPage,marketKind,marketSort,
-      stock,cornerPlanted,firstSeeds,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
+      stock,cornerPlanted,firstSeeds,discoveryRarity:discoverySpecies===firstSeeds[0] ? discoveryRarity : null,branch,confirmId,overlay, warning, notice, chosen, returnId, collectionFilter, entry, chapter, slot, decorChoice
     })
     if (html === last) return
     const active = document.activeElement as HTMLElement | null
@@ -153,6 +164,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }))
     panelKey = context
     host.innerHTML = html
+    tutorialOverlay.render(view)
     for (const selection of productionSelections) {
       const select=host.querySelector<HTMLSelectElement>(`[data-production-slot="${selection.slot}"] [data-production-${selection.key}]`)
       if (select && [...select.options].some(option=>option.value===selection.value)) select.value=selection.value
@@ -444,6 +456,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
       run({type:'sellSeeds',species,profile,count})
       return
     }
+    if(action==='research-direction' && selected!==null && plot?.plant) return run({type:'researchDirection',plot:selected,expectedId:plot.plant.id,recipeId:target.dataset.recipeId!})
     if(action==='nursery'){controller.nursery();return}
     if(action==='nursery-protect') {
       const id=Number(target.dataset.id)
@@ -478,7 +491,7 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     if (action==='cancel-seed') {chosen=null;stock=undefined;actions.changeView({sunflower:false});return}
     if (action==='later' || action==='plant-reward') {
       const available=firstSeeds.find(id=>id===target.dataset.seed)
-      firstSeeds=[];notice='';actions.command({type:'dismissHybrid'})
+      firstSeeds=[];discoverySpecies=null;discoveryRarity=null;notice='';actions.command({type:'dismissHybrid'})
       if (action==='plant-reward' && available) {mode('plant');chosen=available;stock=view.state.seeds[available]?undefined:view.state.variants.find(p=>p.species===available)}
       draw();return
     }
@@ -572,16 +585,16 @@ export function createUI(host: HTMLElement, actions: UIActions): UI {
     }
   })
   const controller:UI = {
-    market(){if(view.menu)return;closePanels();overlay='market';draw()},
-    bridge(){if(view.menu)return;closePanels();overlay='bridge';draw()},
-    helper(){if(view.menu)return;closePanels();overlay='helper';draw()},
-    inspect(index){if(view.menu)return;closePanels();actions.changeView({mode:'garden',selected:index,shovel:false})},
-    nursery(){if(view.menu)return;firstSeeds=[];if(view.state.pendingHybrid)actions.command({type:'dismissHybrid'});closePanels();overlay='evolution';updateDecor()},
+    market(){if(view.menu || !tutorialOverlay.allowsPlot())return;closePanels();overlay='market';draw()},
+    bridge(){if(view.menu || !tutorialOverlay.allowsPlot())return;closePanels();overlay='bridge';draw()},
+    helper(){if(view.menu || !tutorialOverlay.allowsPlot())return;closePanels();overlay='helper';draw()},
+    inspect(index){if(view.menu || !tutorialOverlay.allowsPlot(index))return;closePanels();actions.changeView({mode:'garden',selected:index,shovel:false})},
+    nursery(){if(view.menu || !tutorialOverlay.allowsPlot())return;firstSeeds=[];if(view.state.pendingHybrid)actions.command({type:'dismissHybrid'});closePanels();overlay='evolution';updateDecor()},
     notify: showRewards,
     pickDecor,
     render(next, storageWarning) { view=next; firstSeeds=next.state.pendingHybrid?[next.state.pendingHybrid]:[];branch=next.state.tutorialBranch;warning=storageWarning; draw() },
     pick(index) {
-      if (!view || view.menu || overlay) return
+      if (!view || view.menu || overlay || !tutorialOverlay.allowsPlot(index)) return
       confirmId=null
       if (view.shovel) { actions.select(index); return }
       const plot = view.state.plots[index]

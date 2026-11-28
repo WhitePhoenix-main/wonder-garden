@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import alpha03 from './fixtures/alpha03.json'
-import { advance, basketCount, execute, initialState, speciesIds, speciesInfo } from '../src/game'
+import { advance, basketCount, execute, speciesIds, speciesInfo } from '../src/game'
 import { common, inherit, maxLives, rules, traits } from '../src/game/genetics'
 import { saveVersion, type GameState, type Profile } from '../src/game/model'
 import { extractionYield, harvestSaleValue, seedSaleValue } from '../src/game/trade'
 import { parseSave } from '../src/persistence/migration'
 import { validState } from '../src/persistence/validation'
-import { addLegacyFruit, commit, plantAt, prepareFirstResearch, reject } from './helpers'
+import { gardenWithStarterPlants, addLegacyFruit, commit, plantAt, prepareFirstResearch, reject } from './helpers'
 
 const rareHardy:Profile = {rarity:'rare',plus:'hardy',minus:null}
 const fragile:Profile = {rarity:'common',plus:null,minus:'fragile'}
@@ -20,7 +20,7 @@ function reload(state:GameState):GameState {
 
 describe('Alpha-4 harvest and inventory',()=>{
   it('regrows for the shorter cycle, loses no lives waiting and withers on the last harvest',()=>{
-    const state=initialState(44)
+    const state=gardenWithStarterPlants(44)
     state.coins=speciesInfo.strawberry.seedPrice!
     commit(state,{type:'plant',plot:8,species:'strawberry'})
     const bed=state.plots[8], plant=plantAt(state,8), info=speciesInfo.strawberry
@@ -59,7 +59,7 @@ describe('Alpha-4 harvest and inventory',()=>{
   })
 
   it('groups like crops, keeps a second genome separate and trades against stock atomically',()=>{
-    const state=initialState(37)
+    const state=gardenWithStarterPlants(37)
     const rare:Profile={rarity:'rare',plus:['seedy'],minus:'sparse'}
     state.variants.push({species:'radish',count:1,...rare})
     commit(state,{type:'plant',plot:8,species:'radish',stock:rare})
@@ -93,7 +93,7 @@ describe('Alpha-4 harvest and inventory',()=>{
   })
 
   it('pays the same rounded value for one full sale and valid partial sales across reload',()=>{
-    const state=initialState(33)
+    const state=gardenWithStarterPlants(33)
     addLegacyFruit(state,4,13333)
     const all=structuredClone(state), {id}=state.basket[0]
     commit(all,{type:'sellHarvest',id,count:4})
@@ -105,7 +105,7 @@ describe('Alpha-4 harvest and inventory',()=>{
   })
 
   it('freezes parents through removal and reload, with one cross roll per harvested lot',()=>{
-    const state=initialState(11)
+    const state=gardenWithStarterPlants(11)
     const donor:Profile={rarity:'rare',plus:['seedy'],minus:'small'}
     state.coins=400
     state.sold=true
@@ -142,7 +142,7 @@ describe('Alpha-4 harvest and inventory',()=>{
   })
 
   it('keeps extraction deterministic when the first processed fruit has no own seed',()=>{
-    const state=initialState(1)
+    const state=gardenWithStarterPlants(1)
     const thinSeed:Profile={rarity:'rare',plus:['fruitful'],minus:'sparse'}
     state.coins=1000
     state.sold=true
@@ -152,6 +152,7 @@ describe('Alpha-4 harvest and inventory',()=>{
     commit(state,{type:'plant',plot:9,species:'moonflower'})
     prepareFirstResearch(state)
     Object.assign(plantAt(state,8),thinSeed,{fruitRoll:0.999})
+    commit(state,{type:'researchDirection',plot:8,expectedId:plantAt(state,8).id,recipeId:'golden_flower:main'})
     advance(state,speciesInfo.blueberry.cycleSec)
     state.rng=1
     commit(state,{type:'harvest',plot:8})

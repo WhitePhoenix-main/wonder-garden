@@ -10,7 +10,7 @@ import { orderQuote } from '../src/game/orders'
 import { newPlant } from '../src/game/state'
 import { defaultPolicy } from '../src/game/stock-policy'
 import { parseSave } from '../src/persistence/migration'
-import { addLegacyFruit, cleanBed, commit, cross, earn, plantAt, prepareFirstResearch, reject, wait } from './helpers'
+import { addLegacyFruit, cleanBed, commit, cross, earn, gardenWithStarterPlants, plantAt, prepareFirstResearch, reject, wait } from './helpers'
 
 function reload(state:GameState):GameState {
   const copy=parseSave(JSON.stringify(state))
@@ -21,6 +21,7 @@ function reload(state:GameState):GameState {
 
 function enterBreeding(seed:number) {
   const state=initialState(seed)
+  for (const plot of [12,13]) commit(state,{type:'plant',plot,species:'radish',stock:common})
   wait(state,6)
   commit(state,{type:'harvest',plot:12})
   commit(state,{type:'extractSeeds',id:state.basket[0].id,count:1})
@@ -101,7 +102,8 @@ it.each([17,42,2026])('breeds two rare parents, then epic and legendary radish t
     }
     throw Error(`Rare lineage stalled at ${rarity} after ${attempts} trials`)
   }
-  const rare:[number,number]=[obtain(ordinary,'rare'),obtain(ordinary,'rare')]
+  const uncommon:[number,number]=[obtain(ordinary,'uncommon'),obtain(ordinary,'uncommon')]
+  const rare:[number,number]=[obtain(uncommon,'rare'),obtain(uncommon,'rare')]
   const attemptsToRarePair=attempts
   const epic=obtain(rare,'epic')
   const attemptsToEpic=attempts-attemptsToRarePair
@@ -130,11 +132,12 @@ it('keeps concurrent results and trait sets isolated',()=>{
   commit(state,{type:'startCross',parents:parents(4)})
   expect(new Set(state.crosses.flatMap(entry=>entry.parents)).size).toBe(6)
   advance(state,15)
+  const originalStock=state.seeds.radish
   const results=state.crosses.map(entry=>entry.profile)
   for (const result of [...state.crosses].reverse()) commit(state,{type:'collectCross',id:result.id})
   expect(state.crosses.map(entry=>entry.profile)).toEqual(results)
   expect(state.crosses.every(entry=>entry.collected)).toBe(true)
-  expect(state.seeds.radish+state.variants.reduce((sum,pack)=>sum+pack.count,0)).toBe(3)
+  expect(state.seeds.radish-originalStock+state.variants.reduce((sum,pack)=>sum+pack.count,0)).toBe(3)
 })
 
 it('restores an authentic Alpha 04 save without awarding currency or inventing inventory-only discoveries',()=>{
@@ -273,7 +276,7 @@ it('keeps plot geometry, planting, auras and decoration on the correct island',(
 })
 
 it('respects protected and reserved seed stock during delegated replanting',()=>{
-  const state=initialState(17)
+  const state=gardenWithStarterPlants(17)
   state.sold=true
   state.coins=30000
   state.seeds.radish=3
@@ -291,9 +294,10 @@ it('respects protected and reserved seed stock during delegated replanting',()=>
   commit(state,{type:'harvest',plot:12})
   advance(state,1)
   expect(state.seeds.radish).toBe(3)
-  expect(state.plots[12].plant).toBeNull()
+  expect(plantAt(state,12).lives).toBe(0)
   expect(state.basket.length).toBeGreaterThan(0)
   commit(state,{type:'protectProfile',species:'radish',profile:common,enabled:false})
+  cleanBed(state,12)
   commit(state,{type:'plant',plot:12,species:'radish'})
   advance(state,15)
   expect(state.seeds.radish).toBe(2)
@@ -302,7 +306,7 @@ it('respects protected and reserved seed stock during delegated replanting',()=>
 })
 
 it('does not spend replant stock or duplicate fruit when the basket is full',()=>{
-  const state=initialState(19)
+  const state=gardenWithStarterPlants(19)
   earn(state,150)
   commit(state,{type:'upgradeHelper',target:1})
   state.seeds.radish=3
@@ -315,7 +319,7 @@ it('does not spend replant stock or duplicate fruit when the basket is full',()=
 })
 
 it('keeps seed-mode production ahead of sale and retains a seed reserve over repeated cycles',()=>{
-  let state=initialState(21)
+  let state=gardenWithStarterPlants(21)
   state.sold=true
   state.coins=30000
   for (const target of [1,2,3,4,5] as const) commit(state,{type:'upgradeHelper',target})
@@ -400,7 +404,7 @@ it('keeps the first achievable order across reload, pays it once and replenishes
 })
 
 it('uses protected inventory and shortages to reject a compound order atomically',()=>{
-  const state=initialState(14)
+  const state=gardenWithStarterPlants(14)
   const profile:Profile={rarity:'epic',plus:['early','quality'],minus:null}
   state.variants.push({...profile,species:'radish',count:2})
   advance(state,6)
@@ -423,7 +427,7 @@ it('uses protected inventory and shortages to reject a compound order atomically
 })
 
 it('rolls back an invalid batch of inventory actions instead of partially selling',()=>{
-  const state=initialState(9)
+  const state=gardenWithStarterPlants(9)
   advance(state,6)
   commit(state,{type:'harvest',plot:12})
   const batch=state.basket[0]

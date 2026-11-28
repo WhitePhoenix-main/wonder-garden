@@ -57,10 +57,10 @@ export function automationPanel(state:GameState) {
   let html = `<h2>${w.name} ${numerals[level]}</h2><p>${w.offer}</p>`
   if(!state.tutorialSkipped && level) html+=`<p class="hint">${state.lang==='ru'?'Назначьте грядке режим и профиль пересадки в карточке грядки. Резерв семян настраивается в инвентаре.':'Choose a bed mode and replanting profile on the bed card. Set seed reserves in the inventory.'}</p>`
   const settings = state.lang === 'ru'
-    ? {enabled:'Помощник',replant:'Автопересадка',extractPollinated:'Переработка опылённого урожая',sellSeeds:'Продажа лишних семян',sellFruit:'Продажа урожая'}
-    : {enabled:'Helper',replant:'Automatic replanting',extractPollinated:'Extract pollinated harvest',sellSeeds:'Sell excess seeds',sellFruit:'Sell harvest'}
+    ? {enabled:'Помощник',cleanup:'Автоуборка',replant:'Автопересадка',extractPollinated:'Переработка опылённого урожая',sellSeeds:'Продажа лишних семян',sellFruit:'Продажа урожая'}
+    : {enabled:'Helper',cleanup:'Automatic cleanup',replant:'Automatic replanting',extractPollinated:'Extract pollinated harvest',sellSeeds:'Sell excess seeds',sellFruit:'Sell harvest'}
   if (level) {
-    const toggles=['enabled','replant',...(state.stallLevel>=2 ? ['sellFruit'] as const : []),
+    const toggles=['enabled',...(level>=2 ? ['cleanup'] as const : []),'replant',...(state.stallLevel>=2 ? ['sellFruit'] as const : []),
       ...(state.stallLevel>=3 ? ['extractPollinated','sellSeeds'] as const : [])] as const
     for (const key of toggles) {
       html += `<button type="button" data-action="automation-toggle" data-setting="${key}" aria-pressed="${state.automation[key]}">${settings[key]} · ${state.automation[key]?'✓':'—'}</button>`
@@ -75,13 +75,13 @@ export function automationPanel(state:GameState) {
   }
   if (level) {
     html += `<p class="hint">${status}<br>${w.pace} · ${evolution.helperThroughput[level]} / ${helperLevels[level].intervalSec} ${w.sec}
-      <br>${w.next} · ${Math.ceil(state.harvestRemaining)} ${w.sec}</p>`
+      <br>${w.next} · ${Math.ceil(state.harvestRemaining)} ${w.sec}${level>=2 ? '<br>'+(state.lang==='ru'?'Уборка использует отдельный лимит за цикл.':'Cleanup has its own per-cycle capacity.') : ''}</p>`
   }
   if (next) {
     html += `<button type="button" class="primary" data-action="upgrade-helper" data-level="${next.level}"
       ${state.coins < next.upgradeCost ? 'disabled' : ''}>
       ${level ? w.upgrade : w.hire} · ${numerals[next.level]} · ${next.upgradeCost} ${w.coins}</button>
-      <p>${w.pace} · ${next.intervalSec} ${w.sec}</p>`
+      <p>${w.pace} · ${evolution.helperThroughput[next.level]} / ${next.intervalSec} ${w.sec}${next.level===2 ? ' · '+(state.lang==='ru'?'добавит автоуборку с отдельным лимитом':'adds cleanup with separate capacity') : ''}</p>`
   }
   html += `<h3>${w.stall}</h3><p>${w.sells} ${autoSellOffer.intervalSec} ${w.sec}. ${w.reserve}</p>`
   if (state.autoSell) {

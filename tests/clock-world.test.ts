@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { createClock } from '../src/runtime/clock'
-import { adjacent, advance, initialState } from '../src/game'
+import { adjacent, advance } from '../src/game'
 import { halfHeight, halfWidth, iso, plotAt, plotPosition } from '../src/world/geometry'
-import { plantAt } from './helpers'
+import { gardenWithStarterPlants, plantAt } from './helpers'
 
 describe('Sprint 01 clock and isometric geometry', () => {
   it('TM-01: clears the remainder before visibility resumes and skips the elapsed wall time', () => {
-    const state = initialState()
+    const state = gardenWithStarterPlants(42)
     const clock = createClock(step => advance(state, step))
     expect(clock.frame(1000)).toBe(false)
     expect(clock.frame(1150)).toBe(true)
@@ -24,7 +24,7 @@ describe('Sprint 01 clock and isometric geometry', () => {
 
   it('TM-02: completes the same active growth at 30 and 60 fps and caps long frames', () => {
     for (const fps of [30, 60]) {
-      const state = initialState()
+      const state = gardenWithStarterPlants(42)
       const clock = createClock(step => advance(state, step))
       for (let i = 0; i <= 6 * fps; i++) clock.frame(i * 1000 / fps)
       expect(state.playTime).toBeCloseTo(6)

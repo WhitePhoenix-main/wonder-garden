@@ -2,12 +2,12 @@ import { measure } from './analytics'
 import { bedLevels, speciesInfo, valueScale } from './config'
 import { canonical, fruitCount, nextRandom, plantStats, profileAllowed, quantity, rules, sameProfile, traits } from './genetics'
 import type { Command, GameState, HarvestLot, Plant, PollinationSnapshot, Result } from './model'
-import { auraBonus, basketCapacity, basketCount, pollinationFor } from './queries'
+import { auraBonus, basketCapacity, basketCount, observeCompatibility, pollinationFor, snapshotRecipeId } from './queries'
 import { recordHarvest } from './collection'
 
 function samePollination(a:PollinationSnapshot|null, b:PollinationSnapshot|null):boolean {
   if (!a || !b) return a === b
-  return a.result === b.result &&
+  return a.result === b.result && snapshotRecipeId(a) === snapshotRecipeId(b) &&
     a.donor.species === b.donor.species && sameProfile(a.donor, b.donor) &&
     a.supporting.length === b.supporting.length &&
     a.supporting.every((parent,index) =>
@@ -51,6 +51,8 @@ function addHarvest(state:GameState,index:number,plant:Plant,stats:ReturnType<ty
   const {species} = plant
   const profile = canonical(plant)
   const pollination = pollinationFor(state, index)
+  // A ready crop can be harvested immediately after a layout change.
+  observeCompatibility(state,index)
   const price = speciesInfo[species].fruitValue * stats.fruitPriceMultiplier *
     bedLevels[plot.level].priceMultiplier * (1 + auraBonus(state, index, 'price'))
   const valueUnits = Math.round(price * valueScale)

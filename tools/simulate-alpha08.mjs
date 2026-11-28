@@ -2,7 +2,9 @@ import { createServer } from 'vite'
 import { resolve } from 'node:path'
 
 const root=resolve(process.argv[2]??'.')
-const durations=process.argv[3] ? process.argv[3].split(',').map(Number) : [900,1800,3600,7200,14400]
+const extended=process.argv.includes('--alpha09')
+const durations=process.argv[3] ? process.argv[3].split(',').map(Number) :
+  [...(extended ? [300] : []),900,1800,3600,7200,14400]
 if (durations.some(seconds=>!Number.isSafeInteger(seconds) || seconds<15 || seconds>14400)) {
   throw new Error('Pass comma-separated durations from 15 to 14400 active seconds')
 }
@@ -23,6 +25,7 @@ try {
   const {harmony}=await loader.ssrLoadModule('/src/game/decor.ts')
   const {extractionYield,quickSaleEligible}=await loader.ssrLoadModule('/src/game/trade.ts')
   const living=Boolean(initialState(17).passive)
+  const discovery=Boolean(initialState(17).research)
   const offline=living ? await loader.ssrLoadModule('/src/game/offline.ts') : null
   const production=living ? await loader.ssrLoadModule('/src/game/nursery.ts') : null
 
@@ -41,18 +44,21 @@ try {
     {id:'selective-breeding',planting:mixed,cross:true},
     {id:'rare-lines',planting:eightRadishes,rare:true},
     {id:'helper-harvest',planting:eightRadishes,helper:1,cleanup:false},
-    {id:'helper-cleanup',planting:eightRadishes,helper:1,cleanup:true},
+    {id:'helper-cleanup',planting:eightRadishes,helper:extended ? 2 : 1,cleanup:true},
     {id:'helper-replant',planting:eightRadishes,helper:5,cleanup:true,replant:true},
     {id:'orders',planting:mixed,orders:true},
     {id:'target-quote',planting:mixed,hold:true},
-    {id:'two-islands',planting:[...mixed,...mixed],valley:true}
+    {id:'two-islands',planting:[...mixed,...mixed],valley:true},
+    ...(extended ? [{id:'human-paced',planting:mixed,manualInterval:2},
+      {id:'nursery',planting:mixed,nursery:true}] : [])
   ]
 
   function measure(seed) {
     const state=initialState(seed)
     const report={seed,manualActions:0,helperHarvests:0,helperCleanups:0,helperReplants:0,helperCapacity:0,
       sales:0,orders:0,seedCost:0,breedingCost:0,capital:0,fruit:0,harvests:0,cropFailures:0,seedsObtained:0,deaths:0,
-      specimens:0,firstHybrid:null,firstTier:{},firstProduction:null,allSpecies:null,allBeds:null,bridge:null}
+      specimens:0,firstHybrid:null,firstTier:{},firstProduction:null,allSpecies:null,allBeds:null,bridge:null,
+      manual:{},automatic:{},idleSeconds:0,hybrids:{},tierUnlocked:{}}
     let sum=0,samples=0,floor=0
     function observe(events) {
       for (const event of events) {
@@ -64,6 +70,11 @@ try {
         if (event.startsWith('PlantCleaned:')) report.helperCleanups++
         if (event.startsWith('AutoPlanted:')) report.helperReplants++
         if (event.startsWith('RecipeRevealed:')) report.firstHybrid??=state.playTime
+        if (event.startsWith('RecipeRevealed:')) report.hybrids[event.split(':')[1]]??=state.playTime
+        if (event.startsWith('HelperHarvested:')) increment(report.automatic,'harvest')
+        if (event.startsWith('HelperCleaned:')) increment(report.automatic,'cleanup')
+        if (!discovery && event==='PlantCleaned') increment(report.automatic,'cleanup')
+        if (event.startsWith('AutoPlanted:')) increment(report.automatic,'plant')
         if (event.startsWith('OwnSeeds:')) report.seedsObtained+=Number(event.split(':')[1])
         if (event==='CrossCollected' || event==='CloneCollected' || event.startsWith('RecipeRevealed:')) report.seedsObtained++
         if (event==='CropFailed') report.cropFailures++
@@ -79,8 +90,18 @@ try {
       if (state.plots.slice(0,plotCount).every(p=>p.open)) report.allBeds??=state.playTime
       if (state.plots.length>plotCount) report.bridge??=state.playTime
       if (state.passive?.beds.length) report.firstProduction??={second:state.playTime,capital:report.capital}
+      const open=state.plots.slice(0,plotCount).filter(plot=>plot.open).length
+      for (const [tier,rule] of (evolution.tierRequirements??[]).entries())
+        if (state.planted.length>=rule.species && open>=rule.plots && state.greenhouseLevel>=rule.greenhouse)
+          report.tierUnlocked[tier+1]??=state.playTime
+    }
+    const increment=(counts,action)=>{ counts[action]=(counts[action]??0)+1 }
+    let budget=null,manualWork=false
+    function throttle(interval,second) {
+      budget=interval ? Number(second%interval===0) : null
     }
     function run(command,{required=true,preparation=false}={}) {
+      if (!preparation && budget===0) return null
       const before=state.coins
       const result=execute(state,command)
       if (!result.ok) {
@@ -95,6 +116,9 @@ try {
       else if (delta>0) report.sales+=delta
       if (!preparation) {
         report.manualActions++
+        manualWork=true
+        increment(report.manual,command.type)
+        if (budget!==null) budget--
         if (command.type==='plant') report.specimens++
         if (command.type!=='cleanup') observe(result.events)
         milestones()
@@ -108,7 +132,11 @@ try {
         const turns=1+Math.floor((seconds-state.harvestRemaining)/interval)
         report.helperCapacity+=turns*evolution.helperThroughput[state.helperLevel]
       }
-      observe(advance(state,seconds))
+      const events=advance(state,seconds)
+      if (!manualWork && !events.some(event=>/^(Harvested|PlantCleaned|AutoPlanted|ProductionChanged|Sold)/.test(event)))
+        report.idleSeconds+=seconds
+      manualWork=false
+      observe(events)
       report.sales+=state.coins-before
     }
     function quote(ids,kind='fruit') {
@@ -130,14 +158,15 @@ try {
     function result(extra={}) {
       const gross=report.sales+report.orders
       const operating=report.seedCost+report.breedingCost+(extra.replenishmentCost??0)
-      return {...report,...extra,activeSeconds:state.playTime,endingCoins:state.coins,gross,operating,
+      return {...report,...extra,automaticActions:Object.values(report.automatic).reduce((sum,count)=>sum+count,0),
+        activeSeconds:state.playTime,endingCoins:state.coins,gross,operating,
         netOperating:gross-operating,netAfterCapital:gross-operating-report.capital,
         netPerMinute:state.playTime ? (gross-operating)*60/state.playTime : null,
         quoteAverage:samples ? sum/samples : null,floorPercent:samples ? 100*floor/samples : null,
         helperUtilization:report.helperCapacity ?
           100*(report.helperHarvests+report.helperCleanups+report.helperReplants)/report.helperCapacity : null}
     }
-    return {state,report,run,tick,quote,clean,harvest,result}
+    return {state,report,run,tick,quote,clean,harvest,result,throttle}
   }
 
   function openBeds(state,run,indices) {
@@ -153,7 +182,10 @@ try {
 
   function setup(m,scenario,duration) {
     const {state,run}=m
-    if (scenario.fresh) return [12,13]
+    if (scenario.fresh) {
+      startRadishes(state,run)
+      return [12,13]
+    }
     const prepare=(command)=>run(command,{preparation:true})
     state.coins=50_000
     state.sold=true
@@ -183,7 +215,7 @@ try {
       prepare({type:'restoreBridge'})
       openBeds(state,prepare,[18,19,20,21,22,23])
     } else {
-      for (const plot of [12,13]) prepare({type:'compost',plot,expectedId:state.plots[plot].plant.id})
+      for (const plot of [12,13]) if (state.plots[plot].plant) prepare({type:'compost',plot,expectedId:state.plots[plot].plant.id})
     }
     if (scenario.rare) state.variants.push({species:'radish',...rare,count:Math.ceil(duration/6)*indices.length+indices.length})
     if (scenario.helper) {
@@ -204,18 +236,25 @@ try {
         prepare({type:'store',plot,expectedId:state.plots[plot].plant.id})
       }
     }
+    if (scenario.nursery && living) {
+      prepare({type:'upgradeGreenhouse',target:2})
+      state.seeds.radish=100
+      for (const slot of state.passive.beds.keys())
+        prepare({type:'assignProduction',slot,assignment:{species:'radish',profile:common,mode:'fruit'}})
+    }
     return indices
   }
 
   function benchmark(scenario,seed,duration) {
     const m=measure(seed)
-    const {state,run,tick,quote,harvest,clean}=m
+    const {state,run,tick,quote,harvest,clean,throttle}=m
     const indices=setup(m,scenario,duration)
     const stock=scenario.rare ? rare : common
     const boughtStock=stockCount(state,'radish',stock)
     const species=[...new Set(scenario.planting)]
     for (let second=1;second<=duration;second++) {
       tick()
+      throttle(scenario.manualInterval,second)
       for (const plot of indices) {
         if (!scenario.helper && state.plots[plot].plant?.readySince!==null && state.plots[plot].plant) harvest(plot,false)
         if (!scenario.helper || !scenario.cleanup) clean(plot)
@@ -251,7 +290,12 @@ try {
     const used= Math.max(0,boughtStock-stockCount(state,'radish',stock))
     const replenishmentCost=scenario.replant ? used*speciesInfo.radish.seedPrice : scenario.rare ? null : 0
     return m.result({setupCredit:scenario.fresh ? 0 : 50_000,presetSeedsUsed:used,replenishmentCost,
+      workshopFruit:scenario.nursery && living ? production.productionCount(state) : null,
       inventoryFruit:game.basketCount(state),requirements:scenario.rare ? 'Prepared rare seed supply. Breeding replacement cost is unpriced.' : null})
+  }
+
+  function startRadishes(state,run) {
+    for (const plot of [12,13]) if (!state.plots[plot].plant) run({type:'plant',plot,species:'radish',stock:common})
   }
 
   function route(seed) {
@@ -260,6 +304,7 @@ try {
     function stock(species) {
       return state.seeds[species] ? common : state.variants.find(pack=>pack.species===species)
     }
+    startRadishes(state,run)
     tick(6)
     harvest(12)
     const first=state.basket[0]
@@ -296,6 +341,8 @@ try {
     }
     function discover(plot,result) {
       for (let i=0;i<24 && !stock(result);i++) {
+        if (discovery && !state.plots[plot].plant.pollination)
+          run({type:'researchDirection',plot,expectedId:state.plots[plot].plant.id,recipeId:result+':main'},{required:false})
         const ripe=secondsLeft(state,plot)
         if (ripe) tick(ripe)
         const active=pollinationFor(state,plot)
@@ -341,30 +388,30 @@ try {
     return m.result({onboarding,setupCredit:0,valleyCrop:true,wipedOut:false,routeCapital:report.capital})
   }
 
-  function passive(seed,hours,mode,online=false) {
+  function passive(seed,hours,mode,online=false,level=hours===2 ? 2 : hours===4 ? 3 : 5,species='radish') {
     const m=measure(seed)
     const {state,run,tick}=m
     state.coins=50_000
     state.revealed=['solar_strawberry']
-    const target=hours===2 ? 2 : hours===4 ? 3 : 5
-    for (let level=2;level<=target;level++) run({type:'upgradeGreenhouse',target:level},{preparation:true})
+    if (!state.planted.includes(species)) state.planted.push(species)
+    for (let target=2;target<=level;target++) run({type:'upgradeGreenhouse',target},{preparation:true})
     const startingSeeds=1000
-    state.seeds.radish=startingSeeds
-    for (const slot of state.passive.beds.keys()) run({type:'assignProduction',slot,assignment:{species:'radish',profile:common,mode}})
+    state.seeds[species]=startingSeeds
+    for (const slot of state.passive.beds.keys()) run({type:'assignProduction',slot,assignment:{species,profile:common,mode}})
     const start=1_000_000
     state.passive.checkpoint=start
     const before=state.coins
     const duration=hours*3600
     const returnReport=online ? (tick(duration),null) : offline.catchUp(state,start+duration*1000)
     const count=production.productionCount(state)
-    const seedChange=state.seeds.radish-startingSeeds
+    const seedChange=state.seeds[species]-startingSeeds
     const seedsInStorage=production.seedProductionCount(state)
     const budget=state.coins-before
     const quoteValue=state.passive.basket.reduce((sum,batch)=>sum+batch.valueUnits*batch.count/10_000,0)
     const consumed=returnReport?.spent??Math.max(0,-seedChange)
-    const replenishmentCost=consumed*speciesInfo.radish.seedPrice
-    const netEquivalent=quoteValue+budget+seedsInStorage*speciesInfo.radish.seedPrice-replenishmentCost
-    return m.result({setupCredit:50_000,hours,mode,online,returnReport,fruitInStorage:count,seedsInStorage,seedChange,consumed,
+    const replenishmentCost=consumed*speciesInfo[species].seedPrice
+    const netEquivalent=quoteValue+budget+seedsInStorage*speciesInfo[species].seedPrice-replenishmentCost
+    return m.result({setupCredit:50_000,hours,mode,level,species,online,returnReport,fruitInStorage:count,seedsInStorage,seedChange,consumed,
       replenishmentCost,wholesale:budget,netEquivalent,greenhousePaybackSessions:netEquivalent>0 ? m.report.capital/netEquivalent : null,
       stops:state.passive.beds.map((_,slot)=>production.productionStatus(state,slot).reason)})
   }
@@ -407,6 +454,7 @@ try {
   function recover(seed) {
     const m=measure(seed)
     const {state,run,tick,harvest,clean}=m
+    startRadishes(state,run)
     tick(6)
     for (const plot of [12,13]) {harvest(plot);clean(plot)}
     run({type:'sell'})
@@ -453,9 +501,13 @@ try {
     runs:seeds.map(seed=>benchmark(scenario,seed,duration))})))
   const passiveRuns=living ? [[2,'fruit'],[4,'fruit'],[8,'fruit'],[4,'seed'],[8,'wholesale'],[2,'fruit',true]].map(([hours,mode,online])=>
     ({hours,mode,online:!!online,runs:seeds.map(seed=>passive(seed,hours,mode,online))})) : []
+  if (extended && living) for (const hours of [0.5,2,4,8,24]) {
+    for (const [level,species,mode] of [[2,'radish','fruit'],[3,'strawberry','seed'],[4,'strawberry','wholesale'],[5,'radish','fruit']])
+      passiveRuns.push({hours,level,species,mode,runs:seeds.map(seed=>passive(seed,hours,mode,false,level,species))})
+  }
   const tierLines=['strawberry','moonberry','crystal_flower','star_orchid'].map(species=>({
     species,runs:seeds.map(seed=>tierLine(seed,species,Math.min(durations.at(-1),3600))) }))
-  console.log(JSON.stringify({version:living?'0.8.0':'0.7.0',seeds,durations,results,
+  console.log(JSON.stringify({version:discovery?'0.9.0':living?'0.8.0':'0.7.0',seeds,durations,results,
     playthrough:seeds.map(route),passive:passiveRuns,tierLines,recovery:seeds.map(recover),genetics:seeds.map(genomes)},null,2))
 } finally {
   await loader.close()

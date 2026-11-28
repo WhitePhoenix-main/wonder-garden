@@ -6,10 +6,10 @@ import { initialState } from '../src/game'
 import { rarities, type Profile, type Rarity } from '../src/game/model'
 
 const documented = [
-  [65,25,10,0,0], [55,30,15,0,0], [45,35,20,0,0], [35,35,25,5,0], [30,35,25,10,0],
-  [45,35,20,0,0], [35,40,25,0,0], [25,35,35,5,0], [20,30,40,10,0],
-  [20,35,35,10,0], [15,30,35,18,2], [10,25,40,20,5],
-  [10,20,35,30,5], [5,15,35,35,10], [5,10,30,40,15]
+  [70,30,0,0,0], [55,45,0,0,0], [40,47,13,0,0], [34,37,24,5,0], [30,33,25,10,2],
+  [15,65,20,0,0], [10,53,37,0,0], [8,38,40,14,0], [6,29,39,22,4],
+  [0,20,68,12,0], [0,10,48,40,2], [0,8,38,43,11],
+  [0,0,25,70,5], [0,0,14,41,45], [0,0,0,30,70]
 ]
 const pairs = rarities.flatMap((a,i)=>rarities.slice(i).map(b=>[a,b] as const))
 const make = (rarity:Rarity):Profile=>({rarity,plus:(['early','fruitful','quality'] as const)
@@ -39,13 +39,16 @@ it.each(speciesIds)('reaches every rarity from ordinary parents and generates va
   const allowedAura=auras.some(a=>a.source===species)
   const sample=(a:Profile,b:Profile,n:number)=>Array.from({length:n},()=>inherit(a,b,()=>nextRandom(seed),species))
   const base=sample(common,common,200)
-  const rare=base.find(p=>p.rarity==='rare')!
+  const uncommon=base.find(p=>p.rarity==='uncommon')!
+  expect(uncommon).toBeDefined()
+  const intermediate=sample(uncommon,uncommon,200)
+  const rare=intermediate.find(p=>p.rarity==='rare')!
   expect(rare).toBeDefined()
   const advanced=sample(rare,rare,200)
   const epic=advanced.find(p=>p.rarity==='epic')!
   expect(epic).toBeDefined()
   const final=sample(rare,epic,600)
-  const all=[...base,...advanced,...final]
+  const all=[...base,...intermediate,...advanced,...final]
   expect(new Set(all.map(p=>p.rarity))).toEqual(new Set(rarities))
   expect(all.some(p=>p.rarity==='legendary' && p.minus===null)).toBe(true)
   for (const posterior of all) {

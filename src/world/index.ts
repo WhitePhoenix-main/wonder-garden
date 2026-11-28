@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { isSpecies, speciesInfo } from '../game/config'
 import type { IslandId } from '../game/model'
 import type { World, WorldView } from '../runtime/presentation'
-import { halfHeight, halfWidth, islandFromView, mapFor, type Point } from './geometry'
+import { halfHeight, halfWidth, islandForPlot, islandFromView, iso, mapFor, plotPosition, type Point } from './geometry'
 import { IslandScene } from './IslandScene'
 import { bindInput } from './input'
 
@@ -55,6 +55,23 @@ export function createWorld(host: HTMLElement, targets:Targets): World {
     focus.y += (from.y - halfY) / old - (to.y - halfY) / next
     viewCamera.magnification = target
     updateCamera()
+  }
+
+  function projectBounds(point: Point, width: number, top: number, bottom: number): DOMRect | null {
+    if (!current) return null
+    const camera = current.cameras.main
+    const {focus} = cameras[islandId]
+    const canvas = game.canvas.getBoundingClientRect()
+    const scaleX = camera.zoom * canvas.width / camera.width
+    const scaleY = camera.zoom * canvas.height / camera.height
+    const centerX = canvas.left + canvas.width / 2 + (point.x - focus.x) * scaleX
+    const centerY = canvas.top + canvas.height / 2 + (point.y - focus.y) * scaleY
+    const left = Math.max(canvas.left, centerX - width * scaleX / 2)
+    const right = Math.min(canvas.right, centerX + width * scaleX / 2)
+    const upper = Math.max(canvas.top, centerY - top * scaleY)
+    const lower = Math.min(canvas.bottom, centerY + bottom * scaleY)
+    if (right - left < 12 || lower - upper < 12) return null
+    return new DOMRect(left, upper, right - left, lower - upper)
   }
 
   class WorldScene extends IslandScene {
@@ -125,7 +142,9 @@ export function createWorld(host: HTMLElement, targets:Targets): World {
         if (type === 'Harvested' && isSpecies(species)) {
           const info = speciesInfo[species]
           const name = view?.state.lang === 'en' ? info.nameEn : info.nameRu
-          current?.collectEffect(Number(plot), Number(count)===0 ? (view?.state.lang==='en' ? 'Crop failed' : 'Неурожай') : `+${count} ${name}`)
+          current?.collectEffect(Number(plot), Number(count)===0
+            ? (view?.state.lang==='en' ? 'Crop failed · −1 harvest' : 'Неурожай · −1 сбор')
+            : `+${count} ${name}`)
         }
       }
     },
@@ -137,6 +156,28 @@ export function createWorld(host: HTMLElement, targets:Targets): World {
         updateCamera()
       }
       current?.paint(next)
+    },
+    plotBounds(index) {
+      const plot = view?.state.plots[index]
+      if (!plot || islandForPlot(index) !== islandId) return null
+      return projectBounds(plotPosition(index), 110, plot.plant ? 79 : 32, 34)
+    },
+    structureBounds(id) {
+      const map = mapFor(islandId)
+      const key = id === 'market' ? 'stall' : id === 'nursery' ? 'greenhouse' : id
+      const structure = map.structures.find(item => item.id === key)
+      if (!structure) return null
+      const center = iso(structure.x + (structure.width - 1) / 2, structure.y + (structure.height - 1) / 2)
+      return projectBounds(center, 160, 118, 22)
+    },
+    focusPlot(index) {
+      if (!view?.state.plots[index] || islandForPlot(index) !== islandId) return
+      const point = plotPosition(index)
+      const bounds = projectBounds(point, 110, 79, 34)
+      if (bounds && bounds.top > 95 && bounds.bottom < innerHeight - 240 &&
+          bounds.left > 12 && bounds.right < innerWidth - 12) return
+      cameras[islandId].focus = {x:point.x,y:point.y - 30}
+      updateCamera()
     },
     center() {
       cameras[islandId].focus = frameFor(islandId).center

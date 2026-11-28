@@ -83,15 +83,15 @@ export function evolutionPanel(state:GameState, parents:number[], section:'green
         <p>${rarities.map((rarity,i)=>field[state.lang][rarity]+' '+Number((odds[i]*100/total).toFixed(1))+'%').join(' · ')}</p>
         <p>${ru?'Возможные положительные признаки':'Possible positive traits'} · ${availableTraits(first.species).map(t=>field[state.lang][t]).join(' · ')}</p>
         <p>${ru?'Возможные недостатки':'Possible flaws'} · ${negatives.filter(t=>t!=='fragile' || speciesInfo[first.species].lifecycle==='multi').map(t=>field[state.lang][t]).join(' · ')}</p>`
-      if (experiment.key) {
-        const remaining=evolution.rarityGuarantee-experiment.failures
+      if (experiment.key && experiment.guarantee) {
+        const remaining=experiment.guarantee-experiment.failures
         html+=`<p>${pending
           ? (ru?'Показаны базовые шансы. Точный прогноз появится после завершения текущих опытов этого вида.':'Base odds shown. Exact odds are available when pending experiments on this species finish.')
           : (ru?'Гарантия повышения редкости не позднее чем через':'Rarity increase guaranteed within')+' '+remaining+' '+(ru?'подход. оп.':'eligible trials')}</p>`
       } else html+=`<p>${ru?'Эта пара уже достигла верхней редкости.':'This pair has reached the highest rarity.'}</p>`
       for(const parent of selected) {
         const stats=plantStats(parent.species,parent)
-        html+=`<p>#${parent.id} · ${describe(state.lang,parent)} · ${stats.growthSec.toFixed(1)} ${w.seconds} · ♥ ${parent.lives}/${stats.maxLives}</p>`
+        html+=`<p>#${parent.id} · ${describe(state.lang,parent)} · ${stats.growthSec.toFixed(1)} ${w.seconds} · ${ru?'Осталось сборов':'Harvests remaining'} ${parent.lives}/${stats.maxLives}</p>`
       }
     }
     html+=button('cross-start',w.cross,'class="primary"',!experiment || slots<=0 || state.coins<experiment.cost)

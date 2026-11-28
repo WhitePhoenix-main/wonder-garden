@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { initialState, basketCapacity, basketCount, saleValue } from '../src/game'
+import { basketCapacity, basketCount, saleValue } from '../src/game'
 import { initialMarket } from '../src/game/market'
 import { decorationAt, harmony } from '../src/game/decor'
 import { journal } from '../src/game/journal'
 import { createPersistence } from '../src/persistence/storage'
 import { validState } from '../src/persistence/validation'
-import { cross, legacySix, commit, earn, memoryStorage, prepareFirstResearch, reject, wait } from './helpers'
+import { gardenWithStarterPlants, cross, legacySix, commit, earn, memoryStorage, prepareFirstResearch, reject, wait } from './helpers'
 
 function gardenWithHybrid() {
-  const state = initialState(33)
+  const state = gardenWithStarterPlants(33)
   earn(state,800)
   commit(state,{type:'plant',plot:8,species:'strawberry'})
   commit(state,{type:'plant',plot:9,species:'sunflower'})
@@ -21,7 +21,7 @@ function gardenWithHybrid() {
 describe('Garden building and progress', () => {
   it('DE-01/02: purchases, swaps, stores and recovers decorations without duplicate harmony or charges', () => {
     const buy = {type:'buyDecor',decor:'bench',slot:'northwest',replaceId:null} as const
-    reject(initialState(33),buy,'decorLocked')
+    reject(gardenWithStarterPlants(33),buy,'decorLocked')
     const state = gardenWithHybrid()
     const harmonyBefore=harmony(state)
     expect(harmonyBefore).toBe(85)
@@ -68,7 +68,7 @@ describe('Garden building and progress', () => {
   })
 
   it('PG-01: early goals remain recorded through reload, planting and storing without coin rewards', () => {
-    let state = initialState(33)
+    let state = gardenWithStarterPlants(33)
     wait(state,6)
     commit(state,{type:'harvest',plot:12})
     expect(state.coins).toBe(20)
@@ -98,7 +98,7 @@ describe('Garden building and progress', () => {
     commit(state,{type:'return',plot:12,id:hybrid.id})
     expect(state.coins).toBe(0)
 
-    const depleted = initialState(33)
+    const depleted = gardenWithStarterPlants(33)
     for (const p of depleted.plots) p.plant = null
     depleted.coins = 0
     expect(validState(depleted)).toBe(true)
@@ -110,7 +110,7 @@ describe('Garden building and progress', () => {
   })
 
   it('charges successive basket upgrades and keeps unsold fruit, sound and progress on migration', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     reject(state,{type:'upgradeBasket',target:1},'firstSale')
     earn(state,800)
     wait(state,6)

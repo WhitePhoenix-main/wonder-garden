@@ -1,6 +1,6 @@
-import { canonical, common, plantStats, rules, stockCount, validGenome } from './genetics'
-import type { Experiment, Hybrid, Plant, PollinationSnapshot, Profile, GameState, Recipe, Species } from './model'
-import { adjacent, auras, balance, basketLevels, bedLevels, evolution, island, isHybrid, isSpecies, plotCount, plotIndices, plotIsland, recipes, speciesInfo, valley } from './config'
+import { canonical, common, plantStats, stockCount, validGenome } from './genetics'
+import type { CompatibilityReaction, Experiment, Hybrid, Plant, PollinationSnapshot, Profile, GameState, Recipe, ResearchState, Result, Species } from './model'
+import { adjacent, auras, balance, basketLevels, bedLevels, breedingRecipe, breedingRecipes, breedingTier, evolution, island, isHybrid, isSpecies, plotCount, plotIndices, plotIsland, speciesInfo, valley } from './config'
 import { harvestSaleValue } from './pricing'
 import { harmonyGrowth } from './decor'
 import { hasOtherSource, isValuablePlant, protectedProfile } from './stock-policy'
@@ -79,29 +79,103 @@ export function tierProgress(state:GameState, result:Hybrid) {
 }
 
 type ResearchStage='studied'|'seed'|'fruit'|'active'|'hint'|'unknown'|'tier'|'layout'
+const recipesByMother=new Map<Species,typeof breedingRecipes>()
+for (const recipe of breedingRecipes) {
+  const group=recipesByMother.get(recipe.primary)??[]
+  group.push(recipe)
+  recipesByMother.set(recipe.primary,group)
+}
+for (const group of recipesByMother.values()) group.sort((a,b)=>a.id.localeCompare(b.id,'en'))
 
-export function researchStatus(state:GameState, result:Hybrid) {
-  const recipe = recipes.find(entry=>entry.result===result)!
+export function initialResearch():ResearchState {
+  return {combinations:{},recipes:{}}
+}
+
+export function combinationKey(mother:Species, donors:readonly Species[]):string {
+  return [mother,...[...donors].sort()].join('+')
+}
+
+function auraApplies(target:Species, source:Species, aura:(typeof auras)[number]):boolean {
+  return aura.source===source && (aura.targets==='all' ||
+    (aura.targets==='hybrids' && isHybrid(target)) ||
+    (Array.isArray(aura.targets) && aura.targets.includes(target)))
+}
+
+export function reactionHasSymbiosis(key:string):boolean {
+  const [mother,...donors]=key.split('+')
+  return isSpecies(mother) && donors.some(donor=>isSpecies(donor) && auras.some(aura=>aura.bonus>0 &&
+    (auraApplies(mother,donor,aura) || auraApplies(donor,mother,aura))))
+}
+
+export function compatibilityReaction(mother:Species, donors:Species[]):CompatibilityReaction {
+  const key=combinationKey(mother,donors)
+  const matches=recipesByMother.get(mother)?.some(recipe=>combinationKey(recipe.primary,recipe.neighbors)===key)
+  if (matches) return donors.length>1 ? 'strong' : 'resonance'
+  return reactionHasSymbiosis(key) ? 'symbiosis' : 'none'
+}
+
+export function observeCompatibility(state:GameState,index:number):void {
+  const mother=state.plots[index]?.plant
+  if (!mother?.lives) return
+  const neighbors=neighborSpecies(state,index)
+  for (const donor of neighbors) {
+    const key=combinationKey(mother.species,[donor])
+    state.research.combinations[key]??=compatibilityReaction(mother.species,[donor])
+  }
+  if (neighbors.size>1) for (const recipe of recipesByMother.get(mother.species)??[]) {
+    if (recipe.neighbors.length<2 || !recipe.neighbors.every(donor=>neighbors.has(donor))) continue
+    const key=combinationKey(mother.species,recipe.neighbors)
+    state.research.combinations[key]??='strong'
+  }
+}
+
+export function researchStatus(state:GameState,result:Hybrid,recipeId?:string) {
+  const recipe=breedingRecipes.find(entry=>entry.result===result && (recipeId ? entry.id===recipeId : !entry.alternate))!
   const parents = [recipe.primary,...recipe.neighbors]
   const progress = tierProgress(state,result)
-  const labelKnown = result==='solar_strawberry' || state.revealed.includes(result) ||
-    parents.every(id=>state.planted.includes(id))
-  const activePlots = state.plots.flatMap((_,index)=>pollinationFor(state,index)?.result===result ? [index] : [])
-  const fruitBatch = state.basket.find(batch=>batch.pollination?.result===result && batch.lots.some(lot=>lot.crossPending))
-  const stage:ResearchStage = state.planted.includes(result) ? 'studied' :
-    state.revealed.includes(result) ? 'seed' :
+  const learned=Boolean(state.research.recipes[recipe.id]?.successes)
+  const observed=!!state.research.combinations[combinationKey(recipe.primary,recipe.neighbors)]
+  const guided=result==='solar_strawberry' && !recipe.alternate
+  const labelKnown=learned || guided
+  const matches=(snapshot:PollinationSnapshot|null)=>snapshot && snapshotRecipeId(snapshot)===recipe.id
+  const activePlots = state.plots.flatMap((_,index)=>matches(pollinationFor(state,index)) ? [index] : [])
+  const fruitBatch = state.basket.find(batch=>matches(batch.pollination) && batch.lots.some(lot=>lot.crossPending))
+  const stage:ResearchStage = labelKnown && state.planted.includes(result) ? 'studied' :
+    labelKnown && state.revealed.includes(result) ? 'seed' :
     fruitBatch ? 'fruit' :
     activePlots.length ? 'active' :
     !labelKnown ? parents.some(id=>state.planted.includes(id)) ? 'hint' : 'unknown' :
     !progress.unlocked ? 'tier' : 'layout'
-  return {recipe,progress,labelKnown,stage,activePlots,batchId:fruitBatch?.id,
-    chance:chance(state,result),failures:state.failures[result],pity:rules.pity}
+  return {recipe,progress,labelKnown,observed,stage,activePlots,batchId:fruitBatch?.id,
+    chance:chance(state,result,recipe.id),failures:state.failures[result],pity:breedingTier(result).hardPity}
+}
+
+export function researchDirections(state:GameState,index:number) {
+  const plot=state.plots[index]
+  if (!plot?.plant?.lives) return []
+  const group=recipesByMother.get(plot.plant.species)
+  if (!group) return []
+  const neighbors=neighborSpecies(state,index)
+  return group.filter(recipe=>plot.level>=recipe.minBedLevel && recipe.neighbors.every(donor=>neighbors.has(donor)) &&
+    tierProgress(state,recipe.result).unlocked)
+}
+
+export function chooseResearchDirection(state:GameState,index:number,id:number,recipeId:string):Result {
+  const plant=state.plots[index]?.plant
+  if (!plant?.lives || plant.id!==id) return {ok:false,reason:'stalePlant'}
+  if (plant.pollination) return {ok:false,reason:'researchUnavailable'}
+  const available=researchDirections(state,index)
+  if (available.length<2 || !available.some(recipe=>recipe.id===recipeId)) return {ok:false,reason:'researchUnavailable'}
+  observeCompatibility(state,index)
+  plant.researchDirection=recipeId
+  plant.pollination=pollinationFor(state,index)
+  return {ok:true,events:['ResearchDirectionChanged']}
 }
 
 export function experiments(state:GameState,index:number):Experiment[] {
   const near=adjacent(index)
   const layout=[state.plots[index].level,...near.map(i=>state.plots[i].plant?.id??0)].join('.')
-  return recipes.filter(r=>isRecipeActive(state,index,r)).flatMap(r=>near.flatMap(i=>{
+  return researchDirections(state,index).flatMap(r=>near.flatMap(i=>{
     const donor=state.plots[i].plant
     return donor?.lives && r.neighbors.includes(donor.species)?[{result:r.result,donorId:donor.id,layout}]:[]
   }))
@@ -115,8 +189,8 @@ export function pollinationFor(state:GameState,index:number):PollinationSnapshot
   const plant = state.plots[index]?.plant
   if (!plant?.lives) return null
   if (plant.pollination) return plant.pollination
-  const active = recipes.filter(recipe => isRecipeActive(state, index, recipe))
-  const recipe = active.find(recipe => !state.revealed.includes(recipe.result)) ?? active[0]
+  const active=researchDirections(state,index)
+  const recipe=active.length===1 ? active[0] : active.find(item=>item.id===plant.researchDirection)
   if (!recipe) return null
   const neighbors = adjacent(index).flatMap(neighbor => {
     const donor = state.plots[neighbor]?.plant
@@ -124,10 +198,19 @@ export function pollinationFor(state:GameState,index:number):PollinationSnapshot
   })
   const [donor, ...supporting] = recipe.neighbors.map(species =>
     parentProfile(neighbors.find(neighbor => neighbor.species === species)!))
-  return {result: recipe.result, donor, supporting}
+  return {recipeId:recipe.id, result:recipe.result, donor, supporting}
 }
-export function chance(state:Pick<GameState,'revealed'|'failures'>,result:Recipe['result']) {
-  return result==='solar_strawberry' && !state.revealed.includes(result) || state.failures[result]>=rules.pity ? 1 : rules.success
+export function snapshotRecipeId(snapshot:PollinationSnapshot):string {
+  return snapshot.recipeId??`${snapshot.result}:main`
+}
+
+export function chance(state:Pick<GameState,'revealed'|'failures'>,result:Hybrid,recipeId=`${result}:main`) {
+  const recipe=breedingRecipe(recipeId)
+  if (!recipe || recipe.result!==result) return 0
+  const tier=breedingTier(result)
+  const attempt=state.failures[result]+1
+  if (result==='solar_strawberry' && !recipe.alternate && !state.revealed.includes(result) || attempt>=tier.hardPity) return 1
+  return Math.min(0.95,recipe.baseChance+Math.max(0,attempt-tier.softStart+1)*tier.increment)
 }
 export function auraBonus(state: GameState, index: number, kind: 'growth' | 'price' | 'propagation'): number {
   const plant = state.plots[index]?.plant
@@ -140,10 +223,7 @@ export function auraBonus(state: GameState, index: number, kind: 'growth' | 'pri
   let bonus = 0
   for (const aura of auras) {
     if (aura.kind !== kind) continue
-    const applies = aura.targets === 'all'
-      || (aura.targets === 'hybrids' && speciesInfo[species].generation > 0)
-      || (Array.isArray(aura.targets) && aura.targets.includes(species))
-    if (applies) for (const neighbor of neighbors) if (neighbor.species===aura.source) {
+    for (const neighbor of neighbors) if (auraApplies(species,neighbor.species,aura)) {
       bonus = Math.max(bonus, aura.bonus*plantStats(neighbor.species,neighbor).auraMultiplier)
     }
   }

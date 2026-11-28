@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { initialState, saleValue } from '../src/game'
+import { saleValue } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
 import { validState } from '../src/persistence/validation'
 import { common } from '../src/game/genetics'
 import { saveVersion } from '../src/game/model'
-import { cross, commit, earn, legacySix, memoryStorage, plantAt, prepareFirstResearch, wait } from './helpers'
+import { gardenWithStarterPlants, cross, commit, earn, legacySix, memoryStorage, plantAt, prepareFirstResearch, wait } from './helpers'
 
 const primary = 'wonder-garden.save.v1'
 const backup = primary + '.backup'
@@ -12,7 +12,7 @@ const backup = primary + '.backup'
 describe('Sprint 01 persistence', () => {
   it('SV-01: reloads the exact snapshot and active time with unsold fruit', () => {
     const storage = memoryStorage()
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     wait(state, 6)
     commit(state, { type: 'harvest', plot: 12 })
     commit(state, { type: 'language', lang: 'en' })
@@ -24,7 +24,7 @@ describe('Sprint 01 persistence', () => {
   it('SV-02: recovers last valid backup when primary is malformed or references unknown plants', () => {
     const storage = memoryStorage()
     const persistence = createPersistence(() => storage)
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     wait(state, 4)
     persistence.save(state)
     const expected = structuredClone(state)
@@ -43,7 +43,7 @@ describe('Sprint 01 persistence', () => {
   })
 
   it('migrates first-sprint snapshots and their backups without replaying discoveries', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     earn(state,400)
     commit(state,{type:'plant',species:'strawberry',plot:8})
     commit(state,{type:'plant',species:'sunflower',plot:9})
@@ -80,7 +80,7 @@ describe('Sprint 01 persistence', () => {
 
   it('SV-02: preserves unknown future versions and irrecoverable snapshots until confirmed reset', () => {
     const storage = memoryStorage()
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     const future = JSON.stringify({ ...state, schemaVersion: state.schemaVersion + 1 })
     const irrecoverable = JSON.stringify({ ...state, coins: -1 })
     for (const [raw, warning] of [[future, 'future'], [irrecoverable, 'damaged']]) {
@@ -102,7 +102,7 @@ describe('Sprint 01 persistence', () => {
   })
 
   it('SV-02: rejects invalid ownership, ready state, topology and seed ledger', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     const duplicate = structuredClone(state)
     duplicate.nursery.push(plantAt(duplicate, 12))
     expect(validState(duplicate)).toBe(false)
@@ -119,6 +119,7 @@ describe('Sprint 01 persistence', () => {
     const unavailable = createPersistence(() => { throw new Error('Storage access denied') })
     const state = unavailable.load()
     expect(unavailable.warning).toBe('unavailable')
+    commit(state, { type:'plant',plot:12,species:'radish',stock:{rarity:'common',plus:[],minus:null} })
     wait(state, 6)
     commit(state, { type: 'harvest', plot: 12 })
     const revenue=saleValue(state)

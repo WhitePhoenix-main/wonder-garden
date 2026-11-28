@@ -1,13 +1,13 @@
 import { expect,it } from 'vitest'
-import { advance, initialState } from '../src/game'
+import { advance } from '../src/game'
 import { common } from '../src/game/genetics'
 import type { HarvestBatch } from '../src/game/model'
 import { orderQuote } from '../src/game/orders'
 import { defaultPolicy } from '../src/game/stock-policy'
-import { commit, reject } from './helpers'
+import { gardenWithStarterPlants, commit, reject } from './helpers'
 
 it('keeps seed production running when excess seed and fruit sales are enabled',()=>{
-  const state=initialState(42)
+  const state=gardenWithStarterPlants(42)
   state.sold=true
   state.coins=30000
   state.plots.forEach(plot=>{plot.open=true})
@@ -32,7 +32,7 @@ it('keeps seed production running when excess seed and fruit sales are enabled',
 })
 
 it('leaves a viable source when an order would consume the last hybrid batches',()=>{
-  const state=initialState(42)
+  const state=gardenWithStarterPlants(42)
   state.planted.push('solar_strawberry')
   const batch=():HarvestBatch=>({
     id:state.nextId++,species:'solar_strawberry',count:2,valueUnits:140000,profile:common,pollination:null,
@@ -49,7 +49,7 @@ it('leaves a viable source when an order would consume the last hybrid batches',
 })
 
 it('does not count an exhausted seed quota as a source of another hybrid seed',()=>{
-  const state=initialState(42)
+  const state=gardenWithStarterPlants(42)
   state.seeds.solar_strawberry=1
   state.basket.push({
     id:state.nextId++,species:'solar_strawberry',count:1,valueUnits:140000,profile:common,pollination:null,

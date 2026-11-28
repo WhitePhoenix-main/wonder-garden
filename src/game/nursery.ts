@@ -120,6 +120,7 @@ export interface ProductionReport {
   seeds:number
   spent:number
   coins:number
+  workedSeconds:number
 }
 
 const cycle=(plant:Plant)=>nurseryProduction.cycleMultiplier *
@@ -127,7 +128,7 @@ const cycle=(plant:Plant)=>nurseryProduction.cycleMultiplier *
 
 /** Visit harvest deadlines in slot order so competing beds consume stock reproducibly. */
 export function advanceProduction(state:GameState,seconds:number):ProductionReport {
-  const report={fruit:0,seeds:0,spent:0,coins:0}
+  const report={fruit:0,seeds:0,spent:0,coins:0,workedSeconds:0}
   const stream=state.passive
   const addSeed=(plant:Plant,profile:Profile,count:number)=>{
     if (!count) return
@@ -192,6 +193,7 @@ export function advanceProduction(state:GameState,seconds:number):ProductionRepo
     }
     if (seconds<=0 || deadline===Infinity) break
     const step=Math.min(deadline,seconds)
+    if (active.length) report.workedSeconds+=step
     for (const plant of active) plant.progress=Math.min(1,plant.progress+step/cycle(plant))
     seconds-=step
   }

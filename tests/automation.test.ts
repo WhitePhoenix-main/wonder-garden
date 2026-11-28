@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { advance, basketCapacity, basketCount, initialState, oldestReadyPlot, saleValue, speciesInfo } from '../src/game'
+import { advance, basketCapacity, basketCount, oldestReadyPlot, saleValue, speciesInfo } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
 import { validState } from '../src/persistence/validation'
-import { addLegacyFruit, cleanBed, commit, earn, legacySix, memoryStorage, plantAt, prepareFirstResearch, reject } from './helpers'
+import { gardenWithStarterPlants, addLegacyFruit, cleanBed, commit, earn, legacySix, memoryStorage, plantAt, prepareFirstResearch, reject } from './helpers'
 
 describe('Leafy and the market stall', () => {
   it('AT-01: charges once per level and starts a fresh 5/2/1-second interval', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     reject(state,{type:'upgradeHelper',target:1},'firstSale')
     reject(state,{type:'buyAutoSell'},'hireFirst')
     earn(state,25)
@@ -29,7 +29,7 @@ describe('Leafy and the market stall', () => {
   })
 
   it('AT-02/03: ties break by index and idle or full turns are discarded', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     earn(state,150)
     commit(state,{type:'upgradeHelper',target:1})
     const helperEvents=(seconds:number)=>advance(state,seconds).filter(event=>event!=='MarketUpdated')
@@ -45,12 +45,14 @@ describe('Leafy and the market stall', () => {
     expect(helperEvents(4.9)).toEqual([])
     expect(advance(state,0.1)).toContain('HelperHarvested:12')
     expect(advance(state,5)).toContain('HelperHarvested:13')
-    expect(helperEvents(10)).toEqual(['PlantCleaned','PlantCleaned:12','PlantCleaned','PlantCleaned:13'])
+    expect(helperEvents(10)).toEqual([])
+    expect(state.plots[12].plant?.lives).toBe(0)
+    expect(state.plots[13].plant?.lives).toBe(0)
     expect(helperEvents(5)).toEqual([])
   })
 
   it('HA-01/AT-05: manual and automatic harvest yield the same crop and cannot both collect it', () => {
-    const automatic = initialState(33)
+    const automatic = gardenWithStarterPlants(33)
     earn(automatic,750)
     commit(automatic,{type:'compost',plot:12,expectedId:plantAt(automatic,12).id})
     commit(automatic,{type:'compost',plot:13,expectedId:plantAt(automatic,13).id})
@@ -76,7 +78,7 @@ describe('Leafy and the market stall', () => {
   })
 
   it('AT-02: an older ready plant on the higher index wins', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     earn(state,160)
     advance(state,6)
     commit(state,{type:'harvest',plot:12})
@@ -90,7 +92,7 @@ describe('Leafy and the market stall', () => {
   })
 
   it('preserves a rare plant on its last life during automatic harvest', () => {
-    const state=initialState(33)
+    const state=gardenWithStarterPlants(33)
     earn(state,500)
     Object.assign(plantAt(state,12),{rarity:'rare',plus:['fruitful']})
     commit(state,{type:'upgradeHelper',target:1})
@@ -102,7 +104,7 @@ describe('Leafy and the market stall', () => {
   })
 
   it('AT-04: automatically sells on the deadline and resets it on manual sale', () => {
-    const state=initialState(33)
+    const state=gardenWithStarterPlants(33)
     earn(state,500)
     commit(state,{type:'upgradeHelper',target:1})
     addLegacyFruit(state,15)
@@ -128,7 +130,7 @@ describe('Leafy and the market stall', () => {
   })
 
   it('AT-04: filling the basket never sells during harvest, even at a shared helper and market deadline', () => {
-    const state=initialState(33)
+    const state=gardenWithStarterPlants(33)
     earn(state,500)
     advance(state,6)
     commit(state,{type:'upgradeHelper',target:1})
@@ -149,7 +151,7 @@ describe('Leafy and the market stall', () => {
   })
 
   it('SV-01: restores exact active deadlines and migrates schema 2 with automation unpurchased', () => {
-    const state=initialState(33)
+    const state=gardenWithStarterPlants(33)
     earn(state,500)
     const store=memoryStorage()
     store.setItem('wonder-garden.save.v1',JSON.stringify({...legacySix(state),schemaVersion:2}))

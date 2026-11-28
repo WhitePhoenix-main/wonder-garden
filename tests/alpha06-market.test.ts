@@ -1,6 +1,6 @@
 import { expect,it } from 'vitest'
 import alpha05 from './fixtures/alpha05.json'
-import { advance, execute, initialState } from '../src/game'
+import { advance, execute } from '../src/game'
 import { balance, market, speciesInfo } from '../src/game/config'
 import { common } from '../src/game/genetics'
 import { initialMarket, marketQuote, recordDelivery } from '../src/game/market'
@@ -8,10 +8,10 @@ import { baseIds, saveVersion } from '../src/game/model'
 import { harvestSaleValue, seedSaleValue } from '../src/game/pricing'
 import { quickSaleValue } from '../src/game/trade'
 import { parseSave } from '../src/persistence/migration'
-import { addLegacyFruit, cleanBed, commit, reject } from './helpers'
+import { gardenWithStarterPlants, addLegacyFruit, cleanBed, commit, reject } from './helpers'
 
 it('absorbs ordinary deliveries and settles a large delivery in the correct market only',()=>{
-  const state=initialState(17)
+  const state=gardenWithStarterPlants(17)
   state.coins=60
   addLegacyFruit(state,5,40000)
   commit(state,{type:'sell'})
@@ -34,7 +34,7 @@ it('absorbs ordinary deliveries and settles a large delivery in the correct mark
 })
 
 it('rotates demand on the active clock without changing breeding RNG or accruing time before the first sale',()=>{
-  const state=initialState(42)
+  const state=gardenWithStarterPlants(42)
   const period=market.tickSeconds*market.demandPeriodTicks
   advance(state,period*2)
   expect(state.market).toEqual(initialMarket())
@@ -51,7 +51,7 @@ it('rotates demand on the active clock without changing breeding RNG or accruing
 })
 
 it('quotes the same proceeds and deliveries for manual, partial, bulk and automated sales at one price',()=>{
-  const state=initialState(17)
+  const state=gardenWithStarterPlants(17)
   state.sold=true
   state.market.goods.radish.fruit.saturated=70
   addLegacyFruit(state,7,24679)
@@ -74,7 +74,7 @@ it('quotes the same proceeds and deliveries for manual, partial, bulk and automa
 })
 
 it('uses the seed quote and rolls back deliveries when a bulk order fails',()=>{
-  const state=initialState(17)
+  const state=gardenWithStarterPlants(17)
   state.sold=true
   state.market.goods.radish.seed.saturated=market.capacity.radish.seed
   state.seeds.radish=20
@@ -90,7 +90,7 @@ it('uses the seed quote and rolls back deliveries when a bulk order fails',()=>{
 })
 
 it('settles the market before auto-sale at a shared deadline',()=>{
-  const state=initialState(21)
+  const state=gardenWithStarterPlants(21)
   state.coins=470;state.sold=true
   commit(state,{type:'upgradeHelper',target:1})
   commit(state,{type:'buyAutoSell'})
@@ -107,9 +107,12 @@ it('settles the market before auto-sale at a shared deadline',()=>{
 it('migrates the Alpha 05 fixture intact with neutral prices, then saves an active market exactly',()=>{
   const state=parseSave(JSON.stringify(alpha05))
   if (!state || state==='future') throw Error('Alpha 05 fixture did not load')
-  const {market:initial,trading,clones,rarityProgress,passive,...garden}=state
-  expect({trading,clones,rarityProgress}).toEqual({trading:initialState(1).trading,clones:[],rarityProgress:{}})
-  expect(garden).toEqual({...alpha05,schemaVersion:saveVersion,balanceVersion:balance.version,tutorialSeen:[],
+  const {market:initial,trading,clones,rarityProgress,passive,research,...garden}=state
+  expect(Object.keys(research.recipes)).toEqual(alpha05.revealed.map(id=>id+':main'))
+  expect(garden.failures.solar_strawberry).toBe(alpha05.failures.solar_strawberry
+    ? alpha05.failures.solar_strawberry+1 : 0)
+  expect({trading,clones,rarityProgress}).toEqual({trading:gardenWithStarterPlants(1).trading,clones:[],rarityProgress:{}})
+  expect({...garden,failures:alpha05.failures}).toEqual({...alpha05,schemaVersion:saveVersion,balanceVersion:balance.version,tutorialSeen:[],
     automation:{...alpha05.automation,cleanup:true}})
   expect(passive.basket).toEqual([])
   expect(initial).toEqual(initialMarket())
@@ -125,7 +128,7 @@ it('migrates the Alpha 05 fixture intact with neutral prices, then saves an acti
 })
 
 it('feeds successful order deliveries into the market without a second payout',()=>{
-  const state=initialState(17)
+  const state=gardenWithStarterPlants(17)
   state.sold=true
   addLegacyFruit(state,20,40000)
   const order={id:state.nextId++,buyer:'merchant' as const,requirements:[{kind:'fruit' as const,count:12,species:'radish' as const}],reward:63}
@@ -136,7 +139,7 @@ it('feeds successful order deliveries into the market without a second payout',(
 })
 
 it('preserves a profitable starter cycle at the floor and prevents common seed shop arbitrage',()=>{
-  const state=initialState(42)
+  const state=gardenWithStarterPlants(42)
   state.sold=true
   state.coins=speciesInfo.radish.seedPrice!
   state.market.goods.radish.fruit.saturated=market.capacity.radish.fruit

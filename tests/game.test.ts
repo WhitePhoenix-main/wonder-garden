@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { basketCapacity, canReplace, expansionCost, growthMultiplier, initialState, saleValue, speciesInfo } from '../src/game'
+import { basketCapacity, canReplace, expansionCost, growthMultiplier, saleValue, speciesInfo } from '../src/game'
 import { createPersistence } from '../src/persistence/storage'
 import { common } from '../src/game/genetics'
-import { addLegacyFruit, cross, commit, earn, memoryStorage, plantAt, prepareFirstResearch, reject, wait } from './helpers'
+import { gardenWithStarterPlants, addLegacyFruit, cross, commit, earn, memoryStorage, plantAt, prepareFirstResearch, reject, wait } from './helpers'
 
 describe('Sprint 01 gameplay', () => {
   it('ST-01, GR-01, GR-03, HA-05: starts with two radishes, each ready for one crop', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     expect(state.coins).toBe(20)
     expect(state.planted).toEqual(['radish'])
     expect(basketCapacity(state)).toBe(90)
@@ -36,7 +36,7 @@ describe('Sprint 01 gameplay', () => {
   })
 
   it('HA-02: refuses a harvest at capacity without altering the ready plant or basket', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     addLegacyFruit(state,basketCapacity(state))
     wait(state,6)
     reject(state, { type: 'harvest', plot: 13 }, 'basketFull')
@@ -47,7 +47,7 @@ describe('Sprint 01 gameplay', () => {
   })
 
   it('EX-01, EX-02, MV-02: requires first sale, adjacency, funds and replacement permission', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     reject(state, { type: 'clear', plot: 10 }, 'firstSale')
     reject(state, { type: 'upgrade', plot: 8 }, 'firstSale')
     reject(state, { type: 'plant', plot: 8, species: 'sunflower' }, 'seedLocked')
@@ -64,7 +64,7 @@ describe('Sprint 01 gameplay', () => {
   })
 
   it('GR-02, AU-01, BR-02, BR-03: only orthogonal auras apply and repeats do not stack', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     earn(state, 300)
     commit(state, { type: 'plant', plot: 8, species: 'strawberry' })
     commit(state, { type: 'move', from: 13, to: 9 })
@@ -91,7 +91,7 @@ describe('Sprint 01 gameplay', () => {
   })
 
   it('BR-01, BR-08, PR-01, UP-01, MV-01, NU-01: plays from a new garden through a planted hybrid, II, swap and nursery', () => {
-    const state = initialState(33)
+    const state = gardenWithStarterPlants(33)
     earn(state, 60)
     commit(state, { type: 'plant', plot: 8, species: 'strawberry' })
     earn(state, 90)
@@ -143,7 +143,7 @@ describe('Sprint 01 gameplay', () => {
   })
 
   it('SL-01, EX-03, BR-05: restores progression after filling the island with radishes and reloading', () => {
-    let state = initialState(33)
+    let state = gardenWithStarterPlants(33)
     const radishPrice=speciesInfo.radish.seedPrice!
     const strawberryPrice=speciesInfo.strawberry.seedPrice!
     for (const plot of [8, 9]) commit(state, { type: 'plant', plot, species: 'radish' })
@@ -158,7 +158,7 @@ describe('Sprint 01 gameplay', () => {
       expect(state.coins).toBe(coins - cost - radishPrice)
       totalClearCost += cost
     }
-    expect(totalClearCost).toBe(6800)
+    expect(totalClearCost).toBe(6090)
     expect(expansionCost(state)).toBeNull()
     expect(state.plots.every(p => p.open && p.plant?.species === 'radish')).toBe(true)
     expect(state.planted).toEqual(['radish'])
