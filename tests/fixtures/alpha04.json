@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 8,
+  "tutorialBranch": null,
+  "pendingHybrid": "solar_strawberry",
+  "basketLevel": 0,
+  "firstHarvest": true,
+  "firstExtraction": true,
+  "firstSeedPlanting": true,
+  "firstPropagation": false,
+  "musicMuted": false,
+  "tutorialSkipped": false,
+  "occupiedHintShown": false,
+  "muted": false,
+  "decorations": [
+    {
+      "id": 217,
+      "type": "bench",
+      "slot": "northwest"
+    }
+  ],
+  "helperLevel": 1,
+  "autoSell": true,
+  "harvestRemaining": 3,
+  "sellRemaining": 8,
+  "balanceVersion": 2,
+  "playTime": 482,
+  "nextId": 220,
+  "coins": 600,
+  "plots": [
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 213,
+        "species": "strawberry",
+        "rarity": "common",
+        "plus": null,
+        "minus": null,
+        "lives": 4,
+        "maxLives": 5,
+        "fruitRoll": 0.1838741209357977,
+        "progress": 1,
+        "mature": true,
+        "readySince": 476.42857142857144,
+        "pollination": {
+          "result": "solar_strawberry",
+          "donor": {
+            "species": "sunflower",
+            "rarity": "common",
+            "plus": null,
+            "minus": null
+          },
+          "supporting": []
+        }
+      }
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": true,
+      "level": 1,
+      "plant": {
+        "id": 216,
+        "species": "solar_strawberry",
+        "rarity": "common",
+        "plus": null,
+        "minus": null,
+        "lives": 6,
+        "maxLives": 6,
+        "fruitRoll": 0.3286599391140044,
+        "progress": 1,
+        "mature": true,
+        "readySince": 481,
+        "pollination": null
+      }
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    },
+    {
+      "open": false,
+      "level": 1,
+      "plant": null
+    }
+  ],
+  "nursery": [
+    {
+      "id": 212,
+      "species": "radish",
+      "rarity": "common",
+      "plus": null,
+      "minus": null,
+      "lives": 1,
+      "maxLives": 1,
+      "fruitRoll": 0.9607711071148515,
+      "progress": 1,
+      "mature": true,
+      "readySince": 424.2857142857143,
+      "pollination": null
+    }
+  ],
+  "basket": [],
+  "sold": true,
+  "planted": [
+    "radish",
+    "strawberry",
+    "sunflower",
+    "solar_strawberry"
+  ],
+  "revealed": [
+    "solar_strawberry"
+  ],
+  "seeds": {
+    "radish": 0,
+    "strawberry": 1,
+    "sunflower": 0,
+    "blueberry": 0,
+    "moonflower": 0,
+    "clover": 0,
+    "solar_strawberry": 0,
+    "moonberry": 0,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "variants": [],
+  "failures": {
+    "solar_strawberry": 0,
+    "moonberry": 0,
+    "honey_clover": 0,
+    "golden_flower": 0,
+    "crystal_flower": 0,
+    "star_orchid": 0
+  },
+  "rng": 3455419532,
+  "lang": "ru"
+}

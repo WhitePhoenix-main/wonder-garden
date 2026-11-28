@@ -1,6 +1,5 @@
-import type { Command, Decoration, GameState, Result } from './model'
-import { balance, decorInfo, isDecorSlot, isDecorType, speciesInfo } from './config'
-import { isRecipeRevealed } from './queries'
+import type { Command, Decoration, GameState, IslandId, Result } from './model'
+import { balance, decorInfo, decorIsland, evolution, isDecorSlot, isDecorType, plotCount, plotIndices, speciesInfo } from './config'
 
 export function decorationAt(state:GameState, slot:string): Decoration | undefined {
   return state.decorations.find(item => item.slot === slot)
@@ -10,14 +9,21 @@ export function decorUnlocked(state:GameState): boolean {
   return state.planted.some(id => speciesInfo[id].generation > 0)
 }
 
-export function harmony(state:GameState): number {
-  const plants = new Set(state.plots.flatMap(p => p.plant ? [p.plant.species] : []))
-  const decorations = new Set(state.decorations.flatMap(d => d.slot === null ? [] : [d.type]))
-  const greenhouse = isRecipeRevealed(state)
-  let total = balance.buildingHarmony * (Number(greenhouse) + Number(state.autoSell))
+export function harmony(state:GameState,id?:IslandId): number {
+  if (!id) return harmony(state,'green')+harmony(state,'valley')
+  if (id==='valley' && state.plots.length<=plotCount) return 0
+  const plants = new Set(plotIndices(id).flatMap(i => state.plots[i]?.plant?.species ?? []))
+  const decorations = new Set(state.decorations.flatMap(d => d.slot !== null && decorIsland(d.slot)===id ? [d.type] : []))
+  let total = id==='green' ? balance.buildingHarmony * (Number(state.revealed.length>0) + Number(state.autoSell)) : evolution.independenceHarmony
   for (const species of plants) total += speciesInfo[species].harmony
   for (const type of decorations) total += decorInfo[type].harmony
   return total
+}
+
+export function harmonyGrowth(state:GameState,id:IslandId):number {
+  if (state.greenhouseLevel<2) return 1
+  const local=harmony(state,id)
+  return 1+evolution.harmonyGrowth[balance.harmonyMilestones.filter(goal=>local>=goal).length]
 }
 
 type DecorCommand = Extract<Command, {type:'buyDecor'|'placeDecor'|'storeDecor'}>
@@ -29,7 +35,7 @@ export function decorate(state:GameState, command:DecorCommand): Result {
     if (!item) return {ok:false,reason:'decorChanged'}
     item.slot = null
   } else {
-    if (!isDecorSlot(command.slot)) return {ok:false,reason:'invalidSlot'}
+    if (!isDecorSlot(command.slot) || decorIsland(command.slot)==='valley' && state.plots.length<=plotCount) return {ok:false,reason:'invalidSlot'}
     const displaced = decorationAt(state,command.slot)
     if ((displaced?.id ?? null) !== command.replaceId) return {ok:false,reason:'decorChanged'}
     if (command.type === 'buyDecor') {

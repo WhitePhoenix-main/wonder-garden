@@ -1,15 +1,22 @@
 import { saveVersion, type GameState, type Plant, type Species } from './model'
 import { balance, island, plotCount, hybridCounts, isSpecies } from './config'
 
-import { common, maxLives, nextRandom } from './genetics'
+import { canonical, common, maxLives, nextRandom } from './genetics'
+import { recordPlanting } from './collection'
 import { speciesIds } from './config'
 import type { Profile } from './model'
 
 export function newPlant(id: number, species: Species, profile:Profile=common, fruitRoll=0): Plant {
   const lives=maxLives(species,profile)
-  return { id, species, rarity:profile.rarity, plus:profile.plus, minus:profile.minus, lives,maxLives:lives,fruitRoll, progress: 0, mature: false, readySince: null, pollination:null }
+  return { id, species, ...canonical(profile), lives,maxLives:lives,fruitRoll, progress: 0, mature: false, readySince: null, pollination:null }
 }
 
+export function initialEvolution(): Pick<GameState,'activeIsland'|'greenhouseLevel'|'stallLevel'|'crosses'|'orders'|
+  'orderRefreshAt'|'ordersCompleted'|'collection'|'achievements'|'rank'|'protectedPlants'|'protectedProfiles'|'favorites'|'reserves'|'automation'> {
+  return {activeIsland:'green',greenhouseLevel:1,stallLevel:1,crosses:[],orders:[],orderRefreshAt:0,ordersCompleted:0,
+    collection:[],achievements:[],rank:0,protectedPlants:[],protectedProfiles:[],favorites:[],reserves:{},
+    automation:{enabled:true,replant:false,extractPollinated:false,sellSeeds:false,preferred:null,sellFruit:true,saleRarity:null}}
+}
 export const inactiveAutomation = {
   helperLevel: 0, autoSell: false, harvestRemaining: 0, sellRemaining: 0
 } as const
@@ -24,6 +31,7 @@ export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameSt
   const state: GameState = {
     schemaVersion: saveVersion,
     ...initialAmenities,
+    ...initialEvolution(),
     decorations: [],
     ...inactiveAutomation,
     balanceVersion: balance.version,
@@ -46,7 +54,9 @@ export function initialState(seed=Math.floor(Math.random()*0x100000000)): GameSt
   }
   for (const {plot, species} of island.startPlants) {
     if (!isSpecies(species)) throw new Error(`Unknown starting species: ${species}`)
-    state.plots[plot].plant = newPlant(state.nextId++, species,common,nextRandom(state))
+    const plant=newPlant(state.nextId++, species,common,nextRandom(state))
+    state.plots[plot].plant = plant
+    recordPlanting(state,plant)
     if (!state.planted.includes(species)) state.planted.push(species)
   }
   return state

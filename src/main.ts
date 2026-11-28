@@ -33,7 +33,7 @@ function command(cmd: Command) {
   const result = execute(view.state, cmd)
   if (result.ok && result.events.length) {
     world.effects(result.events)
-    const cue = result.obtained?.some(seed=>seed.rarity==='rare') ? ['RareSeed',...result.events] : result.events
+    const cue = result.obtained?.some(seed=>['rare','epic','legendary'].includes(seed.rarity)) ? ['RareSeed',...result.events] : result.events
     audio.play(cue,view.state.muted)
     if (cmd.type === 'sound' || cmd.type === 'music' || cmd.type === 'language') {
       const {lang,muted,musicMuted}=view.state

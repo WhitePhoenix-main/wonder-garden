@@ -1,5 +1,6 @@
 import type Phaser from 'phaser'
 import { speciesIds } from '../../game/config'
+import { decorIds } from '../../game/model'
 import type { Point } from '../geometry'
 import type { Canvas } from './drawing'
 import { plant } from './plants'
@@ -25,11 +26,12 @@ export function buildArt(scene: Phaser.Scene) {
   texture('island_base', [-522,-38,1172,760], paintBase)
   for (let i = 0; i < 3; i++) {
     texture(`grass_${i+1}`, [-65,-33,130,66], ctx => paintGrass(ctx,i))
+    texture(`valley_grass_${i+1}`, [-65,-33,130,66], ctx => paintGrass(ctx,i,true))
     texture(`path_straight_${i+1}`, [-65,-33,130,66], ctx => paintPath(ctx,i))
   }
-  texture('bed_1',[-66,-40,132,82],ctx => paintBed(ctx,1))
-  texture('bed_2',[-66,-40,132,82],ctx => paintBed(ctx,2))
-  texture('bed_3',[-66,-40,132,82],ctx => paintBed(ctx,3))
+  for (const level of [1,2,3,4,5]) {
+    texture('bed_' + level,[-66,-40,132,82],ctx => paintBed(ctx,level))
+  }
   for (const key of ['rock','stump','weeds']) {
     texture(`obstacle_${key}`,[-51,-44,102,68],ctx => obstacle(ctx,key))
   }
@@ -44,11 +46,12 @@ export function buildArt(scene: Phaser.Scene) {
   texture('greenhouse_restored',[-126,-155,252,216],ctx => greenhouse(ctx,true))
   texture('stall_basic',[-120,-150,240,207],stall)
   texture('stall_auto',[-120,-150,240,207],ctx => stall(ctx,true))
-  for (const level of [1,2,3]) {
+  for (const level of [1,2,3,4,5]) {
     texture('helper_leaf_' + level,[-28,-57,56,68],ctx => leafHelper(ctx,level))
   }
   texture('bridge_broken',[-93,-51,150,116],bridge)
-  for (const type of ['bench','lantern','flower_arch','sakura'] as const) {
+  texture('bridge_repaired',[-145,-51,205,130],ctx => bridge(ctx,true))
+  for (const type of decorIds) {
     texture('decor_' + type,[-58,-122,116,151],ctx => decoration(ctx,type))
   }
   texture('pond',[-127,-53,254,109],pond)

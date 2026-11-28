@@ -1,5 +1,5 @@
 import { decorIds, type DecorType, type GameState } from '../../game/model'
-import { balance, decorInfo, island } from '../../game/config'
+import { balance, decorInfo, island, valley } from '../../game/config'
 import { decorationAt, harmony } from '../../game/decor'
 import { journal } from '../../game/journal'
 
@@ -28,9 +28,30 @@ const chapterNames = {
   en:['Awakening','First wonders','A living garden','Moonlight secrets','Garden star']
 }
 const ranks = {
-  ru:['Начинающий','Ботаник','Селекционер','Мастер','Хранитель острова'],
-  en:['Beginner','Botanist','Breeder','Master','Island Keeper']
+  ru:['Начинающий садовод','Ботаник','Селекционер','Опытный садовод','Мастер селекции','Хранитель сада','Великий ботаник','Легендарный селекционер'],
+  en:['Beginner gardener','Botanist','Breeder','Experienced gardener','Breeding master','Garden keeper','Grand botanist','Legendary breeder']
 }
+const achievements:Record<string,[string,string]>={
+  gardenComplete:['Первый остров завершён','First island complete'], firstCross:['Первый опыт','First experiment'],
+  foundRare:['Редкая находка','Rare discovery'], foundEpic:['Эпическая находка','Epic discovery'],
+  foundLegendary:['Легендарная находка','Legendary discovery'], multiTrait:['Несколько признаков','Multiple traits'],
+  cleanRare:['Чистая редкая линия','Clean rare line'], firstOrder:['Первый заказ','First order'],
+  tenOrders:['Десять заказов','Ten orders'], advancedStall:['Развитая лавка','Advanced stall'],
+  advancedGreenhouse:['Развитая теплица','Advanced greenhouse'], seedReserve:['Семенной резерв','Seed reserve'],
+  automatedGarden:['Автоматизированный сад','Automated garden'], harmony100:['Гармония 100','Harmony 100'],
+  harmony200:['Гармония 200','Harmony 200'], bridgeRestored:['Мост восстановлен','Bridge restored'],
+  valleyComplete:['Долина освоена','Valley complete'], valleyDecor:['Декор долины','Valley decorations'],
+  allSpecies:['Все виды','All species'], fullCollection:['Полная коллекция','Complete collection'],
+  all_common:['Все обычные','All common'], all_uncommon:['Все необычные','All uncommon'],
+  all_rare:['Все редкие','All rare'], all_epic:['Все эпические','All epic'], all_legendary:['Все легендарные','All legendary']
+}
+const paths=[
+  {name:['Садовод','Gardener'],goals:['allSpecies','gardenComplete','advancedGreenhouse','valleyComplete']},
+  {name:['Селекция','Breeding'],goals:['firstCross','foundRare','multiTrait','cleanRare','foundEpic','foundLegendary']},
+  {name:['Коллекция','Collection'],goals:['all_common','all_uncommon','all_rare','all_epic','all_legendary','fullCollection']},
+  {name:['Предпринимательство','Business'],goals:['firstOrder','tenOrders','advancedStall','seedReserve','automatedGarden']},
+  {name:['Создание сада','Garden building'],goals:['harmony100','harmony200','bridgeRestored','valleyDecor']}
+]
 const goals = {
   ru:[
     ['Собрать первый урожай','Посадить клубнику','Открыть 5 грядок','Посадить подсолнечник'],
@@ -52,7 +73,8 @@ export function journalPanel(state:GameState, chapter:number|null):string {
   const progress = journal(state)
   const first = progress.chapters.findIndex(items => items.some(done => !done))
   const score = harmony(state)
-  return `<h2>${w.journal}</h2><p><strong>${w.rank} · ${ranks[state.lang][progress.rank]}</strong></p>
+  const lang=state.lang==='ru'?0:1
+  return `<h2>${w.journal}</h2><p><strong>${w.rank} · ${ranks[state.lang][state.rank]}</strong></p>
     <p>${w.harmony} · <strong>${score}</strong><br>${w.milestones} ·
     ${balance.harmonyMilestones.map(goal => goal <= score ? `<strong>${goal} ✓</strong>` : goal).join(' / ')}</p>
     ${progress.chapters.map((steps,index) => {
@@ -62,6 +84,14 @@ export function journalPanel(state:GameState, chapter:number|null):string {
         `<li>${done ? '✓' : '○'} ${goals[state.lang][index][i]}</li>`).join('')}</ul>` : ''
       return `<button type="button" data-action="chapter" data-id="${index}" aria-expanded="${expanded}">
         ${chapterNames[state.lang][index]} · ${completed}/${steps.length}</button>${tasks}`
+    }).join('')}
+    <h3>${state.lang==='ru'?'Долгосрочные цели':'Long-term goals'}</h3>
+    ${paths.map((path,i)=>{
+      const index=progress.chapters.length+i
+      const done=path.goals.filter(goal=>state.achievements.includes(goal)).length
+      return `<button type="button" data-action="chapter" data-id="${index}" aria-expanded="${chapter===index}">
+        ${path.name[lang]} · ${done}/${path.goals.length}</button>`+(chapter===index ? `<ul class="journal-tasks">${path.goals.map(goal=>
+        `<li>${state.achievements.includes(goal)?'✓':'○'} ${achievements[goal][lang]}</li>`).join('')}</ul>` : '')
     }).join('')}`
 }
 
@@ -74,7 +104,8 @@ export function decorPanel(state:GameState, slotId:string|null, choice:DecorChoi
   const type = newType ?? item?.type
   const confirm = !!type && slotId !== null && (newType !== null || item?.id !== occupant?.id)
   const location = (x:number,y:number) => String.fromCharCode(65+x) + (y+1)
-  const slotButtons = island.decorSlots.map(slot => {
+  const slots = state.activeIsland==='green' ? island.decorSlots : valley.decorSlots
+  const slotButtons = slots.map(slot => {
     const decor = decorationAt(state,slot.id)
     return `<button type="button" data-action="decor-slot" data-id="${slot.id}" aria-pressed="${slotId === slot.id}">
       ${location(slot.x,slot.y)} · ${decor ? name(decor.type) : w.empty}</button>`
@@ -83,7 +114,7 @@ export function decorPanel(state:GameState, slotId:string|null, choice:DecorChoi
     `<button type="button" data-action="decor-type" data-id="${id}" aria-pressed="${newType===id}">
       ${name(id)} · ${decorInfo[id].cost} ◈</button>`).join('')
   const inventory = state.decorations.map(d => {
-    const slot = island.decorSlots.find(s=>s.id===d.slot)
+    const slot = [...island.decorSlots,...valley.decorSlots].find(s=>s.id===d.slot)
     return `<button type="button" data-action="decor-item" data-id="${d.id}" aria-pressed="${item?.id===d.id}">
       ${name(d.type)} #${d.id} · ${slot ? location(slot.x,slot.y) : w.saved}</button>`
   }).join('')

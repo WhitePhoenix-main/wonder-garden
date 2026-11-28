@@ -1,22 +1,35 @@
 import Phaser from 'phaser'
-import { island, isSpecies, speciesInfo } from '../game/config'
+import { isSpecies, speciesInfo } from '../game/config'
+import type { IslandId } from '../game/model'
 import type { World, WorldView } from '../runtime/presentation'
-import { halfHeight, halfWidth, type Point } from './geometry'
+import { halfHeight, halfWidth, islandFromView, mapFor, type Point } from './geometry'
 import { IslandScene } from './IslandScene'
 import { bindInput } from './input'
 
-const center = { x: (island.width - island.height) * halfWidth / 2, y: 302 }
-const width = (island.width + island.height) * halfWidth
-const height = (island.width + island.height) * halfHeight + 267
+function frameFor(id:IslandId) {
+  const map = mapFor(id)
+  const groundHeight = (map.width + map.height) * halfHeight
+  return {
+    center: {x:(map.width - map.height) * halfWidth / 2, y:groundHeight / 2 + 14},
+    width: (map.width + map.height) * halfWidth,
+    height: groundHeight + 267
+  }
+}
 
 export function createWorld(host: HTMLElement, onPick: (index: number) => void, onDecor:(slot:string)=>void,onNursery:()=>void): World {
   let view: WorldView | null = null
   let current: IslandScene | null = null
   let removeInput: (() => void) | undefined
-  let focus = { ...center }
-  let magnification = host.clientWidth <= 600 ? 1.45 : 1
+  const initialMagnification = host.clientWidth <= 600 ? 1.45 : 1
+  const cameras = {
+    green:{focus:frameFor('green').center, magnification:initialMagnification},
+    valley:{focus:frameFor('valley').center, magnification:initialMagnification}
+  }
+  let islandId:IslandId = 'green'
   const updateCamera = (): void => {
     if (!current) return
+    const {center,width,height} = frameFor(islandId)
+    const {focus,magnification} = cameras[islandId]
     const camera = current.cameras.main
     const baseZoom = Math.min(camera.width / (width + 38), camera.height / height)
     const zoom = baseZoom * magnification
@@ -29,6 +42,8 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
 
   function changeZoom(factor: number, from: Point, to = from): void {
     if (!current || !Number.isFinite(factor)) return
+    const viewCamera = cameras[islandId]
+    const {focus,magnification} = viewCamera
     const camera = current.cameras.main
     const old = camera.zoom
     const halfX = camera.width / 2
@@ -37,7 +52,7 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
     const next = old * target / magnification
     focus.x += (from.x - halfX) / old - (to.x - halfX) / next
     focus.y += (from.y - halfY) / old - (to.y - halfY) / next
-    magnification = target
+    viewCamera.magnification = target
     updateCamera()
   }
 
@@ -54,6 +69,7 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
         view: () => view,
         toWorld: point => {
           const camera = this.cameras.main
+          const {focus} = cameras[islandId]
           return {
             x: focus.x + (point.x - camera.width / 2) / camera.zoom,
             y: focus.y + (point.y - camera.height / 2) / camera.zoom
@@ -62,6 +78,7 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
         zoom: changeZoom,
         pan: delta => {
           const zoom = this.cameras.main.zoom
+          const {focus} = cameras[islandId]
           focus.x -= delta.x / zoom
           focus.y -= delta.y / zoom
           updateCamera()
@@ -113,11 +130,16 @@ export function createWorld(host: HTMLElement, onPick: (index: number) => void, 
     },
     render(next) {
       view = next
+      const nextIsland = islandFromView(next)
+      if (nextIsland !== islandId) {
+        islandId = nextIsland
+        updateCamera()
+      }
       current?.paint(next)
     },
     center() {
-      focus = { ...center }
-      magnification = 1
+      cameras[islandId].focus = frameFor(islandId).center
+      cameras[islandId].magnification = 1
       updateCamera()
     },
     zoom(delta) {

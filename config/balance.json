@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "startCoins": 20,
   "plants": [
     {
@@ -402,6 +402,18 @@
       "upgradeCost": 750,
       "growthMultiplier": 1.4,
       "priceMultiplier": 1.25
+    },
+    {
+      "level": 4,
+      "upgradeCost": 1800,
+      "growthMultiplier": 1.55,
+      "priceMultiplier": 1.35
+    },
+    {
+      "level": 5,
+      "upgradeCost": 3600,
+      "growthMultiplier": 1.7,
+      "priceMultiplier": 1.45
     }
   ],
   "expansionCosts": [
@@ -456,6 +468,16 @@
       "level": 3,
       "upgradeCost": 1200,
       "intervalSec": 1
+    },
+    {
+      "level": 4,
+      "upgradeCost": 2600,
+      "intervalSec": 1
+    },
+    {
+      "level": 5,
+      "upgradeCost": 5200,
+      "intervalSec": 1
     }
   ],
   "autoSell": {
@@ -491,6 +513,34 @@
       "nameEn": "Cherry Blossom",
       "cost": 350,
       "harmony": 15
+    },
+    {
+      "id": "fountain",
+      "nameRu": "Фонтан",
+      "nameEn": "Fountain",
+      "cost": 420,
+      "harmony": 16
+    },
+    {
+      "id": "apiary",
+      "nameRu": "Пчелиный домик",
+      "nameEn": "Bee House",
+      "cost": 300,
+      "harmony": 11
+    },
+    {
+      "id": "magic_lantern",
+      "nameRu": "Магический фонарь",
+      "nameEn": "Magic Lantern",
+      "cost": 330,
+      "harmony": 12
+    },
+    {
+      "id": "statue",
+      "nameRu": "Садовая статуя",
+      "nameEn": "Garden Statue",
+      "cost": 550,
+      "harmony": 18
     }
   ],
   "buildingHarmony": 25,
@@ -505,29 +555,189 @@
     "pity": 4,
     "rarity": [
       [
-        65,
-        25,
-        10
+        [
+          65,
+          25,
+          10,
+          0,
+          0
+        ],
+        [
+          55,
+          30,
+          15,
+          0,
+          0
+        ],
+        [
+          45,
+          35,
+          20,
+          0,
+          0
+        ],
+        [
+          35,
+          35,
+          25,
+          5,
+          0
+        ],
+        [
+          30,
+          35,
+          25,
+          10,
+          0
+        ]
       ],
       [
-        55,
-        30,
-        15
+        [
+          55,
+          30,
+          15,
+          0,
+          0
+        ],
+        [
+          45,
+          35,
+          20,
+          0,
+          0
+        ],
+        [
+          35,
+          40,
+          25,
+          0,
+          0
+        ],
+        [
+          25,
+          35,
+          35,
+          5,
+          0
+        ],
+        [
+          20,
+          30,
+          40,
+          10,
+          0
+        ]
       ],
       [
-        45,
-        35,
-        20
+        [
+          45,
+          35,
+          20,
+          0,
+          0
+        ],
+        [
+          35,
+          40,
+          25,
+          0,
+          0
+        ],
+        [
+          20,
+          35,
+          35,
+          10,
+          0
+        ],
+        [
+          15,
+          30,
+          35,
+          18,
+          2
+        ],
+        [
+          10,
+          25,
+          40,
+          20,
+          5
+        ]
       ],
       [
-        35,
-        40,
-        25
+        [
+          35,
+          35,
+          25,
+          5,
+          0
+        ],
+        [
+          25,
+          35,
+          35,
+          5,
+          0
+        ],
+        [
+          15,
+          30,
+          35,
+          18,
+          2
+        ],
+        [
+          10,
+          20,
+          35,
+          30,
+          5
+        ],
+        [
+          5,
+          15,
+          35,
+          35,
+          10
+        ]
       ],
       [
-        25,
-        40,
-        35
+        [
+          30,
+          35,
+          25,
+          10,
+          0
+        ],
+        [
+          20,
+          30,
+          40,
+          10,
+          0
+        ],
+        [
+          10,
+          25,
+          40,
+          20,
+          5
+        ],
+        [
+          5,
+          15,
+          35,
+          35,
+          10
+        ],
+        [
+          5,
+          10,
+          30,
+          40,
+          15
+        ]
       ]
     ],
     "inheritedPlus": 0.8,
@@ -558,11 +768,15 @@
     "rarityFruitPrice": [
       1,
       1.1,
-      1.2
+      1.2,
+      1.32,
+      1.45
     ],
     "raritySeedYield": [
       0,
       0.06,
+      0.12,
+      0.12,
       0.12
     ],
     "seedyYield": [
@@ -572,11 +786,150 @@
     "raritySeedPrice": [
       1,
       1.35,
-      1.7
+      1.7,
+      2.05,
+      2.45
     ],
     "seedTraitPrice": {
       "plus": 0.15,
       "minus": 0.15
-    }
+    },
+    "slots": [
+      0,
+      1,
+      1,
+      2,
+      3
+    ],
+    "quality": [
+      0.1,
+      0.2
+    ],
+    "stable": [
+      0.1,
+      0.2
+    ],
+    "aura": [
+      0.1,
+      0.2
+    ],
+    "copyCap": 0.75
+  },
+  "evolution": {
+    "greenhouseCosts": [
+      0,
+      500,
+      1200,
+      2500,
+      5000
+    ],
+    "stallCosts": [
+      0,
+      300,
+      850,
+      1800,
+      3600
+    ],
+    "crossSlots": [
+      0,
+      1,
+      1,
+      2,
+      3
+    ],
+    "experiments": [
+      {
+        "cost": 50,
+        "seconds": 15
+      },
+      {
+        "cost": 120,
+        "seconds": 25
+      },
+      {
+        "cost": 240,
+        "seconds": 40
+      },
+      {
+        "cost": 400,
+        "seconds": 60
+      }
+    ],
+    "levelFiveInheritance": 0.9,
+    "bridge": {
+      "species": 10,
+      "plots": 12,
+      "harmony": 200,
+      "cost": 1500
+    },
+    "valleyCosts": [
+      350,
+      500,
+      700,
+      950,
+      1300,
+      1750
+    ],
+    "helperThroughput": [
+      0,
+      1,
+      1,
+      1,
+      2,
+      3
+    ],
+    "harmonyGrowth": [
+      0,
+      0.01,
+      0.02,
+      0.035,
+      0.05
+    ],
+    "independenceHarmony": 25,
+    "orderSlots": [
+      1,
+      1,
+      2,
+      3,
+      4
+    ],
+    "orderCooldown": 12,
+    "orderBonus": 1.35,
+    "orderMinReward": 12,
+    "orderFruitCount": [
+      5,
+      12
+    ],
+    "orderSeedCount": [
+      1,
+      2
+    ],
+    "rankRequirements": [
+      {},
+      {
+        "species": 3
+      },
+      {
+        "species": 6
+      },
+      {
+        "species": 10
+      },
+      {
+        "species": 12,
+        "plots": 16
+      },
+      {
+        "bridge": true
+      },
+      {
+        "collection": 36,
+        "orders": 10
+      },
+      {
+        "collection": 60,
+        "orders": 25
+      }
+    ]
   }
 }

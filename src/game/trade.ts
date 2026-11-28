@@ -1,8 +1,9 @@
 import { autoSellOffer, isHybrid, isSpecies, speciesInfo, valueScale } from './config'
-import { changeStock, common, inherit, nextRandom, rules, sameProfile, stockCount } from './genetics'
+import { changeStock, common, inherit, nextRandom, rules, sameProfile, stockCount, traits, validGenome } from './genetics'
 import { rarities, type Command, type GameState, type HarvestBatch, type HarvestLot, type Profile,
   type Result, type SeedPack, type Species } from './model'
 import { chance } from './queries'
+import { availableStock, hasOtherSource, lotSeedYield, productionTarget, protectedHarvest, protectedProfile } from './stock-policy'
 
 type Trade = Extract<Command, {type:'sellHarvest'|'extractSeeds'|'sellSeeds'}>
 
@@ -13,7 +14,7 @@ export function harvestSaleValue(batch:HarvestBatch, count = batch.count):number
 }
 
 export function seedSaleValue(species:Species, profile:Profile):number {
-  const modifier = 1 + (profile.plus ? rules.seedTraitPrice.plus : 0) - (profile.minus ? rules.seedTraitPrice.minus : 0)
+  const modifier = 1 + traits(profile).length * rules.seedTraitPrice.plus - (profile.minus ? rules.seedTraitPrice.minus : 0)
   return Math.max(1, Math.round(speciesInfo[species].seedValue * rules.raritySeedPrice[rarities.indexOf(profile.rarity)] * modifier))
 }
 
@@ -22,10 +23,9 @@ function portions(batch:HarvestBatch, count:number) {
   for (const lot of batch.lots) {
     if (count <= 0) break
     const units = Math.min(count, lot.remaining)
-    const used = lot.size - lot.remaining
     // Distribute a single harvest's seed quota across its fruit. Each unit is
     // counted once, whether sold or extracted. Splitting the action adds no rolls.
-    const seeds = Math.ceil((used + units) * lot.seedYield / lot.size) - Math.ceil(used * lot.seedYield / lot.size)
+    const seeds = lotSeedYield(lot,units)
     result.push({lot, count:units, seeds})
     count -= units
   }
@@ -41,7 +41,7 @@ export function extractionYield(batch:HarvestBatch, count = batch.count) {
   return {seeds, attempts}
 }
 
-function consume(state:GameState, batch:HarvestBatch, count:number) {
+export function consumeHarvest(state:GameState, batch:HarvestBatch, count:number) {
   for (const part of portions(batch, count)) part.lot.remaining -= part.count
   batch.count -= count
   if (batch.count === 0) state.basket.splice(state.basket.indexOf(batch), 1)
@@ -60,8 +60,22 @@ function validCount(count:number, available:number) {
 }
 
 export function quickSaleEligible(state:GameState, batch:HarvestBatch, automated=false):boolean {
-  if (batch.lots.some(lot => lot.crossPending)) return false
-  if (automated && batch.profile && !sameProfile(batch.profile, common)) return false
+  if (protectedHarvest(state,batch) || batch.lots.some(lot => lot.crossPending || lot.origin?.mode==='breeding')) return false
+  if (automated) {
+    const rarity=state.automation.saleRarity
+    if (rarity && rarities.indexOf((batch.profile??common).rarity)>rarities.indexOf(rarity)) return false
+    if (batch.lots.some(lot => {
+      const origin=lot.origin
+      if (origin?.mode==='seed') {
+        // A seed-only garden keeps its harvest. When both sales are enabled,
+        // prepared reserves allow the stall to clear surplus seed crops.
+        const target=productionTarget(state,origin.plot,batch.species)
+        return !state.automation.sellSeeds || stockCount(state,batch.species,target.profile)<target.count
+      }
+      return origin?.mode==='support' ||
+        !rarity && batch.profile && !sameProfile(batch.profile,common) && origin?.mode!=='commercial'
+    })) return false
+  }
   if (isHybrid(batch.species) && !state.seeds[batch.species] && !state.variants.some(pack => pack.species === batch.species)) {
     // Leave a viable source of seed even after the last plant of a hybrid expires.
     const reserve = state.basket.find(candidate => candidate.species === batch.species && extractionYield(candidate).seeds > 0)
@@ -71,14 +85,13 @@ export function quickSaleEligible(state:GameState, batch:HarvestBatch, automated
 }
 
 export function quickSaleValue(state:GameState):number {
-  return Math.round(state.basket.reduce((sum, batch) =>
-    sum + (quickSaleEligible(state, batch) ? batch.count * batch.valueUnits : 0), 0) / valueScale)
+  return state.basket.reduce((sum,batch)=>sum+(quickSaleEligible(state,batch) ? harvestSaleValue(batch) : 0),0)
 }
 
 export function sellBasket(state: GameState, automated=false): string[] {
   const selling = state.basket.filter(batch => quickSaleEligible(state, batch, automated))
   if (!selling.length) return []
-  const value = Math.round(selling.reduce((sum, batch) => sum + batch.count * batch.valueUnits, 0) / valueScale)
+  const value = selling.reduce((sum,batch)=>sum+harvestSaleValue(batch),0)
   if (!Number.isSafeInteger(state.coins + value)) return []
   const sold = new Set(selling)
   state.basket = state.basket.filter(batch => !sold.has(batch))
@@ -142,7 +155,7 @@ function extract(state:GameState, batch:HarvestBatch, count:number):Result {
     lot.crossPending = false
     if (seeds > 0) lot.copyPending = false
   }
-  consume(state, batch, count)
+  consumeHarvest(state, batch, count)
   state.firstExtraction = true
   if (isHybrid(batch.species) && yieldQuote.seeds > 0) state.firstPropagation = true
   state.rng = stream.rng
@@ -152,11 +165,30 @@ function extract(state:GameState, batch:HarvestBatch, count:number):Result {
   return {ok:true, events, obtained}
 }
 
+export function seedSaleIssue(state:GameState,species:Species,profile:Profile,count:number):string|null {
+  if (!isSpecies(species) || !validGenome(species,profile,true)) return 'noSeeds'
+  const stock=stockCount(state,species,profile)
+  if (!validCount(count,stock)) return 'invalidQuantity'
+  if (protectedProfile(state,species,profile)) return 'protectedItem'
+  if (count>availableStock(state,species,profile)) return 'seedReserved'
+  if (count===stock && (isHybrid(species) || !sameProfile(profile,common)) && !hasOtherSource(state,species,profile)) return 'lastProfile'
+  return null
+}
+
+export function harvestSaleIssue(state:GameState,batch:HarvestBatch,count:number):string|null {
+  if (protectedHarvest(state,batch)) return 'protectedItem'
+  if (isHybrid(batch.species) && batch.profile && extractionYield(batch).seeds>0 &&
+    extractionYield(batch,count).seeds===extractionYield(batch).seeds &&
+    !state.seeds[batch.species] && !state.variants.some(pack=>pack.species===batch.species) &&
+    !hasOtherSource(state,batch.species,undefined,undefined,batch.id)) return 'lastHybrid'
+  return null
+}
+
 export function trade(state:GameState, command:Trade):Result {
   if (command.type === 'sellSeeds') {
-    if (!isSpecies(command.species)) return {ok:false, reason:'noSeeds'}
-    const {species, profile, count} = command
-    if (!validCount(count, stockCount(state, species, profile))) return {ok:false, reason:'invalidQuantity'}
+    const {species,profile,count}=command
+    const issue=seedSaleIssue(state,species,profile,count)
+    if (issue) return {ok:false,reason:issue}
     const value = count * seedSaleValue(species, profile)
     if (!Number.isSafeInteger(state.coins + value)) return {ok:false, reason:'coinLimit'}
     changeStock(state, species, profile, -count)
@@ -166,9 +198,11 @@ export function trade(state:GameState, command:Trade):Result {
   if (!batch) return {ok:false, reason:'itemChanged'}
   if (!validCount(command.count, batch.count)) return {ok:false, reason:'invalidQuantity'}
   if (command.type === 'extractSeeds') return extract(state, batch, command.count)
+  const issue=harvestSaleIssue(state,batch,command.count)
+  if (issue) return {ok:false,reason:issue}
 
   const value = harvestSaleValue(batch, command.count)
   if (!Number.isSafeInteger(state.coins + value)) return {ok:false, reason:'coinLimit'}
-  consume(state, batch, command.count)
+  consumeHarvest(state, batch, command.count)
   return {ok:true, events:recordSale(state, value)}
 }

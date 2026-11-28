@@ -1,6 +1,8 @@
-import { common, plantStats, rules, stockCount } from './genetics'
+import { canonical, common, plantStats, rules, stockCount, validGenome } from './genetics'
 import type { Experiment, Plant, PollinationSnapshot, Profile, GameState, Recipe, Species } from './model'
-import { adjacent, auras, balance, basketLevels, bedLevels, island, isHybrid, isSpecies, recipes, speciesInfo, valueScale } from './config'
+import { adjacent, auras, balance, basketLevels, bedLevels, evolution, island, isHybrid, isSpecies, plotIndices, plotIsland, recipes, speciesInfo, valley, valueScale } from './config'
+import { harmonyGrowth } from './decor'
+import { protectedProfile } from './stock-policy'
 
 export function basketCapacity(state:Pick<GameState,'basketLevel'>):number {
   return basketLevels[state.basketLevel].capacity
@@ -32,14 +34,15 @@ export function seedUnlocked(state: GameState, species: Species): boolean {
   return true
 }
 
-export function expansionCost(state: GameState): number | null {
-  const openCount = state.plots.filter(plot => plot.open).length
-  return balance.expansionCosts[openCount - island.startOpen.length] ?? null
+export function expansionCost(state: GameState, plot?:number): number | null {
+  const id=plot===undefined ? state.activeIsland : plotIsland(plot)
+  const open=plotIndices(id).filter(index=>state.plots[index]?.open).length
+  return id==='green' ? balance.expansionCosts[open - island.startOpen.length] ?? null :
+    evolution.valleyCosts[open-valley.startOpen.length] ?? null
 }
 
 export function saleValue(state: GameState): number {
-  const units = state.basket.reduce((sum, batch) => sum + batch.valueUnits * batch.count, 0)
-  return Math.round(units / valueScale)
+  return state.basket.reduce((sum,batch)=>sum+Math.round(batch.valueUnits*batch.count/valueScale),0)
 }
 
 function neighborSpecies(state: GameState, index: number): Set<Species> {
@@ -68,8 +71,8 @@ export function experiments(state:GameState,index:number):Experiment[] {
   }))
 }
 
-function parentProfile({species, rarity, plus, minus}:Plant):Profile & {species:Species} {
-  return {species, rarity, plus, minus}
+function parentProfile(plant:Plant):Profile & {species:Species} {
+  return {species:plant.species,...canonical(plant)}
 }
 
 export function pollinationFor(state:GameState,index:number):PollinationSnapshot|null {
@@ -90,14 +93,16 @@ export function chance(state:Pick<GameState,'revealed'|'failures'>,result:Recipe
 export function auraBonus(state: GameState, index: number, kind: 'growth' | 'price' | 'propagation'): number {
   const species = state.plots[index]?.plant?.species
   if (!species) return 0
-  const neighbors = neighborSpecies(state, index)
+  const neighbors = adjacent(index).flatMap(i=>state.plots[i]?.plant ?? [])
   let bonus = 0
   for (const aura of auras) {
-    if (aura.kind !== kind || !isSpecies(aura.source) || !neighbors.has(aura.source)) continue
+    if (aura.kind !== kind) continue
     const applies = aura.targets === 'all'
       || (aura.targets === 'hybrids' && speciesInfo[species].generation > 0)
       || (Array.isArray(aura.targets) && aura.targets.includes(species))
-    if (applies) bonus = Math.max(bonus, aura.bonus)
+    if (applies) for (const neighbor of neighbors) if (neighbor.species===aura.source) {
+      bonus = Math.max(bonus, aura.bonus*plantStats(neighbor.species,neighbor).auraMultiplier)
+    }
   }
   return bonus
 }
@@ -107,7 +112,7 @@ export function growthMultiplier(state: GameState, index: number): number {
   if (!plot) return 1
   const plant = plot.plant
   const traitFactor = plant ? speciesInfo[plant.species].cycleSec / plantStats(plant.species, plant).growthSec : 1
-  return bedLevels[plot.level].growthMultiplier * (1 + auraBonus(state, index, 'growth')) * traitFactor
+  return bedLevels[plot.level].growthMultiplier * (1 + auraBonus(state, index, 'growth')) * traitFactor * harmonyGrowth(state,plotIsland(index))
 }
 
 export function cycleSeconds(state:GameState, index:number):number {
@@ -129,6 +134,7 @@ export function removalIssue(state:GameState, plot:number, expectedId:number, ac
   if (action === 'compost' && !state.sold) return 'firstSale'
   if (!plant || plant.id !== expectedId) return 'stalePlant'
   const species = plant.species
+  if (action==='compost' && (state.protectedPlants.includes(plant.id) || protectedProfile(state,species,plant))) return 'protectedItem'
   if (action === 'compost' && isHybrid(species) && !state.seeds[species] && !state.variants.some(v=>v.species===species) &&
       !state.nursery.some(p => p.species === species) &&
       !state.plots.some(p => p.plant?.species === species && p.plant.id !== expectedId)) return 'lastHybrid'
@@ -142,6 +148,7 @@ export function plantingIssue(state:GameState, index:number, species:Species, re
   if (plot.plant && !canReplace(state)) return 'replacementLocked'
   if (plot.plant && replaceId === undefined) return 'occupied'
   if (!isSpecies(species) || !seedUnlocked(state,species)) return 'seedLocked'
+  if (stock && !validGenome(species,stock,true)) return 'invalidProfile'
   if (stock || isHybrid(species)) return stockCount(state,species,stock??common)>0 ? null : 'noSeeds'
   if (state.coins < (speciesInfo[species].seedPrice ?? 0)) return 'noCoins'
   return null

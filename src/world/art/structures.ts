@@ -69,6 +69,51 @@ export function decoration(ctx:Canvas, type:DecorType):void {
       for (let j=0;j<5;j++) ellipse(ctx,p.x+Math.cos(j*1.26)*4,p.y+Math.sin(j*1.26)*4,4,3,'#edb6c5')
       ellipse(ctx,p.x,p.y,2.6,2.6,'#ffdfa0')
     })
+  } else if (type === 'fountain') {
+    ellipse(ctx,0,5,43,21,'#7f9189')
+    ellipse(ctx,0,-1,43,21,gradient(ctx,-22,21,'#d3d8bb','#99a598'))
+    ellipse(ctx,0,-1,35,15,gradient(ctx,-19,17,'#abd6ce','#659c9f'))
+    ellipse(ctx,0,0,27,10,'#93c3bd')
+    box(ctx,-.13,-.13,.26,.26,23,'#d3d8bb','#9ba99f','#768e85')
+    ellipse(ctx,0,-26,16,7,'#c9d7ba')
+    ellipse(ctx,0,-28,10,3,'#99d7cd')
+    for (const side of [-1,1]) {
+      line(ctx,[at(0,-30),at(side*6,-39),at(side*13,-35),at(side*16,-25),at(side*20,-6)],'#d2eae0',2)
+      ellipse(ctx,side*20,-5,6,1.9,'#c8e3d4')
+    }
+  } else if (type === 'apiary') {
+    box(ctx,-.27,-.19,.54,.38,7,'#d0b392','#9a785a','#8c6a54')
+    for (const floor of [7,18,29]) {
+      box(ctx,-.27,-.19,.54,.38,11,'#e0c18f','#bd905c','#a07650',floor)
+    }
+    const top = [raised(-.34,-.26,42),raised(.34,-.26,42),raised(.34,.26,42),raised(-.34,.26,42)]
+    polygon(ctx,[top[0],top[1],raised(.34,0,59),raised(-.34,0,59)],'#d5b792','#a98464',2)
+    polygon(ctx,[raised(-.34,0,59),raised(.34,0,59),top[2],top[3]],'#b48c68','#a98464',2)
+    ellipse(ctx,-12,-18,8,3,'#6a5340',-.42)
+    for (const [x,y] of [[18,-25],[-26,-51]]) {
+      ellipse(ctx,x+3,y-3,5,3,'#e8e4c6',-.43)
+      ellipse(ctx,x,y,4,2.6,'#e5b661',.28)
+      line(ctx,[at(x,y-2),at(x-1,y+2)],'#93704e',1.5)
+    }
+  } else if (type === 'magic_lantern') {
+    box(ctx,-.22,-.22,.44,.44,10,'#c1bfa7','#858976','#67766f')
+    line(ctx,[at(0,-9),at(-3,-52),at(8,-75),at(21,-72)],'#73805d',6)
+    line(ctx,[at(18,-70),at(18,-60)],'#776f57',2)
+    polygon(ctx,[at(18,-61),at(31,-56),at(32,-45),at(18,-35),at(5,-45),at(6,-56)],
+      gradient(ctx,-62,-33,'#ded1f1','#8f83bd'),'#6c628a',2)
+    line(ctx,[at(18,-60),at(14,-53),at(20,-46),at(18,-38)],'#f0dcfb',1.6)
+    for (const [x,y] of [[-6,-33],[32,-28],[38,-63]]) {
+      polygon(ctx,[at(x,y-4),at(x+2,y),at(x,y+4),at(x-2,y)],'#e8daf2')
+    }
+  } else if (type === 'statue') {
+    box(ctx,-.32,-.27,.64,.54,11,'#dddcc1','#a8a592','#858d81')
+    box(ctx,-.22,-.17,.44,.34,17,'#d2d3b9','#b1b3a0','#868c80',11)
+    ellipse(ctx,0,-37,15,13,gradient(ctx,-51,-24,'#e4e2c8','#9aa58f'))
+    ellipse(ctx,2,-51,11,10,'#cbd0b6')
+    ellipse(ctx,-3,-64,3.4,10,'#c6ceb5',-.29)
+    ellipse(ctx,5,-64,3.2,10,'#dcdcc2',.22)
+    ellipse(ctx,-13,-36,5,5,'#bcc4ab')
+    ellipse(ctx,5,-53,1.3,1.4,'#73836f')
   } else {
     line(ctx,[at(0,-1),at(-3,-42),at(9,-80)],'#795649',9)
     line(ctx,[at(-2,-32),at(-25,-58)],'#936c59',5)
@@ -95,10 +140,17 @@ export function leafHelper(ctx: Canvas, level: number): void {
     for (let i=0;i<5;i++) ellipse(ctx,8+Math.cos(i*1.257)*4,-41+Math.sin(i*1.257)*4,3,3,'#f3d7a6')
     ellipse(ctx,8,-41,2.5,2.5,'#d89f50')
   }
-  if (level === 3) {
+  if (level >= 3) {
     line(ctx,[at(-9,-47),at(-2,-36),at(9,-39)],'#f7d263',2)
     for (const [x,y] of [[-19,-38],[21,-46],[-23,-15]]) polygon(ctx,
       [at(x,y-4),at(x+2,y),at(x,y+4),at(x-2,y)],'#ffe9a2')
+  }
+  if (level >= 4) {
+    leaf(ctx,at(-10,-33),at(-23,-49),5, ['#cbdd9c','#859f66','#526843'])
+  }
+  if (level === 5) {
+    polygon(ctx,[at(-5,-45),at(0,-52),at(5,-45),at(0,-40)],'#e7bd65','#9c774e',1)
+    ellipse(ctx,0,-46,2,2,'#fff0b9')
   }
   const radius = 6 + level
   line(ctx,[at(6,-14),at(8,-22),at(15,-23),at(19,-15)],'#987648',2.4)

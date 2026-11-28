@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "id": "valley",
+  "width": 10,
+  "height": 8,
+  "tileWidth": 128,
+  "tileHeight": 64,
+  "plotOrigin": {
+    "x": 3,
+    "y": 2
+  },
+  "plotWidth": 4,
+  "plotHeight": 2,
+  "startOpen": [
+    0,
+    1
+  ],
+  "startPlants": [],
+  "structures": [
+    {
+      "id": "pond",
+      "x": 8,
+      "y": 4,
+      "width": 2,
+      "height": 2
+    }
+  ],
+  "decorSlots": [
+    {
+      "id": "valley_northwest",
+      "x": 3,
+      "y": 0
+    },
+    {
+      "id": "valley_northeast",
+      "x": 6,
+      "y": 0
+    },
+    {
+      "id": "valley_southwest",
+      "x": 3,
+      "y": 7
+    },
+    {
+      "id": "valley_southeast",
+      "x": 6,
+      "y": 7
+    },
+    {
+      "id": "valley_meadow",
+      "x": 4,
+      "y": 5
+    },
+    {
+      "id": "valley_orchard",
+      "x": 5,
+      "y": 5
+    }
+  ],
+  "paths": [
+    {
+      "x": 2,
+      "y": 1
+    },
+    {
+      "x": 3,
+      "y": 1
+    },
+    {
+      "x": 4,
+      "y": 1
+    },
+    {
+      "x": 5,
+      "y": 1
+    },
+    {
+      "x": 6,
+      "y": 1
+    },
+    {
+      "x": 7,
+      "y": 1
+    },
+    {
+      "x": 2,
+      "y": 2
+    },
+    {
+      "x": 7,
+      "y": 2
+    },
+    {
+      "x": 2,
+      "y": 3
+    },
+    {
+      "x": 7,
+      "y": 3
+    },
+    {
+      "x": 2,
+      "y": 4
+    },
+    {
+      "x": 7,
+      "y": 4
+    },
+    {
+      "x": 2,
+      "y": 5
+    },
+    {
+      "x": 7,
+      "y": 5
+    },
+    {
+      "x": 2,
+      "y": 6
+    },
+    {
+      "x": 3,
+      "y": 6
+    },
+    {
+      "x": 4,
+      "y": 6
+    },
+    {
+      "x": 5,
+      "y": 6
+    },
+    {
+      "x": 6,
+      "y": 6
+    },
+    {
+      "x": 7,
+      "y": 6
+    },
+    {
+      "x": 2,
+      "y": 7
+    }
+  ],
+  "bridge": {
+    "x": 2,
+    "y": 7,
+    "direction": "south",
+    "state": "broken"
+  }
+}
