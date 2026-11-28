@@ -1,7 +1,7 @@
 import type { GameState } from './model'
 import { autoSellOffer, helperLevels } from './config'
 import { autoSellGarden, workGarden } from './automation'
-import { cycleSeconds, pollinationFor } from './queries'
+import { cycleSeconds, observeCompatibility, pollinationFor } from './queries'
 import { refreshOrders } from './orders'
 import { settleMarket } from './market'
 import { advanceProduction } from './nursery'
@@ -12,7 +12,10 @@ export function growPlots(state: GameState, seconds: number, active:boolean): nu
   let ready=0
   state.plots.forEach(({plant}, index) => {
     if (!plant?.lives) return
-    if (active && !plant.pollination) plant.pollination = pollinationFor(state, index)
+    if (active) {
+      observeCompatibility(state,index)
+      if (!plant.pollination) plant.pollination = pollinationFor(state,index)
+    }
     if (plant.readySince !== null) return
     const rate = 1 / cycleSeconds(state, index)
     const timeToRipe = (1 - plant.progress) / rate

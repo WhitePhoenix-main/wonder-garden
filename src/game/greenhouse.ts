@@ -1,5 +1,5 @@
 import { evolution, speciesInfo } from './config'
-import { canonical, changeStock, inherit, nextRandom, rarityOdds, stockCount } from './genetics'
+import { canonical, changeStock, inherit, nextRandom, rarityGuarantee, rarityOdds, stockCount } from './genetics'
 import { rarities, type GameState, type Plant, type Result } from './model'
 
 export const greenhouseTime=(state:GameState)=>state.playTime+(state.passive?.labSeconds??0)
@@ -21,9 +21,10 @@ export function crossingQuote(state:GameState,a:Plant,b:Plant) {
   const higher=base.map((weight,rank)=>rank>highestParent ? weight : 0)
   const target=higher.findIndex(Boolean)
   const key=target<0 ? null : a.species+'/'+rarities[target]
+  const guarantee=target<0 ? 0 : rarityGuarantee(rarities[target])
   const failures=key ? state.rarityProgress[key]??0 : 0
-  const weights=failures>=evolution.rarityGuarantee-1 ? higher : base
-  return {key,highestParent,failures,weights,base,...evolution.experiments[speciesInfo[a.species].generation]}
+  const weights=key && failures>=guarantee-1 ? higher : base
+  return {key,highestParent,failures,guarantee,weights,base,...evolution.experiments[speciesInfo[a.species].generation]}
 }
 
 export function startCross(state:GameState, parents:[number,number]):Result {

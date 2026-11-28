@@ -71,6 +71,9 @@ ui = createUI(document.querySelector<HTMLElement>('#ui')!, {
   select(index) { view.selected = index; render() },
   center: () => world.center(),
   zoom: delta => world.zoom(delta),
+  worldTutorialBounds: index => world.plotBounds(index),
+  worldStructureBounds: id => world.structureBounds(id),
+  focusTutorialPlot: index => world.focusPlot(index),
   changeView(patch) { Object.assign(view,patch); render() },
   decorPreview(editing, preview) {
     view.decorEditing = editing

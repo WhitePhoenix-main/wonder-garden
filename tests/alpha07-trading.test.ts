@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest'
-import { advance, basketCapacity, initialState } from '../src/game'
+import { advance, basketCapacity } from '../src/game'
 import { autoSellGarden, productionStatus, saleStatus } from '../src/game/automation'
 import { evolution, market } from '../src/game/config'
 import { common, profileKey } from '../src/game/genetics'
@@ -7,10 +7,10 @@ import { orderQuote, refreshOrders } from '../src/game/orders'
 import { harvestSaleValue, seedSaleValue } from '../src/game/pricing'
 import { marketQuote } from '../src/game/market'
 import { marketPanel } from '../src/ui/panels/market'
-import { addLegacyFruit, commit, reject } from './helpers'
+import { gardenWithStarterPlants, addLegacyFruit, commit, reject } from './helpers'
 
 function advancedStall() {
-  const state=initialState(42)
+  const state=gardenWithStarterPlants(42)
   state.coins=25_000
   state.sold=true
   commit(state,{type:'upgradeHelper',target:1})
@@ -50,7 +50,7 @@ it('reserves only needed order units and uses the real partial-batch price',()=>
 })
 
 it('prices new orders from inventory and preserves published rewards as the quote changes',()=>{
-  const state=initialState(17)
+  const state=gardenWithStarterPlants(17)
   state.sold=true
   state.revealed.push('solar_strawberry')
   addLegacyFruit(state,80,280_000)

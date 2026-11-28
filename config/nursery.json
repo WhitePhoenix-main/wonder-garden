@@ -1,10 +1,10 @@
 {
   "levels": [
     { "beds": 0, "hours": 0, "capacity": 0 },
-    { "beds": 2, "hours": 2, "capacity": 60 },
-    { "beds": 4, "hours": 4, "capacity": 140 },
-    { "beds": 6, "hours": 6, "capacity": 260 },
-    { "beds": 8, "hours": 8, "capacity": 480 }
+    { "beds": 2, "hours": 2, "capacity": 80 },
+    { "beds": 4, "hours": 4, "capacity": 200 },
+    { "beds": 6, "hours": 6, "capacity": 400 },
+    { "beds": 8, "hours": 8, "capacity": 700 }
   ],
   "cycleMultiplier": 5,
   "seedModeLevel": 3,

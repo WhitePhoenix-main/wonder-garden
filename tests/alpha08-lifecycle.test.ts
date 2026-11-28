@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { advance, initialState } from '../src/game'
+import { advance } from '../src/game'
 import { beginObservation, sessionStats } from '../src/game/analytics'
 import { workGarden } from '../src/game/automation'
 import { evolution, recipes } from '../src/game/config'
@@ -9,10 +9,10 @@ import { auraBonus, canRecoverGarden, pollinationFor, researchStatus } from '../
 import { newPlant } from '../src/game/state'
 import { defaultPolicy, hasOtherSource } from '../src/game/stock-policy'
 import { parseSave } from '../src/persistence/migration'
-import { commit, plantAt, reject } from './helpers'
+import { gardenWithStarterPlants, commit, plantAt, reject } from './helpers'
 
 it('keeps wilted specimens across reload and removes only the requested dead specimen',()=>{
-  let state=initialState(12)
+  let state=gardenWithStarterPlants(12)
   advance(state,6)
   const plant=plantAt(state,12)
   expect(commit(state,{type:'harvest',plot:12})).toContain('Withered')
@@ -33,7 +33,7 @@ it('keeps wilted specimens across reload and removes only the requested dead spe
 })
 
 it('spends a life on a deterministic crop failure without spawning a batch or using a crossing try',()=>{
-  const state=initialState(31)
+  const state=gardenWithStarterPlants(31)
   const mother=newPlant(state.nextId++,'strawberry',{...common,minus:'unfruitful'},0.05)
   state.plots[8].plant=mother
   Object.assign(mother,{mature:true,progress:1,readySince:0,lives:1,
@@ -49,7 +49,7 @@ it('spends a life on a deterministic crop failure without spawning a batch or us
 })
 
 it('removes the advantages of dead neighbors while preserving an existing pollination snapshot',()=>{
-  const state=initialState(31)
+  const state=gardenWithStarterPlants(31)
   state.planted.push('strawberry','sunflower','blueberry')
   state.plots[4].open=state.plots[5].open=true
   state.plots[8].plant=newPlant(state.nextId++,'strawberry')
@@ -70,7 +70,7 @@ it('removes the advantages of dead neighbors while preserving an existing pollin
 })
 
 it('gates new pollination on tier progress and respects shared sides',()=>{
-  const state=initialState(11)
+  const state=gardenWithStarterPlants(11)
   state.plots[8].plant=newPlant(state.nextId++,'strawberry')
   state.plots[9].plant=newPlant(state.nextId++,'sunflower')
   expect(researchStatus(state,'solar_strawberry').stage).toBe('tier')
@@ -85,7 +85,7 @@ it('gates new pollination on tier progress and respects shared sides',()=>{
 })
 
 it('leaves emergency recovery available when wilted plants are the only remaining specimens',()=>{
-  const state=initialState(11)
+  const state=gardenWithStarterPlants(11)
   state.coins=0
   for (const plot of [12,13]) plantAt(state,plot).lives=0
   expect(canRecoverGarden(state)).toBe(true)
@@ -121,8 +121,8 @@ it('allows the configured genetic distributions and inherits compatible malprodu
   expect(outcomes.every(profile=>validGenome('strawberry',profile))).toBe(true)
 })
 
-it('uses one helper work slot for each harvest, cleanup or replant and obeys reserves',()=>{
-  const state=initialState(31)
+it('starts cleanup at level II, collects independently, and obeys reseeding reserves',()=>{
+  const state=gardenWithStarterPlants(31)
   const plant=plantAt(state,12)
   const harvestPolicy={...defaultPolicy,priority:3,mode:'commercial',replant:{species:'radish',profile:common}} as const
   state.plots[12].policy=harvestPolicy
@@ -137,17 +137,22 @@ it('uses one helper work slot for each harvest, cleanup or replant and obeys res
   state.automation.cleanup=false
   expect(workGarden(state)).not.toContain('PlantCleaned:12')
   state.automation.cleanup=true
-  expect(workGarden(state)).toContain('PlantCleaned:12')
+  expect(workGarden(state)).not.toContain('PlantCleaned:12')
+  state.helperLevel=2
+  Object.assign(plantAt(state,13),{mature:true,progress:1,readySince:0})
+  const work=workGarden(state)
+  expect(work).toContain('PlantCleaned:12')
+  expect(work).toContain('HelperHarvested:13')
   expect(state.plots[12].plant).toBeNull()
   expect(workGarden(state)).not.toContain('AutoPlanted:12')
   state.helperLevel=evolution.helperReplantLevel as typeof state.helperLevel
   expect(workGarden(state)).toContain('AutoPlanted:12')
   expect(state.seeds.radish).toBe(1)
-  expect(sessionStats(state,60).total).toMatchObject({helperHarvests:1,helperCleanups:1,helperReplants:1,helperUsed:3})
+  expect(sessionStats(state,60).total).toMatchObject({helperHarvests:2,helperCleanups:2,helperReplants:1,helperUsed:5})
 })
 
 it('persists tutorial progress and allows a fresh guide without resetting the garden',()=>{
-  const state=initialState(74)
+  const state=gardenWithStarterPlants(74)
   const snapshot=structuredClone(state)
   expect(commit(state,{type:'tutorialSeen',id:'first-harvest'})).toEqual(['TutorialUpdated'])
   expect(commit(state,{type:'tutorialSeen',id:'first-harvest'})).toEqual([])

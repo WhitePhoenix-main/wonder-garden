@@ -1,8 +1,8 @@
 import { expect,it } from 'vitest'
 import { advance, initialState, speciesInfo } from '../src/game'
-import { chance, experiments, pollinationFor, secondsLeft } from '../src/game/queries'
-import { balance, evolution, plotIndices } from '../src/game/config'
-import { common, rules } from '../src/game/genetics'
+import { chance, experiments, pollinationFor, researchDirections, secondsLeft } from '../src/game/queries'
+import { balance, breedingTier, evolution, plotIndices } from '../src/game/config'
+import { common } from '../src/game/genetics'
 import { harmony } from '../src/game/decor'
 import { parseSave } from '../src/persistence/migration'
 import type { Command,Hybrid,Species } from '../src/game/model'
@@ -10,6 +10,7 @@ import { commit,cross,earn,wait } from './helpers'
 
 it.each([17,42,2026])('completes all 12 species and 16 beds through public commands, sequence %i',seed=>{
   let s=initialState(seed)
+  for (const plot of [12,13]) commit(s,{type:'plant',plot,species:'radish',stock:common})
   wait(s,speciesInfo.radish.cycleSec)
   commit(s,{type:'harvest',plot:12})
   const firstHarvest=s.playTime
@@ -35,8 +36,11 @@ it.each([17,42,2026])('completes all 12 species and 16 beds through public comma
       advance(s,secondsLeft(s,plot))
       cross(s,plot,captured.result)
     }
-    for(let i=0;i<=rules.pity && !stock(result);i++){
+    for(let i=0;i<breedingTier(result).hardPity && !stock(result);i++){
       const p=s.plots[plot].plant!
+      if (!p.pollination && researchDirections(s,plot).length>1) {
+        commit(s,{type:'researchDirection',plot,expectedId:p.id,recipeId:result+':main'})
+      }
       advance(s,secondsLeft(s,plot))
       cross(s,plot,result)
       if(!p.lives){
@@ -94,28 +98,31 @@ it.each([17,42,2026])('completes all 12 species and 16 beds through public comma
   console.log({seed,firstHarvest,firstHybrid:first,completion,bridge:s.playTime})
 },10000)
 
-it('keeps failures across reload and relocation and guarantees the fifth extraction attempt',()=>{
+it('keeps failures across reload and relocation and guarantees the sixth extraction attempt',()=>{
   const s=initialState(1);s.coins=2000
   s.sold=true
+  commit(s,{type:'plant',plot:12,species:'radish',stock:common})
   commit(s,{type:'clear',plot:4})
   commit(s,{type:'clear',plot:5})
   for(const [plot,species] of [[8,'strawberry'],[9,'sunflower']] as const)commit(s,{type:'plant',plot,species})
   commit(s,{type:'plant',plot:4,species:'blueberry'})
   advance(s,12);cross(s,8,'solar_strawberry')
-  for(let i=0;i<rules.pity;i++){
+  for(let i=0;i<breedingTier('solar_strawberry').hardPity-1;i++){
+    if (!s.plots[8].plant!.lives) {
+      commit(s,{type:'cleanup',plot:8,expectedId:s.plots[8].plant!.id})
+      commit(s,{type:'plant',plot:8,species:'strawberry',stock:common})
+    }
     advance(s,12);commit(s,{type:'harvest',plot:8})
     const batch=s.basket[0]
-    // The first sample from 1000 is ~.624, above the normal .3 success chance.
-    s.rng=1000
+    // The next sample from 1500 exceeds even the last soft-pity chance.
+    s.rng=1500
     expect(commit(s,{type:'extractSeeds',id:batch.id,count:batch.count})).toContain('ExperimentFailed')
     expect(s.failures.solar_strawberry).toBe(i+1)
   }
-  commit(s,{type:'cleanup',plot:8,expectedId:s.plots[8].plant!.id})
-  commit(s,{type:'plant',plot:8,species:'strawberry',stock:common})
   commit(s,{type:'move',from:8,to:9})
   const copy=parseSave(JSON.stringify(s)) as typeof s
   expect(chance(copy,'solar_strawberry')).toBe(1)
   advance(copy,12);cross(copy,9,'solar_strawberry')
   expect(copy.failures.solar_strawberry).toBe(0)
-  expect(chance(copy,'solar_strawberry')).toBe(rules.success)
+  expect(chance(copy,'solar_strawberry')).toBe(breedingTier('solar_strawberry').base)
 })

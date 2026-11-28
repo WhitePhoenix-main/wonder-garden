@@ -1,7 +1,7 @@
 import { measure, observeDraft, commitObservation } from './analytics'
 import type { BedLevel, Command, GameState, Result } from './model'
 import { adjacent, autoSellOffer, basketLevels, bedLevels, helperLevels, isHybrid, plotCount, speciesIds, speciesInfo } from './config'
-import { canRecoverGarden, plantingIssue, removalIssue, expansionCost } from './queries'
+import { canRecoverGarden, chooseResearchDirection, plantingIssue, removalIssue, expansionCost } from './queries'
 import { decorate } from './decor'
 import { newPlant } from './state'
 import { sellBasket, trade } from './trade'
@@ -73,6 +73,7 @@ function apply(state:GameState,command:Command):Result {
     case 'restoreBridge': case 'travel': case 'protectPlant': case 'protectProfile': case 'favoriteProfile':
     case 'setReserve': case 'plotPolicy': case 'plotTemplate': case 'setTrading': case 'setAutomation': return evolve(state,command)
     case 'assignProduction': case 'moveProduction': case 'collectProduction': return evolve(state,command)
+    case 'researchDirection': return chooseResearchDirection(state,command.plot,command.expectedId,command.recipeId)
     case 'dismissHybrid': state.pendingHybrid=null;return success('HintDismissed')
     case 'tutorialBranch': state.tutorialBranch=command.branch;return success('BranchChosen')
     case 'sell': return success(...sellBasket(state))
@@ -173,6 +174,7 @@ function apply(state:GameState,command:Command):Result {
       if (plot.plant || !canRecoverGarden(state)) return failure('recoveryUnavailable')
       plot.plant = newPlant(state.nextId++,'radish',common,nextRandom(state))
       recordPlanting(state,plot.plant)
+      if (!state.planted.includes('radish')) state.planted.push('radish')
       return success('Planted')
     case 'harvest': return harvest(state,command)
     case 'cleanup':

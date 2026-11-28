@@ -1,20 +1,25 @@
 import { expect,it } from 'vitest'
 import fixture from './fixtures/alpha02.json'
-import { advance,basketCapacity,initialState,saleValue,speciesInfo } from '../src/game'
+import { advance,basketCapacity,saleValue,speciesInfo } from '../src/game'
 import { common,compatible,fruitCount,inherit,nextRandom,plantStats,quantity } from '../src/game/genetics'
-import { positives,negatives,saveVersion,type GameState,type Profile } from '../src/game/model'
+import { positives,negatives,rarities,saveVersion,type GameState,type Profile } from '../src/game/model'
 import { parseSave } from '../src/persistence/migration'
 import { experiments } from '../src/game/queries'
-import { addLegacyFruit,cleanBed,commit,cross,reject } from './helpers'
+import { gardenWithStarterPlants, addLegacyFruit,cleanBed,commit,cross,reject } from './helpers'
 
 function sequence(...values:number[]){return ()=>values.shift()??0.999}
 const rare:Profile={...common,rarity:'rare',plus:'early'}
 const uncommon:Profile={...common,rarity:'uncommon',plus:'hardy'}
 
-it.each([[common,common,65,90],[common,uncommon,55,85],[common,rare,45,80],[uncommon,uncommon,45,80],
-  [uncommon,rare,35,75],[rare,rare,20,55]] as const)('rolls rarity at both cumulative boundaries %j × %j',(a,b,x,y)=>{
-  for(const [roll,expected] of [[x-.01,'common'],[x,'uncommon'],[y-.01,'uncommon'],[y,'rare']] as const)
-    expect(inherit(a,b,sequence(roll/100)).rarity).toBe(expected)
+it.each([[common,common,[70,30]],[common,uncommon,[55,45]],[common,rare,[40,47,13]],[uncommon,uncommon,[15,65,20]],
+  [uncommon,rare,[10,53,37]],[rare,rare,[0,20,68,12]]] as const)('rolls rarity on both sides of its cumulative boundaries %j × %j',(a,b,weights)=>{
+  let before=0
+  for (const [rank,weight] of weights.entries()) {
+    if (!weight) continue
+    expect(inherit(a,b,sequence((before+.01)/100)).rarity).toBe(rarities[rank])
+    before+=weight
+    expect(inherit(a,b,sequence((before-.01)/100)).rarity).toBe(rarities[rank])
+  }
 })
 it('inherits pluses and flaws, including collisions and mutation',()=>{
   for(const [choice,index,expected] of [[.79,0,'hardy'],[.79,.99,'early'],[.8,0,'fruitful']] as const)
@@ -50,7 +55,7 @@ it('matches the expected output distributions and income per minute',()=>{
   }
 })
 it('retains an oversized crop and copies exactly one seed on the final life',()=>{
-  const s=initialState(3),b=s.plots[12],p=b.plant!
+  const s=gardenWithStarterPlants(3),b=s.plots[12],p=b.plant!
   Object.assign(p,{...rare,plus:'seedy',minus:'sparse',lives:1,fruitRoll:.999})
   b.level=2
   addLegacyFruit(s,basketCapacity(s)-2)
@@ -76,7 +81,7 @@ it('retains an oversized crop and copies exactly one seed on the final life',()=
 it('upgrades a snapshot generated and validated by 1465cf9; rejects invalid legacy inventory',()=>{
   const s=parseSave(JSON.stringify(fixture)) as GameState
   expect(s).toMatchObject({schemaVersion:saveVersion,coins:fixture.coins,planted:fixture.planted,
-    seeds:{solar_strawberry:1},failures:{solar_strawberry:0,moonberry:1},musicMuted:true,lang:'en'})
+    seeds:{solar_strawberry:1},failures:{solar_strawberry:0,moonberry:2},musicMuted:true,lang:'en'})
   expect(saleValue(s)).toBe(60)
   expect(s.basket).toMatchObject([{species:'strawberry',count:4,valueUnits:150000,profile:null,pollination:null}])
   for(const [i,b] of fixture.plots.entries()){
@@ -85,6 +90,7 @@ it('upgrades a snapshot generated and validated by 1465cf9; rejects invalid lega
   }
   expect(s.nursery[0]).toMatchObject({id:fixture.nursery[0].id,species:'blueberry',progress:1,...common,lives:speciesInfo.blueberry.lives})
   expect(parseSave(JSON.stringify({...fixture,seeds:{...fixture.seeds,solar_strawberry:2}}))).toBeNull()
+  commit(s,{type:'researchDirection',plot:8,expectedId:s.plots[8].plant!.id,recipeId:'moonberry:main'})
   advance(s,12)
   const available=experiments(s,8)
   expect(available.map(e=>e.result).sort()).toEqual(['moonberry','solar_strawberry'])
@@ -113,7 +119,7 @@ it('captures the configured recipe and the first eligible donor even when donors
   expect(pollinated.pollination).toMatchObject({result:'solar_strawberry',donor:{species:'sunflower',...common}})
   commit(s,{type:'extractSeeds',id:pollinated.id,count:pollinated.count})
   expect(s.seeds.strawberry).toBeGreaterThan(0)
-  expect(s.failures.moonberry).toBe(1)
+  expect(s.failures.moonberry).toBe(2)
 })
 
 it('preserves profiles and partial growth in nursery, replacement and next draw',()=>{
@@ -138,7 +144,7 @@ it('preserves profiles and partial growth in nursery, replacement and next draw'
 })
 
 it('retains the roll on the bed if another harvest advances the generator',()=>{
-  const s=initialState(7),p=s.plots[12].plant!
+  const s=gardenWithStarterPlants(7),p=s.plots[12].plant!
   p.fruitRoll=.999;advance(s,6)
   addLegacyFruit(s,basketCapacity(s)-2)
   reject(s,{type:'harvest',plot:12},'basketFull')
@@ -169,12 +175,12 @@ it('rebreeds an expired hybrid, retains its last harvest and never repeats the i
   const batch=s.basket.find(b=>b.pollination?.result==='solar_strawberry')!
   s.rng=1000
   expect(commit(s,{type:'extractSeeds',id:batch.id,count:batch.count})).toContain('ExperimentFailed')
-  s.failures.solar_strawberry=4
+  s.failures.solar_strawberry=5
   advance(s,12);expect(cross(s,8,'solar_strawberry')).toContain('SeedPropagated:solar_strawberry')
 })
 
 it('rejects a replay after regrowth and after a replacement takes the same bed',()=>{
-  const s=initialState(12)
+  const s=gardenWithStarterPlants(12)
   s.coins=speciesInfo.strawberry.seedPrice!
   commit(s,{type:'plant',species:'strawberry',plot:8})
   advance(s,12)

@@ -54,7 +54,10 @@ export function productionStatus(state:GameState,index:number) {
   const policy=plot?.policy??defaultPolicy
   const plant=plot?.plant
   if (!state.automation.enabled || !state.helperLevel) return 'manual'
-  if (plant?.lives===0) return 'cleanup'
+  if (plant?.lives===0) {
+    if (isValuablePlant(state,plant)) return 'protected'
+    return state.automation.cleanup && state.helperLevel>=2 ? 'cleanup' : 'manual'
+  }
   if (policy.mode==='support' || plant?.lives===1 && isValuablePlant(state,plant)) return 'protected'
   if (plant) {
     if (!policy.harvest) return 'manual'
@@ -88,35 +91,41 @@ export function workGarden(state:GameState):string[] {
   candidates.sort((a,b)=>b.policy.priority-a.policy.priority || b.preferred-a.preferred ||
     a.readySince-b.readySince || a.index-b.index)
   const capacity=evolution.helperThroughput[state.helperLevel]
-  let actions=0
+  let harvests=0, cleanups=0, replants=0
+  const cleanup=state.automation.cleanup && state.helperLevel>=2
   const replant=state.automation.replant && state.helperLevel>=evolution.helperReplantLevel
   for (const {index,plant,policy} of candidates) {
-    if (actions>=capacity) break
     if (plant?.lives===0) {
-      if (state.automation.cleanup && finish(execute(state,{type:'cleanup',plot:index,expectedId:plant.id}))) {
-        actions++
+      if (cleanup && cleanups<capacity && !isValuablePlant(state,plant) &&
+          finish(execute(state,{type:'cleanup',plot:index,expectedId:plant.id}))) {
+        cleanups++
+        events.push('HelperCleaned:'+index)
         measure(state,plant.species,{helperCleanups:1})
       }
     } else if (plant) {
-      if (plant.readySince===null || !policy.harvest || policy.mode==='support' ||
+      if (harvests>=capacity || plant.readySince===null || !policy.harvest || policy.mode==='support' ||
         plant.lives===1 && isValuablePlant(state,plant)) continue
       const fruits=fruitCount(plantStats(plant.species,plant),plant.fruitRoll)
       if (basketCount(state)+fruits>basketCapacity(state)) events.push(...autoSellGarden(state,true,fruits))
       if (finish(execute(state,{type:'harvest',plot:index,expectedId:plant.id,cycle:plant.lives}))) {
         events.push('HelperHarvested:'+index)
-        actions++
+        harvests++
         measure(state,plant.species,{helperHarvests:1})
       }
-    } else if (replant && policy.replant && availableStock(state,policy.replant.species,policy.replant.profile)>0) {
+    }
+  }
+  if (replant) for (const {index,policy} of candidates) {
+    if (replants>=capacity) break
+    if (!state.plots[index].plant && policy.replant && availableStock(state,policy.replant.species,policy.replant.profile)>0) {
       const {species,profile}=policy.replant
       if (finish(execute(state,{type:'plant',plot:index,species,stock:profile}))) {
         events.push('AutoPlanted:'+index)
-        actions++
+        replants++
         measure(state,species,{helperReplants:1})
       }
     }
   }
-  measure(state,'garden',{helperUsed:actions,helperCapacity:capacity})
+  measure(state,'garden',{helperUsed:harvests+cleanups+replants,helperCapacity:capacity*(1+Number(cleanup)+Number(replant))})
 
   if (state.stallLevel>=3) {
     const candidates=state.basket.slice()

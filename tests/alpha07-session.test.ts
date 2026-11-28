@@ -1,14 +1,14 @@
 import alpha06 from './fixtures/alpha06.json'
 import { expect, it } from 'vitest'
-import { initialState, advance, execute } from '../src/game'
+import { advance, execute } from '../src/game'
 import { beginObservation, sessionStats } from '../src/game/analytics'
 import { marketQuote } from '../src/game/market'
 import { common } from '../src/game/genetics'
 import { parseSave } from '../src/persistence/migration'
-import { commit } from './helpers'
+import { gardenWithStarterPlants, commit } from './helpers'
 
 it('records committed batches once, disregards a rolled-back bulk sale and starts fresh on load',()=>{
-  const s=initialState(42)
+  const s=gardenWithStarterPlants(42)
   beginObservation(s)
   advance(s,9)
   commit(s,{type:'harvest',plot:12})
@@ -37,9 +37,10 @@ it('records committed batches once, disregards a rolled-back bulk sale and start
 it('preserves the Alpha 06 market, paid experiments, RNG and every inventory lot through migration',()=>{
   const loaded=parseSave(JSON.stringify(alpha06))
   if (!loaded || loaded==='future') throw Error('Migration failed')
-  const {schemaVersion,balanceVersion,trading,rarityProgress,clones,passive,automation,tutorialSeen,...existing}=loaded
+  const {schemaVersion,balanceVersion,trading,rarityProgress,clones,passive,automation,tutorialSeen,research,...existing}=loaded
   const {schemaVersion:old,balanceVersion:oldBalance,automation:oldAutomation,...previous}=alpha06
-  expect([old,schemaVersion,oldBalance,balanceVersion]).toEqual([10,12,4,5])
+  expect([old,schemaVersion,oldBalance,balanceVersion]).toEqual([10,13,4,5])
+  expect(Object.keys(research.recipes)).toEqual(alpha06.revealed.map(id=>id+':main'))
   expect(automation).toEqual({...oldAutomation,cleanup:true})
   expect(passive.checkpoint).toBeNull()
   expect(tutorialSeen).toEqual([])

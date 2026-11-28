@@ -2,7 +2,16 @@ import { recipes, hybridCounts, speciesInfo } from '../src/game/config'
 import type { Hybrid } from '../src/game/model'
 import { expect } from 'vitest'
 import type { Command, GameState, Plant } from '../src/game/model'
-import { advance, execute } from '../src/game'
+import { advance, execute, initialState } from '../src/game'
+import { common } from '../src/game/genetics'
+
+// Historical scenarios begin with the same two plants as Alpha 08.
+export function gardenWithStarterPlants(seed:number) {
+  const state=initialState(seed)
+  for (const plot of [12,13]) commit(state,{type:'plant',plot,species:'radish',stock:common})
+  state.firstSeedPlanting=false
+  return state
+}
 
 type Harvest=Extract<Command,{type:'harvest'}>
 type Input=Exclude<Command,Harvest>|(Omit<Harvest,'expectedId'|'cycle'>&Partial<Pick<Harvest,'expectedId'|'cycle'>>)
@@ -64,9 +73,9 @@ export function earn(state: GameState, target: number): void {
     }
     let plots=state.plots.flatMap((p,plot)=>p.plant?.species==='radish' && p.plant.lives ? [plot] : [])
     if (!plots.length) {
-      const plot=state.plots.findIndex(b=>b.open && !b.plant)
+      const plot=[12,13,...state.plots.keys()].find(i=>state.plots[i].open && !state.plots[i].plant)??-1
       if (plot<0) throw Error('No space for a radish')
-      commit(state,{type:'plant',plot,species:'radish'})
+      commit(state,{type:'plant',plot,species:'radish',stock:state.seeds.radish ? common : undefined})
       plots=[plot]
     }
     advance(state,speciesInfo.radish.cycleSec)

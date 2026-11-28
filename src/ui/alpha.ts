@@ -12,7 +12,7 @@ export const alpha = {
     honeyBenefit:'Медовый клевер повышает шанс копирования черт соседнего гибрида до 40%. Разместите его сбоку от Солнечной клубники.',
     cornerHint:'Освободите лопатой или расчистите грядку, посадите любимое растение и примерьте декор возле теплицы.',
     empty:'Откройте «Посадку» и выберите пустую грядку для аварийного редиса.',
-    stock:'Посадите запасное семя в «Посадке».', nursery:'Верните растение из питомника через «Посадку».',
+    stock:'Откройте свободную грядку и выберите семя из запаса.', nursery:'Откройте свободную грядку, чтобы вернуть растение из питомника.',
     buy:'Посадите редис из каталога.', sell:'Продайте корзину, чтобы купить редис.',
     occupied:'Здесь уже растёт растение. Выберите свободную грядку или освободите эту лопатой.',
     closed:'Расчистите эту грядку в «Стройке».', restored:'Теплица восстановлена', beds:'Грядки'
@@ -30,7 +30,7 @@ export const alpha = {
     honeyBenefit:'Honey clover gives adjacent hybrids a 40% chance to copy their traits. Plant it beside your sunberry.',
     cornerHint:'Free or clear a bed, plant a favorite and preview a decoration beside the greenhouse.',
     empty:'Open Plant and choose an empty bed for an emergency radish.',
-    stock:'Plant a spare seed from the catalog.', nursery:'Return a nursery plant through Plant.',
+    stock:'Open an empty bed and choose a seed from your stock.', nursery:'Open an empty bed to return a plant from the nursery.',
     buy:'Buy a radish from the catalog.', sell:'Sell your basket to afford a radish.',
     occupied:'A plant is growing here. Choose an empty bed or free this one with the shovel.',
     closed:'Clear this bed in Build.', restored:'Greenhouse restored', beds:'Beds'

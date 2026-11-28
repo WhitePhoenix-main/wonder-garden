@@ -1,6 +1,6 @@
 import { evolution, isSpecies, plotCount, speciesInfo } from '../game/config'
 import { validAutomation, validPlotPolicy } from '../game/evolution'
-import { profileKey, rarityOdds, sameProfile, validGenome } from '../game/genetics'
+import { profileKey, rarityGuarantee, sameProfile, validGenome } from '../game/genetics'
 import { buyers, negatives, plotModes, positives, rarities, type GameState, type Plant, type Profile } from '../game/model'
 import { finite, integer, record } from './shape'
 import { greenhouseTime } from '../game/greenhouse'
@@ -26,12 +26,10 @@ function validRarityProgress(state:GameState):boolean {
   if (!record(state.rarityProgress) || Array.isArray(state.rarityProgress)) return false
   return Object.entries(state.rarityProgress).every(([key,count])=>{
     const [species,target,...extra]=key.split('/')
+    const rarity=rarities.find(value=>value===target)
     if (!isSpecies(species) || !state.planted.includes(species) || extra.length ||
-      !integer(count) || !count || count>=evolution.rarityGuarantee) return false
-    return rarities.some((a,i)=>rarities.some((b,j)=>{
-      const firstHigher=rarityOdds(a,b).findIndex((weight,k)=>weight>0 && k>Math.max(i,j))
-      return firstHigher>=0 && rarities[firstHigher]===target
-    }))
+      !rarity || rarity==='common' || !integer(count) || !count) return false
+    return count<(Number(state.schemaVersion)>=13 ? rarityGuarantee(rarity) : evolution.rarityGuarantee)
   })
 }
 

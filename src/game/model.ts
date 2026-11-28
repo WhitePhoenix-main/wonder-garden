@@ -7,7 +7,7 @@ export type Lang = 'ru' | 'en'
 export type HelperLevel = 0 | BedLevel
 export const decorIds = ['bench','lantern','flower_arch','sakura','fountain','apiary','magic_lantern','statue'] as const
 export type DecorType = typeof decorIds[number]
-export const saveVersion = 12
+export const saveVersion = 13
 export type MarketKind = 'fruit' | 'seed'
 export interface MarketSupply {
   previousPrice?: number
@@ -27,6 +27,16 @@ export interface Recipe {
   minBedLevel: BedLevel
   harvests: number
 }
+export interface BreedingRecipe extends Recipe {
+  id: string
+  alternate: boolean
+  baseChance: number
+}
+export type CompatibilityReaction = 'none'|'symbiosis'|'resonance'|'strong'
+export interface ResearchState {
+  combinations: Record<string,CompatibilityReaction>
+  recipes: Record<string,{attempts:number;successes:number}>
+}
 
 export const rarities = ['common','uncommon','rare','epic','legendary'] as const
 export const positives = ['hardy','early','fruitful','seedy','quality','stable','aura'] as const
@@ -43,6 +53,7 @@ export interface Profile {
 export interface SeedPack extends Profile {species:Species; count:number}
 export interface Experiment {result:Hybrid; donorId:number; layout:string}
 export interface PollinationSnapshot {
+  recipeId?: string
   result: Hybrid
   donor: Profile & {species:Species}
   supporting: (Profile & {species:Species})[]
@@ -66,6 +77,7 @@ export interface HarvestBatch {
   lots: HarvestLot[]
 }
 export interface Plant extends Profile {
+  researchDirection?: string
   pollination: PollinationSnapshot|null
   lives:number
   maxLives:number
@@ -197,6 +209,7 @@ export interface GameState {
   seeds: Record<Species,number>
   variants:SeedPack[]
   failures:Record<Hybrid,number>
+  research:ResearchState
   rng:number
   lang: Lang
   musicMuted: boolean
@@ -255,6 +268,7 @@ export type Command =
   | BulkItem
   | {type:'clear'|'upgrade';plot:number}
   | {type:'harvest';plot:number;expectedId:number;cycle:number}
+  | {type:'researchDirection';plot:number;expectedId:number;recipeId:string}
   | {type:'cleanup';plot:number;expectedId:number}
   | {type:'store'|'compost';plot:number;expectedId:number}
   | {type:'dismissHybrid'} | {type:'tutorialBranch';branch:'experiment'|'corner'}

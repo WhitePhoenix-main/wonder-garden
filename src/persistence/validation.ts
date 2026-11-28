@@ -2,7 +2,8 @@ import { common, compatible, maxLives, profileKey, rules, sameProfile, traits, v
 import { decorIsland, market, nurseryProduction, speciesIds, valley, valleyPlotCount } from '../game/config'
 import { initialTrading, marketKinds, validTrading, validPrice } from '../game/market'
 import { positives, negatives, rarities, type Hybrid, type Profile, type ProductionAssignment, type Species, saveVersion, type GameState, type Plant } from '../game/model'
-import { adjacent, balance, island, isSpecies, plotCount, recipes, isHybrid, speciesInfo, helperLevels, autoSellOffer, basketLevels, isDecorType, isDecorSlot } from '../game/config'
+import { adjacent, balance, island, isSpecies, plotCount, breedingRecipe, breedingRecipes, breedingTier, recipes, isHybrid, speciesInfo, helperLevels, autoSellOffer, basketLevels, isDecorType, isDecorSlot } from '../game/config'
+import { combinationKey, compatibilityReaction } from '../game/queries'
 import { record, integer, finite } from './shape'
 import { validateEvolution } from './evolution'
 import { seedProductionCapacity, validAssignment } from '../game/nursery'
@@ -22,7 +23,8 @@ const previousLives: Record<Species, number> = {
 type OldFruit = {species:Species; valueUnits:number}
 type EvolutionKeys='activeIsland'|'greenhouseLevel'|'stallLevel'|'crosses'|'orders'|'orderRefreshAt'|'ordersCompleted'|
   'collection'|'achievements'|'rank'|'protectedPlants'|'protectedProfiles'|'favorites'|'reserves'|'automation'
-export type AlphaSevenState=Omit<GameState,'schemaVersion'|'passive'|'automation'|'tutorialSeen'>&{
+export type AlphaEightState=Omit<GameState,'schemaVersion'|'research'>&{schemaVersion:12}
+export type AlphaSevenState=Omit<AlphaEightState,'schemaVersion'|'passive'|'automation'|'tutorialSeen'>&{
   schemaVersion:11
   automation:Omit<GameState['automation'],'cleanup'>
 }
@@ -36,6 +38,7 @@ export type AlphaThreeState = Omit<AlphaFourState,'schemaVersion'|'firstExtracti
   schemaVersion:7; plots:AlphaThreePlot[]; nursery:AlphaThreePlant[]; basket:OldFruit[]
 }
 export function validState(v:unknown):v is GameState {return validate(v,saveVersion)}
+export function validAlphaEight(v:unknown):v is AlphaEightState {return validate(v,12)}
 export function validAlphaSeven(v:unknown):v is AlphaSevenState {return validate(v,11)}
 export function validAlphaSix(v:unknown):v is AlphaSixState {return validate(v,10)}
 export function validAlphaFive(v:unknown):v is AlphaFiveState {return validate(v,9)}
@@ -51,11 +54,32 @@ export function validLegacy(v:unknown):v is LegacyState {return validate(v,6)}
 function validPollination(value:unknown, mother:Species, known:Set<unknown>, current:boolean):boolean {
   if (value === null) return true
   if (!record(value) || !isHybrid(value.result) || !Array.isArray(value.supporting) || !record(value.donor)) return false
-  const recipe = recipes.find(r => r.result === value.result)
+  if (value.recipeId!==undefined && typeof value.recipeId!=='string') return false
+  const recipe=breedingRecipe(value.recipeId??`${value.result}:main`)
   const parents = [value.donor, ...value.supporting]
-  return !!recipe && mother === recipe.primary && parents.length === recipe.neighbors.length &&
+  return !!recipe && recipe.result===value.result && mother === recipe.primary && parents.length === recipe.neighbors.length &&
     parents.every(p => record(p) && isSpecies(p.species) && known.has(p.species) && profile(p,p.species,current)) &&
-    recipe.neighbors.every(species => parents.some(p => p.species === species))
+    recipe.neighbors.every((species,index) => parents[index].species === species)
+}
+
+function validResearch(value:unknown,known:Set<unknown>,revealed:unknown[]):boolean {
+  if (!record(value) || Array.isArray(value) || !record(value.combinations) || Array.isArray(value.combinations) ||
+      !record(value.recipes) || Array.isArray(value.recipes)) return false
+  for (const [key,reaction] of Object.entries(value.combinations)) {
+    const [mother,...donors]=key.split('+')
+    if (!isSpecies(mother) || !known.has(mother) || !donors.length || donors.length>4 ||
+        !donors.every(isSpecies) || !donors.every(donor=>known.has(donor)) ||
+        new Set(donors).size!==donors.length || combinationKey(mother,donors)!==key ||
+        compatibilityReaction(mother,donors)!==reaction || donors.length>1 && reaction!=='strong') return false
+  }
+  for (const [id,stats] of Object.entries(value.recipes)) {
+    const recipe=breedingRecipe(id)
+    if (!recipe || !record(stats) || !integer(stats.attempts) || !stats.attempts ||
+        !integer(stats.successes) || stats.successes>stats.attempts ||
+        !known.has(recipe.primary) || !recipe.neighbors.every(donor=>known.has(donor)) ||
+        !!stats.successes && !revealed.includes(recipe.result)) return false
+  }
+  return true
 }
 
 const historicalFruitMax:Record<Species,number>={radish:5,strawberry:3,blueberry:4,sunflower:6,clover:3,moonflower:4,
@@ -99,15 +123,15 @@ function validateMarket(value:unknown,legacy:boolean):boolean {
   })
 }
 
-function validate(v: unknown,version:6|7|8|9|10|11|typeof saveVersion): boolean {
+function validate(v: unknown,version:6|7|8|9|10|11|12|typeof saveVersion): boolean {
   const current = version >= 9
   const inventory = version >= 8
   const legacy = version === 6
-  const balanceVersion=version===saveVersion ? balance.version : version>=10 ? 4 : version===9 ? 3 : inventory ? 2 : legacyBalanceVersion
+  const balanceVersion=version===saveVersion ? balance.version : version===12 ? 5 : version>=10 ? 4 : version===9 ? 3 : inventory ? 2 : legacyBalanceVersion
   if (!record(v) || v.schemaVersion !== version || v.balanceVersion !== balanceVersion ||
       !finite(v.playTime) || !integer(v.nextId) || !integer(v.coins) || typeof v.sold !== 'boolean' ||
       (v.lang !== 'ru' && v.lang !== 'en') || !Array.isArray(v.planted) || !v.planted.every(isSpecies) ||
-      !v.planted.includes('radish') || new Set(v.planted).size !== v.planted.length) return false
+      version<saveVersion && !v.planted.includes('radish') || new Set(v.planted).size !== v.planted.length) return false
   if (!integer(v.helperLevel) || v.helperLevel >= (current ? helperLevels.length : 4) || typeof v.autoSell !== 'boolean' ||
       !finite(v.harvestRemaining) || !finite(v.sellRemaining)) return false
   const interval = helperLevels[v.helperLevel].intervalSec
@@ -135,7 +159,7 @@ function validate(v: unknown,version:6|7|8|9|10|11|typeof saveVersion): boolean 
     if(v.pendingHybrid!==null && (!isHybrid(v.pendingHybrid) || !(revealed as Hybrid[]).includes(v.pendingHybrid)))return false
     const failures=v.failures
     if(!integer(v.rng) || v.rng>0xffffffff || !record(failures) ||
-      !speciesIds.every(id=>integer(seeds[id]) && (!seeds[id] || isHybrid(id) || (v.planted as unknown[]).includes(id))) || !recipes.every(r=>integer(failures[r.result]) && Number(failures[r.result])<=rules.pity) ||
+      !speciesIds.every(id=>integer(seeds[id]) && (!seeds[id] || isHybrid(id) || version===saveVersion && id==='radish' || (v.planted as unknown[]).includes(id))) ||
       !Array.isArray(v.variants))return false
     const keys=new Set<string>()
     for(const pack of v.variants){
@@ -155,12 +179,14 @@ function validate(v: unknown,version:6|7|8|9|10|11|typeof saveVersion): boolean 
     if (legacy && (!integer(p.propagation) || (isHybrid(p.species) ? p.propagation >= speciesInfo[p.species].propagationThreshold : p.propagation !== 0))) return false
     const productionReady=location==='production' && p.progress===1 && p.readySince===null
     if (!productionReady && (p.progress===1 ? !p.mature || !finite(p.readySince) || p.readySince>playTime : p.readySince!==null)) return false
-    const dead=version===saveVersion && location==='plot' && p.lives===0 && p.progress===0 && p.pollination===null
+    const dead=version>=12 && location==='plot' && p.lives===0 && p.progress===0 && p.pollination===null
     if(!legacy && (!profile(p,p.species,current) || p.maxLives!==(inventory ? maxLives(p.species,p as unknown as Profile) :
         previousLives[p.species] + (p.plus==='hardy' ? rules.hardy[p.rarity==='rare' ? 1 : 0] : 0) -
         (p.minus==='fragile' ? rules.fragile : 0)) ||
       !integer(p.lives) || (!dead && !p.lives) || p.lives>Number(p.maxLives) || !finite(p.fruitRoll) || p.fruitRoll>=1))return false
     if (inventory && !validPollination(p.pollination,p.species,known,current)) return false
+    if (p.researchDirection!==undefined && (version<saveVersion || typeof p.researchDirection!=='string' ||
+        breedingRecipe(p.researchDirection)?.primary!==p.species)) return false
     seen.add(p.id)
     return true
   }
@@ -189,7 +215,7 @@ function validate(v: unknown,version:6|7|8|9|10|11|typeof saveVersion): boolean 
   }
   if (inventory && (!v.basket.every(f => validHarvest(f,seen,nextId,known,current)) ||
       v.basket.reduce((sum, f) => sum + f.count, 0) > capacity)) return false
-  if (version===saveVersion) {
+  if (version>=12) {
     const passive=v.passive
     const settings=nurseryProduction.levels[Number(v.greenhouseLevel)-1]
     if (!Array.isArray(v.tutorialSeen) || v.tutorialSeen.length>64 || new Set(v.tutorialSeen).size!==v.tutorialSeen.length ||
@@ -223,6 +249,7 @@ function validate(v: unknown,version:6|7|8|9|10|11|typeof saveVersion): boolean 
         b.lots.length===1 && b.lots[0].origin===undefined && b.lots[0].size===b.count) ||
         passive.basket.reduce((n,b)=>n+b.count,0)>settings.capacity) return false
   }
+  if (version===saveVersion && !validResearch(v.research,known,revealed as Hybrid[])) return false
   if (current && !validateEvolution(v as unknown as GameState,seen,instances)) return false
   if (version>=10 && !validateMarket(v.market,version===10)) return false
   if (version>=11) {
@@ -233,8 +260,13 @@ function validate(v: unknown,version:6|7|8|9|10|11|typeof saveVersion): boolean 
   }
   return recipes.every(({ result, primary, neighbors, harvests }) => {
     const count = progress[result], stock = seeds[result]
-    if (!integer(count) || count > (legacy?harvests:rules.pity) || !integer(stock)) return false
-    if ((count || (!legacy && (revealed as Hybrid[]).includes(result))) && (!known.has(primary) || !neighbors.every(id => known.has(id)))) return false
+    if (!integer(count) || count > (legacy?harvests:version===saveVersion?breedingTier(result).hardPity-1:rules.pity) || !integer(stock)) return false
+    if (count || (!legacy && (revealed as Hybrid[]).includes(result))) {
+      const parentKnown=version===saveVersion
+        ? breedingRecipes.some(recipe=>recipe.result===result && known.has(recipe.primary) && recipe.neighbors.every(id=>known.has(id)))
+        : known.has(primary) && neighbors.every(id=>known.has(id))
+      if (!parentKnown) return false
+    }
     if(!legacy){
       const hasStock=stock>0 || (v.variants as GameState['variants']).some(pack=>pack.species===result)
       return (revealed as Hybrid[]).includes(result) || !hasStock && !known.has(result)

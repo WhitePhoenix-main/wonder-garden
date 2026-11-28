@@ -1,7 +1,7 @@
 import { protectedProfile } from '../game/stock-policy'
 import Phaser from 'phaser'
-import { adjacent, plotCount, recipes } from '../game/config'
-import { isRecipeActive, secondsLeft, isRecipeRevealed } from '../game/queries'
+import { adjacent, breedingRecipes, plotCount, recipes } from '../game/config'
+import { auraBonus, isRecipeActive, secondsLeft, isRecipeRevealed } from '../game/queries'
 import { decorationAt } from '../game/decor'
 import { rarities, type IslandId, type Plant } from '../game/model'
 import type { WorldView } from '../runtime/presentation'
@@ -248,7 +248,7 @@ export class IslandScene extends Phaser.Scene {
     const bridgeRepaired = state.plots.length > plotCount
     const key = JSON.stringify([state.lang,sunflower,shovel,state.tutorialSkipped,mode,selected,moveFrom,decorEditing,decorPreview,state.sold,state.autoSell,
       state.protectedPlants,state.protectedProfiles,state.helperLevel,state.greenhouseLevel,state.stallLevel,isRecipeRevealed(state),bridgeRepaired,state.decorations,
-      plots.map((p,i) => [secondsLeft(state,offset+i),p.open,p.level,p.policy?.mode,p.plant?.species,p.plant?.rarity,p.plant?.lives,p.plant?.pollination?.result,!!p.policy?.replant,
+      plots.map((p,i) => [secondsLeft(state,offset+i),p.open,p.level,p.policy?.mode,p.plant?.species,p.plant?.rarity,p.plant?.lives,p.plant?.pollination?.recipeId,p.plant?.pollination?.result,!!p.policy?.replant,
         p.plant && plantTexture(p.plant)])])
     if (key === this.lastPaint) return
     this.lastPaint = key
@@ -283,8 +283,11 @@ export class IslandScene extends Phaser.Scene {
       const pos = plotPosition(i)
       const plant=plot.plant
       const isProtected=plant && (state.protectedPlants.includes(plant.id) || protectedProfile(state,plant.species,plant))
-      const status=isProtected ? '◆' : plant?.lives===1 ? '♥1' : plant?.pollination ? '✧' : !plant && plot.policy?.replant ? '↻' : ''
-      cell.level.setVisible(plot.open).setText([grades[plot.level],status].filter(Boolean).join(' · '))
+      const remaining=plant?.lives ? `${plant.lives}/${plant.maxLives}` : ''
+      const supported=selected===i && (auraBonus(state,i,'growth') || auraBonus(state,i,'price') || auraBonus(state,i,'propagation'))
+      const status=plant?.lives===0 ? '×' : plant?.pollination ? '✧' : supported ? '+' : !plant && plot.policy?.replant ? '↻' : ''
+      cell.level.setVisible(plot.open).setText([grades[plot.level],isProtected ? '◆' : '',status,remaining].filter(Boolean).join(' · '))
+        .setBackgroundColor(plant?.lives===1 ? '#825a23' : '#594937')
       const policy = policyBadges[plot.policy?.mode ?? 'manual']
       cell.policy.setVisible(plot.open && !!policy[state.lang]).setText(policy[state.lang]).setBackgroundColor(policy.color)
       cell.countdown=secondsLeft(state,i)+(state.lang==='ru'?' с':' s')
@@ -304,6 +307,12 @@ export class IslandScene extends Phaser.Scene {
       } else {
         cell.rarity.setVisible(false)
       }
+      if (plant?.pollination && plant.lives>0) {
+        this.markers.lineStyle(1.6,0xffe7ad,.85)
+        for (const [x,y,r] of [[-18,-43,2],[8,-57,3],[19,-35,2]]) {
+          this.markers.strokeCircle(pos.x+x,pos.y+y,r)
+        }
+      }
 
       if (mode === 'build' && state.sold && !plot.open && adjacent(i).some(j => state.plots[j].open)) {
         outline(this.highlights,pos,0xf7d79d,0.9,0.20)
@@ -312,8 +321,8 @@ export class IslandScene extends Phaser.Scene {
         outline(this.highlights,pos,0xcde2ae,0.81,0.19)
       }
       const neighbor = plot.plant?.species
-      if (mode === 'breed' && selected !== null && neighbor && adjacent(selected).includes(i) &&
-          recipes.some(r => r.primary === state.plots[selected].plant?.species && r.neighbors.includes(neighbor))) {
+      if (selected !== null && plot.plant?.lives && neighbor && adjacent(selected).includes(i) &&
+          breedingRecipes.some(r => r.neighbors.includes(neighbor) && isRecipeActive(state,selected,r))) {
         const origin = plotPosition(selected)
         outline(this.highlights,pos,0xdac2e9,0.79,0.22)
         this.highlights.lineStyle(3.2,0xe8d0fa,0.85).lineBetween(origin.x,origin.y,pos.x,pos.y)

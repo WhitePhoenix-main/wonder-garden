@@ -5,7 +5,7 @@ import { bridgeIssue } from '../game/evolution'
 import { traits } from '../game/genetics'
 import { marketQuote } from '../game/market'
 
-import { researchStatus, saleValue, tierProgress } from '../game/queries'
+import { reactionHasSymbiosis, researchStatus, saleValue, tierProgress } from '../game/queries'
 import { extractionYield } from '../game/trade'
 import { alpha } from './alpha'
 
@@ -28,7 +28,7 @@ const hints = {
     seedPlant: 'Нажмите пустую грядку и посадите полученное семя из запаса.',
     sell: 'Откройте рынок и продайте урожай. Часть плодов можно оставить на семена.',
     cross: 'В инвентаре извлеките семена из опылённого урожая клубники.',
-    regrow: 'Клубника растёт снова после сбора, пока у неё остаются жизни.',
+    regrow: 'Клубника растёт снова после сбора, пока у неё остаются сборы.',
     saveFor: (name:string, price:number) => `Собирайте и продавайте урожай. ${name} стоит ${price} ◈.`,
     strawberry: 'Нажмите свободную грядку и выберите клубнику.',
     sunflower: 'Посадите подсолнечник на грядке сбоку от клубники.',
@@ -46,7 +46,7 @@ const hints = {
     seedPlant: 'Tap an empty bed and plant a seed from your stock.',
     sell: 'Open the market and sell your harvest. You can keep some fruit for seeds.',
     cross: 'Extract seeds from pollinated strawberries in the inventory.',
-    regrow: 'Strawberries regrow after harvest as long as they have lives left.',
+    regrow: 'Strawberries regrow after harvest while harvests remain.',
     saveFor: (name:string, price:number) => `Harvest and sell crops. ${name} costs ${price} ◈.`,
     strawberry: 'Tap an empty bed and choose a strawberry seed.',
     sunflower: 'Plant a sunflower beside the strawberry.',
@@ -68,10 +68,6 @@ export function gardenHint(state:GameState):string {
   if (!state.sold) return text.harvest
   if (state.planted.includes('solar_strawberry')) {
     const ru=state.lang==='ru'
-    if (!state.helperLevel) return ru?'Наймите Листика для первого автоматического сбора.':'Hire Leafy for your first automatic harvest.'
-    if (state.greenhouseLevel<2) return ru?'Улучшите теплицу до II для селекции одного вида.':'Upgrade the greenhouse to II to breed plants of one species.'
-    if (!state.crosses.length) return ru?'Поместите два растения одного вида в питомник и начните опыт.':'Store two plants of one species in the nursery and start an experiment.'
-    if (state.stallLevel<2) return ru?'Откройте автопродажу в торговой лавке.':'Unlock automatic sales at the stall.'
     if (state.planted.length < speciesIds.length) return text.explore
     if (state.plots.length===plotCount && state.plots.every(p=>p.open)) return ru?'Нажмите на мост, чтобы узнать условия восстановления.':'Tap the bridge to see its restoration requirements.'
     return state.plots.slice(0,plotCount).every(plot => plot.open) ? text.complete : text.expand
@@ -122,32 +118,41 @@ export function tutorialStep(state:GameState):TutorialStep|null {
   const profiles=[...live,...state.variants]
   const steps=[
     say('welcome',true,'none','Я Листик! Выращивайте растения, расширяйте сад и открывайте новые виды.','I’m Leafy! Grow plants, expand your garden and discover new species.',false),
-    say('first-harvest',!state.firstHarvest,'none','Дождитесь созревания редиса и нажмите на него, чтобы собрать урожай.','Wait for the radish to ripen, then tap it to harvest.'),
-    say('cleanup',state.firstHarvest && dead && !state.sold,'none','Редис прожил один сбор. Нажмите на засохшее растение, чтобы освободить грядку.','Radish lasts one harvest. Tap the withered plant to clear its bed.'),
+    say('first-plant',!state.firstHarvest && !state.plots.some(p=>p.plant) && (state.seeds.radish>0 || state.variants.some(p=>p.species==='radish')),'none','Нажмите свободную грядку и посадите семя редиса из запаса.','Tap an empty bed and plant a radish seed from your stock.'),
+    say('first-harvest',state.plots.some(p=>p.plant) && !state.firstHarvest,'none','Дождитесь созревания редиса и нажмите на него, чтобы собрать урожай.','Wait for the radish to ripen, then tap it to harvest.'),
+    say('cleanup',state.firstHarvest && dead && !state.sold,'none','У редиса запас — один сбор. Он засох после урожая. Нажмите на растение, чтобы освободить грядку.','Radish has a capacity of one harvest and has withered. Tap it to clear the bed.'),
     say('first-sale',state.firstHarvest && !state.sold && state.basket.length>0,'market','Откройте рынок и продайте часть урожая. Остальное пригодится для семян.','Open the market and sell some harvest. Keep some fruit for seeds.'),
-    say('extract',state.sold && !state.firstExtraction && state.basket.some(b=>extractionYield(b).seeds>0),'inventory','В инвентаре откройте урожай и извлеките семена.','Open your harvest in the inventory and extract seeds.'),
+    say('second-plant',state.sold && !state.firstExtraction && !state.basket.length && !state.plots.some(p=>p.plant?.lives) && (state.seeds.radish>0 || state.variants.some(p=>p.species==='radish')),'none','Посадите оставшееся семя редиса. Из следующего урожая можно получить новые семена.','Plant your remaining radish seed. The next harvest can provide new seeds.'),
+    say('second-harvest',state.sold && !state.firstExtraction && !state.basket.length && state.plots.some(p=>p.plant?.lives),'none','Дождитесь созревания и соберите урожай для получения семян.','Wait for the crop to ripen and harvest it for seeds.'),
+    say('extract',state.sold && !state.firstExtraction && state.basket.some(b=>extractionYield(b).seeds>0),'inventory','Плоды можно продать или переработать в семена. Семена можно посадить или продать.','Open your harvest in the inventory and extract seeds.'),
     say('plant-stock',state.firstExtraction && !state.firstSeedPlanting && (Object.values(state.seeds).some(Boolean)||state.variants.length>0),'none','Нажмите любую пустую грядку и выберите семена из запаса.','Tap any empty bed and choose seeds from your stock.'),
-    say('regrowth',state.planted.includes('strawberry'),'none','Клубника плодоносит несколько раз. Каждый сбор тратит жизнь, затем ягоды созревают снова.','Strawberries fruit several times. Each harvest uses a life before the berries regrow.',false),
+    say('regrowth',state.planted.includes('strawberry'),'none','Клубника плодоносит несколько раз. Каждый сбор расходует один цикл, затем ягоды созревают снова.','Strawberries fruit several times. Each harvest uses one cycle before the berries regrow.',false),
     say('expansion',state.sold && solar.progress.current.plots<solar.progress.required.plots,'none','Нажмите соседний закрытый участок, чтобы посмотреть стоимость расчистки. Выберите любую подходящую грядку.','Tap an adjacent blocked plot to see its clearing cost. Choose whichever plot suits your garden.'),
     say('research',state.firstSeedPlanting && !state.planted.includes('solar_strawberry') && solar.stage!=='fruit' && solar.stage!=='seed','collection','В альманахе изучите первое скрещивание. Растения-соседи должны касаться сторонами, диагональ не считается.','Study the first cross in the almanac. Plants must share an edge; diagonals do not count.',false),
-    say('pollination',solar.stage==='active','collection','Подсолнечник опыляет клубнику. Соберите ягоды именно с клубники.','Sunflowers pollinate strawberries. Collect the berries from the strawberry plant.'),
+    say('pollination',solar.stage==='active','collection','Подсолнечник опыляет клубнику. Когда она созреет, соберите ягоды с неё. Если растение не видно, откройте альманах.','Sunflowers pollinate strawberries. Harvest the strawberry when ripe. If it is out of view, open the almanac.'),
     say('pollinated-fruit',solar.stage==='fruit','collection','Соберите семена из опылённой партии клубники. В альманахе можно открыть эту партию.','Extract seeds from the pollinated strawberry batch. Open it from the almanac.'),
     say('hybrid-seed',solar.stage==='seed','none','Вы получили семя нового вида. Посадите его на свободной грядке.','You found a new species. Plant its seed in an empty bed.'),
     say('magic-tier',solar.stage==='studied','collection','Солнечная клубника открывает Тир II. У гибридов свои ауры, урожай и роли в следующих опытах.','Sunberry opens Tier II. Hybrids bring their own auras, yields, and roles in later crosses.',false),
-    say('storage',state.revealed.length>0,'evolution','В питомнике можно сохранить живое растение. Оно сохраняет геном, жизни и стадию роста.','Store a living plant in the greenhouse nursery to preserve its genome, lives, and growth.',false),
-    say('helper',state.helperLevel>0,'helper','Листик собирает урожай и убирает погибшие растения. Оба действия занимают его рабочее время.','Leafy harvests and clears withered plants. Both tasks use his work time.',false),
+    say('storage',state.revealed.length>0,'evolution','В питомнике можно сохранить живое растение. Оно сохраняет геном, запас сборов и стадию роста.','Store a living plant in the greenhouse nursery to preserve its genome, remaining harvests, and growth.',false),
+    say('helper',state.helperLevel>0,'helper','Листик собирает урожай. Со II уровня он также убирает засохшие растения.','Leafy harvests crops. At level II he also clears withered plants.',false),
     say('replant',state.helperLevel>=evolution.helperReplantLevel,'helper','Листик может пересаживать выбранный профиль. Семена защищённых профилей и резервы сохраняются.','Leafy can replant a chosen profile while respecting protected seeds and reserves.',false),
+    say('plot-cleared',state.plots.slice(0,plotCount).filter(p=>p.open).length>4,'none','Расчищенная грядка расширяет сад. Выбирайте, что выращивать на новом месте.','A cleared bed expands your garden. Choose what to grow there.',false),
+    say('bed-upgraded',state.plots.some(p=>p.open && p.level>1),'none','Улучшенная грядка ускоряет рост и позволяет выращивать более сложные гибриды.','An upgraded bed speeds growth and supports more advanced hybrids.',false),
+    say('symbiosis',Object.keys(state.research.combinations).some(reactionHasSymbiosis),'collection','Соседние растения могут помогать друг другу своими аурами. Посмотрите сочетания в журнале совместимости.','Neighboring plants can help each other with auras. Check combinations in the compatibility journal.',false),
+    say('uncommon',profiles.some(p=>p.rarity==='uncommon'),'inventory','Необычная редкость относится к экземпляру, а не к ботаническому тиру вида.','Uncommon rarity belongs to a specimen, while botanical tier belongs to the species.',false),
+    say('assignment',state.helperLevel>0 && state.plots.some(p=>p.policy && p.policy.mode!=='manual'),'helper','Назначенная грядка следует выбранному режиму. Листик учитывает защиту и резервы семян.','An assigned bed follows its selected mode. Leafy respects protection and seed reserves.',false),
+    say('repeat-harvest',live.some(p=>p.lives>0 && p.lives<p.maxLives),'none','После сбора многоразовое растение снова растёт. Каждый сбор расходует один из оставшихся циклов.','After harvest, a multi-harvest plant grows again. Each harvest consumes one remaining cycle.',false),
     say('aura',state.planted.includes('sunflower'),'collection','Аура подсолнечника ускоряет ближайшие растения по общей стороне.','Sunflower auras speed up plants that share an edge.',false),
     say('low-price',state.sold && state.planted.some(id=>marketQuote(state,id,'fruit').pricePercent<=85),'market','Цена упала после поставок. Дайте рынку время, продайте другой вид или выполните заказ.','The price fell after deliveries. Let the market recover, sell another species, or fill an order.',false),
     say('order',state.orders.length>0,'market','Сравните фиксированную награду заказа с текущей ценой продажи его товаров.','Compare the fixed order reward with the current sale value of its goods.',false),
     say('greenhouse',state.greenhouseLevel>=2,'evolution','Внутривидовой опыт меняет редкость и гены уже изученного вида. Выберите два живых растения одного вида.','Same-species experiments change rarity and traits. Choose two living plants of the same species.',false),
     say('afk',state.passive.beds.length>0,'evolution','Назначьте семена грядке питомника. Она медленно выращивает урожай и работает между сеансами.','Assign seeds to a nursery bed. It grows crops slowly and can work between sessions.',false),
-    say('unfruitful',profiles.some(p=>p.minus==='unfruitful'),'inventory','Малоплодность снижает урожай. У некоторых видов возможен неурожай, который всё равно тратит жизнь.','Unfruitful plants yield less. Some can fail a crop and still use one life.',false),
+    say('unfruitful',profiles.some(p=>p.minus==='unfruitful'),'inventory','Малоплодность снижает урожай. У некоторых видов возможен неурожай, который всё равно расходует один сбор.','Unfruitful plants yield less. Some can fail a crop and still use one harvest.',false),
     say('fruitful',profiles.some(p=>traits(p).includes('fruitful')),'inventory','Плодовитый профиль меняет возможное число плодов. Сравните диапазоны и шансы в карточке.','Fruitful profiles change the possible harvest. Compare ranges and odds on the plant card.',false),
     say('rare',profiles.some(p=>p.rarity==='rare'||p.rarity==='epic'||p.rarity==='legendary'),'inventory','Редкость описывает геном, а тир — вид. Редкий редис всё равно относится к Тиру I.','Rarity describes the genome. Tier describes the species. A rare radish still belongs to Tier I.',false),
     say('guarantee',Object.values(state.failures).some(Boolean)||Object.keys(state.rarityProgress).length>0,'collection','Серия неудач приближает гарантию. Межвидовые рецепты и повышение редкости считают её отдельно.','Failed trials approach a guarantee. Hybrid recipes and rarity upgrades track separate streaks.',false),
     say('clone',state.greenhouseLevel>=3,'evolution','Клонирование сохраняет геном редкого живого экземпляра. Поместите его в хранилище теплицы.','Cloning keeps a rare living plant’s genome. Move it into greenhouse storage.',false),
-    say('last-life',live.some(p=>p.lives===1 && (state.protectedPlants.includes(p.id)||p.rarity==='rare'||p.rarity==='epic'||p.rarity==='legendary')),'none','У ценного растения последняя жизнь. Защитите экземпляр или подстрахуйте линию семенем либо клоном.','A valuable plant has one life left. Protect it or secure the line with a seed or a clone.',false),
+    say('last-life',live.some(p=>p.lives===1 && (state.protectedPlants.includes(p.id)||p.rarity==='rare'||p.rarity==='epic'||p.rarity==='legendary')),'none','У ценного растения последний сбор. Защитите экземпляр или подстрахуйте линию семенем либо клоном.','A valuable plant has one harvest remaining. Protect it or secure the line with a seed or a clone.',false),
     say('crystal-tier',tierProgress(state,'crystal_flower').unlocked,'collection','Доступна кристальная ботаника. Сила роста Кристального цветка помогает соседним гибридам.','Crystal botany is available. Crystal Flower helps adjacent hybrids grow.',false),
     say('astral-tier',tierProgress(state,'star_orchid').unlocked,'collection','Доступен Тир IV. Кристальному цветку нужны два разных донора по общей стороне.','Tier IV is available. Crystal Flower needs two distinct donors sharing an edge.',false),
     say('bridge',bridgeIssue(state)===null,'none','Сад готов к восстановлению моста. Нажмите на него, чтобы открыть путь в Долину.','Your garden can restore the bridge. Tap it to open the way to the Valley.',false)

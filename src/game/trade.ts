@@ -1,9 +1,9 @@
 import { measure } from './analytics'
 import { autoSellOffer, isHybrid, isSpecies } from './config'
-import { changeStock, common, inherit, nextRandom, sameProfile, stockCount, validGenome } from './genetics'
+import { changeStock, common, hybridRarityOdds, inherit, nextRandom, sameProfile, stockCount, validGenome } from './genetics'
 import { rarities, type Command, type GameState, type HarvestBatch, type HarvestLot, type Profile,
   type Result, type SeedPack, type Species } from './model'
-import { chance } from './queries'
+import { chance, snapshotRecipeId } from './queries'
 import { availableStock, hasOtherSource, lotSeedYield, productionTarget, protectedHarvest, protectedProfile } from './stock-policy'
 import { harvestSaleValue, seedSaleValue } from './pricing'
 import { marketQuote, recordDelivery, saleMinimum } from './market'
@@ -111,6 +111,7 @@ function extract(state:GameState, batch:HarvestBatch, count:number):Result {
 
   const stream = {rng:state.rng}
   const breeding = {revealed:[...state.revealed], failures:{...state.failures}}
+  const history={...state.research.recipes}
   let pendingHybrid = state.pendingHybrid
   const random = () => nextRandom(stream)
   const events = ['SeedsExtracted', 'OwnSeeds:' + yieldQuote.seeds]
@@ -126,18 +127,26 @@ function extract(state:GameState, batch:HarvestBatch, count:number):Result {
   const used = portions(batch, count)
   function cross(mother:Profile, snapshot:NonNullable<HarvestBatch['pollination']>) {
     const result = snapshot.result
-    if (random() >= chance(breeding, result)) {
+    const recipeId=snapshotRecipeId(snapshot)
+    const previous=history[recipeId]
+    const record={attempts:Math.min(Number.MAX_SAFE_INTEGER,(previous?.attempts??0)+1),successes:previous?.successes??0}
+    history[recipeId]=record
+    if (random() >= chance(breeding,result,recipeId)) {
       breeding.failures[result]++
       events.push('ExperimentFailed')
       return
     }
     const first = !breeding.revealed.includes(result)
-    const genome = first && result === 'solar_strawberry' ? common : inherit(mother, snapshot.donor, random, result)
+    const donors=[snapshot.donor,...snapshot.supporting]
+    const guided=first && recipeId==='solar_strawberry:main'
+    const genome=guided ? common : inherit(mother,snapshot.donor,random,result,undefined,hybridRarityOdds(mother,donors),snapshot.supporting)
     add(result, genome, 1)
+    record.successes=Math.min(record.attempts,record.successes+1)
     breeding.failures[result] = 0
     if (first) {
       pendingHybrid ??= result
       breeding.revealed.push(result)
+      events.push('HybridDiscovered:'+result+':'+genome.rarity)
     }
     events.push((first ? 'RecipeRevealed:' : 'SeedPropagated:') + result)
   }
@@ -167,6 +176,7 @@ function extract(state:GameState, batch:HarvestBatch, count:number):Result {
   state.rng = stream.rng
   state.revealed = breeding.revealed
   state.failures = breeding.failures
+  state.research.recipes=history
   state.pendingHybrid = pendingHybrid
   return {ok:true, events, obtained}
 }

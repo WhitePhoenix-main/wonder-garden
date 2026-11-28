@@ -16,6 +16,15 @@ export const availableTraits=(species:Species)=>positives.filter(t=>
   (t!=='hardy' || speciesInfo[species].lifecycle==='multi') && (t!=='aura' || auras.some(a=>a.source===species)))
 export const rarityOdds=(a:Profile['rarity'],b:Profile['rarity']):readonly number[]=>
   rules.rarity[rarities.indexOf(a)][rarities.indexOf(b)]
+export const rarityGuarantee=(rarity:Profile['rarity']):number=>rules.rarityGuarantees[rarities.indexOf(rarity)]
+
+export function hybridRarityOdds(mother:Profile,donors:readonly Profile[]):readonly number[] {
+  if (mother.rarity==='common' && donors.every(parent=>parent.rarity==='common')) return rules.hybridRarity
+  const pairs=donors.map(parent=>rarityOdds(mother.rarity,parent.rarity))
+  const inherited=rules.hybridParentWeight
+  return rules.hybridRarity.map((base,rank)=>base*(1-inherited)+
+    inherited*pairs.reduce((weight,pair)=>weight+pair[rank],0)/pairs.length)
+}
 
 export function validGenome(species:Species, profile:Profile, allowLegacy=false):boolean {
   if (!profile || !rarities.includes(profile.rarity) || !(profile.plus===null || typeof profile.plus==='string' || Array.isArray(profile.plus))) return false
@@ -85,7 +94,7 @@ export function profileAllowed(species:Species, profile:Profile):boolean {
 }
 
 export function inherit(a:Profile,b:Profile,random:()=>number,species?:Species,inheritedPlus=rules.inheritedPlus,
-  row=rarityOdds(a.rarity,b.rarity)):Profile {
+  row=rarityOdds(a.rarity,b.rarity),supporting:readonly Profile[]=[]):Profile {
   const single = species !== undefined && speciesInfo[species].lifecycle === 'single'
   const allowedPluses = species === undefined ? positives : availableTraits(species)
   const allowedFlaws = single ? negatives.filter(trait => trait !== 'fragile') : negatives
@@ -94,14 +103,15 @@ export function inherit(a:Profile,b:Profile,random:()=>number,species?:Species,i
   const rank=row.findIndex(weight=>roll < (limit+=weight))
   const plus:Positive[]=[]
   const pick=<T>(values:readonly T[])=>values[Math.floor(random()*values.length)]
-  const inherited=new Set([...traits(a), ...traits(b)])
+  const parents=[a,b,...supporting]
+  const inherited=new Set(parents.flatMap(traits))
   for (let i=0;i<rules.slots[rank];i++) {
     const parents=allowedPluses.filter(v=>inherited.has(v) && !plus.includes(v))
     const mutations=allowedPluses.filter(v=>!inherited.has(v) && !plus.includes(v))
     plus.push(pick(parents.length && (!mutations.length || random()<inheritedPlus) ? parents : mutations))
   }
   const p:Profile={rarity:rarities[rank],plus,minus:null}
-  const flaws=[a.minus,b.minus].filter(v=>v!==null)
+  const flaws=parents.map(parent=>parent.minus).filter(v=>v!==null)
   const chance=flaws.length===0?rules.newFlaw:flaws.length===1?rules.oneFlaw:rules.twoFlaws
   if(random()<chance) {
     const valid=allowedFlaws.filter(minus=>compatible({...p,minus}))

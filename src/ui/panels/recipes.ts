@@ -12,7 +12,7 @@ const hints: Record<Hybrid, [string, string]> = {
 }
 
 export function recipeKnown(s: GameState, r: Recipe) {
-  return [r.primary,...r.neighbors].every(id => s.planted.includes(id))
+  return (s.research.recipes['id' in r ? String(r.id) : `${r.result}:main`]?.successes ?? 0) > 0 || r.result === 'solar_strawberry' && !('alternate' in r && r.alternate)
 }
 
 const labels = {
@@ -33,11 +33,13 @@ function adjacencyDiagram(ru:boolean):string {
 export function recipeCard(s: GameState, r: Recipe, selected: number|null) {
   const w = labels[s.lang]
   const name = (id: keyof typeof speciesInfo) => s.lang === 'ru' ? speciesInfo[id].nameRu : speciesInfo[id].nameEn
-  const status=researchStatus(s,r.result)
+  const status=researchStatus(s,r.result,'id' in r ? String(r.id) : undefined)
   if (!status.labelKnown) {
     const someKnown = [r.primary,...r.neighbors].some(id => s.planted.includes(id))
     const clue = someKnown ? hints[r.result][s.lang === 'ru' ? 0 : 1] : w.explore
-    return `<section class="recipe-card"><h3>◇ · ${w.mystery}</h3><p>${clue}</p></section>`
+    const stage = status.stage==='active' ? (s.lang==='ru'?'Опыление активно':'Pollination active') : status.stage==='fruit' ? (s.lang==='ru'?'Опылённый урожай в инвентаре':'Pollinated harvest in inventory') : ''
+    return `<section class="recipe-card"><h3>◇ · ${w.mystery}</h3><p>${clue}</p>${stage ? '<p>'+stage+'</p>' : ''}
+      ${status.batchId!==undefined ? `<button type="button" data-action="research-batch" data-id="${status.batchId}">${s.lang==='ru'?'Открыть партию':'Open harvest batch'}</button>` : ''}</section>`
   }
   const plot = selected === null ? null : s.plots[selected]
   const neighbors = selected === null ? [] : adjacent(selected).map(i => s.plots[i].plant?.species)
@@ -54,6 +56,6 @@ export function recipeCard(s: GameState, r: Recipe, selected: number|null) {
     ${w.neighbors} · ${r.neighbors.map(id => name(id) + mark(neighbors.includes(id))).join(' + ')}<br>
     ${w.bed} ≥ ${r.minBedLevel}${mark(!!plot && plot.level >= r.minBedLevel)}</p>
     ${r.result==='solar_strawberry' && status.stage!=='studied' ? adjacencyDiagram(s.lang==='ru') : ''}
-    <p><b>${status.chance*100}%</b> · ${s.lang==='ru'?'Следующая попытка':'Next attempt'} · ${status.failures}/${status.pity} ${s.lang==='ru'?'неудач':'failures'} ${revealed?' · '+w.revealed:''}</p>
+    <p>${status.observed ? `<b>${Math.round(status.chance*100)}%</b> · ` : ''}${s.lang==='ru'?'Следующая попытка':'Next attempt'} · ${status.failures}/${status.pity} ${s.lang==='ru'?'неудач':'failures'} ${revealed?' · '+w.revealed:''}</p>
     ${status.batchId!==undefined ? `<button type="button" data-action="research-batch" data-id="${status.batchId}">${s.lang==='ru'?'Открыть партию':'Open harvest batch'}</button>` : ''}</section>`
 }

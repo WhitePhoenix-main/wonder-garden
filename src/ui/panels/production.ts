@@ -41,7 +41,7 @@ export function productionPanel(state:GameState):string {
     const stored=state.nursery.filter(p=>!isBusy(state,p.id))
     return `<section class="production-bed" data-production-slot="${slot}">
       <h4>${w.bed} ${slot+1} ${plant ? '· '+name(plant) : ''}</h4>
-      <p>${w[status.reason]} ${plant ? '· '+Math.floor(plant.progress*20)*5+'% · '+plant.lives+'/'+plant.maxLives+' ♥':''}
+      <p>${w[status.reason]} ${plant ? '· '+Math.floor(plant.progress*20)*5+'% · '+plant.lives+'/'+plant.maxLives+(state.lang==='ru'?' сборов':' harvests'):''}
       ${assignment ? '· '+w.seedCount+' '+status.available+'/'+status.stock:''}</p>
       <label>${w.seed}<select id="${id}-seed" data-production-seed><option value="">—</option>${options}</select></label>
       <select aria-label="${w.title}" data-production-mode>${modes.map(m=>`<option value="${m}" ${assignment?.mode===m?'selected':''}>${w[m==='seed'?'seeds':m]}</option>`).join('')}</select>
@@ -91,7 +91,7 @@ export function showReturnReport(report:ReturnReport,lang:Lang):void {
   const row=(label:string,value:number|string)=>value ? `<dt>${label}</dt><dd>${value}</dd>` : ''
   const stops=[...new Set(report.stops)].filter(s=>s==='empty'||s==='reserve'||s==='full'||s==='protected')
   modal.innerHTML=`<h2 id="return-report-heading">${w.return}</h2><dl>
-    ${row(w.away,time(report.absent))}${row(w.processed,report.processed ? time(report.processed):0)}
+    ${row(w.away,time(report.absent))}${row(w.processed,report.workedSeconds ? time(report.workedSeconds):0)}
     ${row(w.basket,report.fruit)}${row(w.seeds,report.seeds)}${row(w.coins,report.coins)}
     ${row(w.spent,report.spent)}${row(w.experiments,report.experiments)}${row(w.ripe,report.ready)}
     </dl>${stops.length ? `<p>${stops.map(s=>w[s]).join(' · ')}</p>`:''}

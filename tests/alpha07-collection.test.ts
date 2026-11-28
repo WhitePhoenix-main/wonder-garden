@@ -1,13 +1,13 @@
 import { expect,it } from 'vitest'
-import { advance, execute, initialState } from '../src/game'
+import { advance, execute } from '../src/game'
 import { evolution, recipes, speciesIds, speciesInfo } from '../src/game/config'
 import { common } from '../src/game/genetics'
 import { rarities, type GameState, type Profile, type Rarity, type Species } from '../src/game/model'
 import { parseSave } from '../src/persistence/migration'
-import { commit } from './helpers'
+import { gardenWithStarterPlants, commit } from './helpers'
 
 it('plants all 60 collection entries from common starters and paid greenhouse offspring',()=>{
-  const garden=initialState(2026)
+  const garden=gardenWithStarterPlants(2026)
   // Prepare a funded garden with the recipes already learned and Common seed stock.
   garden.coins=1_000_000
   garden.sold=true
@@ -46,11 +46,13 @@ it('plants all 60 collection entries from common starters and paid greenhouse of
     }
 
     const [first,second]=parents.get('common')!
-    getOffspring('uncommon',1,[first,second])
-    getOffspring('rare',2,[first,parents.get('uncommon')![0]])
+    getOffspring('uncommon',2,[first,second])
+    const [uncommonA,uncommonB]=parents.get('uncommon')!
+    getOffspring('rare',2,[uncommonA,uncommonB])
     const [rareA,rareB]=parents.get('rare')!
-    getOffspring('epic',1,[rareA,rareB])
-    getOffspring('legendary',1,[rareA,parents.get('epic')![0]])
+    getOffspring('epic',2,[rareA,rareB])
+    const [epicA,epicB]=parents.get('epic')!
+    getOffspring('legendary',1,[epicA,epicB])
     expect(garden.collection.filter(row=>row.species===species).map(row=>row.rarity).sort()).toEqual([...rarities].sort())
   }
   expect(garden.collection).toHaveLength(60)
